@@ -90,12 +90,55 @@ public actor RobotConnection {
         try await client.getDaemonStatusApiDaemonStatusGet().ok.body.json
     }
 
-    public func wakeUp() async throws {
-        _ = try await client.playWakeUpApiMovePlayWakeUpPost().ok
+    /// Plays the wake-up animation. Motors must already be enabled — the daemon
+    /// route does not touch the control mode, so a `disabled` robot just doesn't move.
+    ///
+    /// Status codes are mapped explicitly: `.ok` would surface the daemon's 503
+    /// "Backend not running" as an opaque `undocumented` runtime error.
+    public func wakeUp() async throws -> String {
+        switch try await client.playWakeUpApiMovePlayWakeUpPost() {
+        case let .ok(response):
+            return try response.body.json.uuid
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
     }
 
-    public func gotoSleep() async throws {
-        _ = try await client.playGotoSleepApiMovePlayGotoSleepPost().ok
+    public func gotoSleep() async throws -> String {
+        switch try await client.playGotoSleepApiMovePlayGotoSleepPost() {
+        case let .ok(response):
+            return try response.body.json.uuid
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
+    }
+
+    public func setMotorMode(_ mode: Components.Schemas.MotorControlMode) async throws {
+        switch try await client.setMotorModeApiMotorsSetModeModePost(path: .init(mode: mode)) {
+        case .ok:
+            return
+        case .unprocessableContent:
+            throw ReachyKitError.daemonRejected(statusCode: 422)
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
+    }
+
+    public func motorMode() async throws -> Components.Schemas.MotorControlMode {
+        try await client.getMotorStatusApiMotorsStatusGet().ok.body.json.mode
+    }
+
+    /// Starts the robot backend. Returns immediately with a job id — the caller
+    /// must poll `daemonStatus()` until the state settles.
+    public func startDaemon(wakeUp: Bool) async throws {
+        switch try await client.startDaemonApiDaemonStartPost(query: .init(wakeUp: wakeUp)) {
+        case .ok:
+            return
+        case .unprocessableContent:
+            throw ReachyKitError.daemonRejected(statusCode: 422)
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
     }
 
     // MARK: Recorded moves (dances / emotions / music libraries)

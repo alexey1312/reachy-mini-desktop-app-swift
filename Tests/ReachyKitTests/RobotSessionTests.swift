@@ -6,22 +6,59 @@ import Testing
 private final class MockRobotClient: RobotAPIClient, @unchecked Sendable {
     enum Probe { case ok, fail }
 
+    /// Every daemon call in order, so tests can assert the wake/sleep sequence.
+    enum Step: Equatable {
+        case startDaemon(wakeUp: Bool)
+        case motorMode(Components.Schemas.MotorControlMode)
+        case wakeUp
+        case gotoSleep
+    }
+
     private let lock = NSLock()
     private var probes: [Probe]
-    private(set) var wakeCalls = 0
-    private(set) var sleepCalls = 0
+    private var state: Components.Schemas.DaemonState
+    private var steps: [Step] = []
     let identity = RobotIdentity(hardwareID: "hw-1", name: "testbot", daemonVersion: "1.9.0")
 
-    init(probes: [Probe]) {
+    private let wakeFailure: ReachyKitError?
+    private let startFailure: ReachyKitError?
+
+    init(
+        probes: [Probe],
+        state: Components.Schemas.DaemonState = .running,
+        wakeFailure: ReachyKitError? = nil,
+        startFailure: ReachyKitError? = nil
+    ) {
         self.probes = probes
+        self.state = state
+        self.wakeFailure = wakeFailure
+        self.startFailure = startFailure
+    }
+
+    var recordedSteps: [Step] {
+        lock.withLock { steps }
+    }
+
+    var wakeCalls: Int {
+        recordedSteps.filter { $0 == .wakeUp }.count
+    }
+
+    var sleepCalls: Int {
+        recordedSteps.filter { $0 == .gotoSleep }.count
+    }
+
+    private func record(_ step: Step) {
+        lock.withLock { steps.append(step) }
     }
 
     private var status: Components.Schemas.DaemonStatus {
+        let currentState = lock.withLock { state }
         let json = """
-        {"robot_name": "testbot", "state": "running", "wireless_version": false,
+        {"robot_name": "testbot", "state": "\(currentState.rawValue)", "wireless_version": false,
          "desktop_app_daemon": false, "simulation_enabled": true,
          "mockup_sim_enabled": false,
-         "backend_status": {"motor_control_mode": "enabled", "error": null}}
+         "backend_status": {"ready": true, "motor_control_mode": "enabled",
+                            "last_alive": null, "control_loop_stats": {}}}
         """
         // swiftlint:disable:next force_try
         return try! JSONDecoder().decode(Components.Schemas.DaemonStatus.self, from: Data(json.utf8))
@@ -37,12 +74,34 @@ private final class MockRobotClient: RobotAPIClient, @unchecked Sendable {
         return status
     }
 
-    func wakeUp() async throws {
-        wakeCalls += 1
+    func wakeUp() async throws -> String {
+        if let wakeFailure {
+            throw wakeFailure
+        }
+        record(.wakeUp)
+        return "wake-uuid"
     }
 
-    func gotoSleep() async throws {
-        sleepCalls += 1
+    func gotoSleep() async throws -> String {
+        record(.gotoSleep)
+        return "sleep-uuid"
+    }
+
+    func setMotorMode(_ mode: Components.Schemas.MotorControlMode) async throws {
+        record(.motorMode(mode))
+    }
+
+    /// The real route answers with a job id and starts the backend in the background.
+    func startDaemon(wakeUp: Bool) async throws {
+        if let startFailure {
+            throw startFailure
+        }
+        record(.startDaemon(wakeUp: wakeUp))
+        lock.withLock { state = .running }
+    }
+
+    func runningMoveUUIDs() async throws -> Set<String> {
+        []
     }
 }
 
@@ -120,8 +179,13 @@ struct RobotSessionTests {
                 throw URLError(.timedOut)
             }
 
-            func wakeUp() async throws {}
-            func gotoSleep() async throws {}
+            func wakeUp() async throws -> String {
+                ""
+            }
+
+            func gotoSleep() async throws -> String {
+                ""
+            }
         }
         let session = RobotSession { _ in FailingClient() }
         await session.connect(to: RobotAddress(host: "10.0.0.9"))
@@ -129,15 +193,68 @@ struct RobotSessionTests {
         #expect(session.lastError != nil)
     }
 
-    @Test("wake and sleep forward to the client")
-    func wakeSleep() async {
+    @Test("wake enables the motors before playing the animation")
+    func wakeEnablesMotorsFirst() async {
         let client = MockRobotClient(probes: [])
         let session = makeSession(client: client)
         await session.connect(to: RobotAddress(host: "10.0.0.9"))
         await session.wake()
-        await session.sleep()
+        #expect(client.recordedSteps == [.motorMode(.enabled), .wakeUp])
+        session.disconnect()
+    }
+
+    @Test("wake starts a stopped backend instead of hitting 503")
+    func wakeStartsStoppedDaemon() async {
+        let client = MockRobotClient(probes: [], state: .stopped)
+        let session = makeSession(client: client)
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        await session.wake()
+        // `wake_up=true` makes the daemon enable the motors and play the animation itself.
+        #expect(client.recordedSteps.first == .startDaemon(wakeUp: true))
+        #expect(session.lastError == nil)
+        session.disconnect()
+    }
+
+    @Test("a 503 from a torn-down backend reads as an actionable message")
+    func backendNotRunningIsReadable() async {
+        let client = MockRobotClient(probes: [], wakeFailure: .backendNotRunning)
+        let session = makeSession(client: client)
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        await session.wake()
+        #expect(session.lastError == ReachyKitError.backendNotRunning.errorDescription)
+        #expect(session.powerTransition == nil)
+        session.disconnect()
+    }
+
+    @Test("a 409 while the daemon is busy reads as an actionable message")
+    func daemonBusyIsReadable() async {
+        let client = MockRobotClient(probes: [], state: .stopped, startFailure: .daemonBusy)
+        let session = makeSession(client: client)
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        await session.wake()
+        #expect(session.lastError == ReachyKitError.daemonBusy.errorDescription)
+        session.disconnect()
+    }
+
+    @Test("a second wake is ignored while one is already in flight")
+    func concurrentWakeIsIgnored() async {
+        let client = MockRobotClient(probes: [])
+        let session = makeSession(client: client)
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        async let first: Void = session.wake()
+        async let second: Void = session.wake()
+        _ = await (first, second)
         #expect(client.wakeCalls == 1)
-        #expect(client.sleepCalls == 1)
+        session.disconnect()
+    }
+
+    @Test("sleep disables the motors only after the animation finished")
+    func sleepDisablesMotorsLast() async {
+        let client = MockRobotClient(probes: [])
+        let session = makeSession(client: client)
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        await session.sleep()
+        #expect(client.recordedSteps == [.gotoSleep, .motorMode(.disabled)])
         session.disconnect()
     }
 }

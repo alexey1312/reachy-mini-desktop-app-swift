@@ -13,6 +13,14 @@ public final class RobotSession {
         case unreachable(RobotIdentity)
     }
 
+    /// Wake and sleep are long enough — a cold backend start is budgeted at 90 s —
+    /// that the UI has to show what the robot is doing meanwhile.
+    public enum PowerTransition: Equatable, Sendable {
+        case startingBackend
+        case wakingUp
+        case goingToSleep
+    }
+
     public struct MovePlayback: Equatable, Sendable {
         public let dataset: String
         public let move: String
@@ -26,6 +34,12 @@ public final class RobotSession {
         public var requiredConsecutiveSuccesses = 2
         /// Move task polling is intentionally cheaper than rendering/state streaming.
         public var movePollInterval: Duration = .milliseconds(500)
+        /// Upstream waits this long for a wake/sleep animation before moving on.
+        public var moveCompletionTimeout: Duration = .seconds(10)
+        /// Backend startup budget — upstream's `STARTUP.TIMEOUT_NORMAL`.
+        public var daemonStartTimeout: Duration = .seconds(90)
+        /// Motors need a moment to hold their pose before the animation starts.
+        public var motorSettleDelay: Duration = .milliseconds(300)
 
         public init() {}
     }
@@ -37,6 +51,7 @@ public final class RobotSession {
     public private(set) var compatibilityWarning: String?
     public private(set) var currentMove: MovePlayback?
     public private(set) var isStoppingMove = false
+    public private(set) var powerTransition: PowerTransition?
     /// Explicit Disconnect suppresses discovery-driven reconnect until the user connects again.
     public private(set) var automaticConnectionAllowed = true
 
@@ -48,6 +63,12 @@ public final class RobotSession {
     private var pathMonitor: NWPathMonitor?
     private var moveCache: [String: [String]] = [:]
     private var connectionAttemptID = UUID()
+
+    /// `ReachyKitError` carries actionable text; raw interpolation would print
+    /// the bare case name instead.
+    static func describe(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? "\(error)"
+    }
 
     /// Production session talking to a real daemon.
     public convenience init(configuration: Configuration = .init()) {
@@ -99,7 +120,7 @@ public final class RobotSession {
             guard connectionAttemptID == attemptID else { return false }
             resetConnectionState()
             if !Task.isCancelled {
-                lastError = "\(error)"
+                lastError = Self.describe(error)
             }
             return false
         }
@@ -110,14 +131,6 @@ public final class RobotSession {
         connectionAttemptID = UUID()
         resetConnectionState()
         lastError = nil
-    }
-
-    public func wake() async {
-        await run { try await $0.wakeUp() }
-    }
-
-    public func sleep() async {
-        await run { try await $0.gotoSleep() }
     }
 
     /// Returns a session-scoped cached dataset index. Actual move assets stay daemon-side.
@@ -132,7 +145,7 @@ public final class RobotSession {
             lastError = nil
             return moves
         } catch {
-            lastError = "\(error)"
+            lastError = Self.describe(error)
             throw error
         }
     }
@@ -149,7 +162,7 @@ public final class RobotSession {
             currentMove = playback
             startMonitoring(playback, client: client)
         } catch {
-            lastError = "\(error)"
+            lastError = Self.describe(error)
             throw error
         }
     }
@@ -195,16 +208,6 @@ public final class RobotSession {
         lastError = errors.isEmpty ? nil : errors.sorted().joined(separator: "\n")
     }
 
-    private func run(_ operation: (any RobotAPIClient) async throws -> Void) async {
-        guard let client else { return }
-        lastError = nil
-        do {
-            try await operation(client)
-        } catch {
-            lastError = "\(error)"
-        }
-    }
-
     private func resetConnectionState() {
         pollTask?.cancel()
         pollTask = nil
@@ -218,6 +221,7 @@ public final class RobotSession {
         compatibilityWarning = nil
         currentMove = nil
         isStoppingMove = false
+        powerTransition = nil
         moveCache = [:]
         phase = .idle
     }
@@ -303,5 +307,93 @@ public final class RobotSession {
                 }
             }
         }
+    }
+}
+
+// MARK: - Wake / sleep
+
+/// Both transitions are multi-step protocols against the daemon, not single
+/// calls: `/move/play/wake_up` and `/move/play/goto_sleep` only play animations
+/// and never touch the motor control mode, and they answer 503 while the robot
+/// backend is down. Enabling and cutting motor power is the caller's job.
+public extension RobotSession {
+    /// The branch is picked from a freshly fetched status rather than `lastStatus`,
+    /// which may be a poll interval out of date — long enough to send motor
+    /// commands at a backend that is already gone.
+    func wake() async {
+        guard let client, powerTransition == nil else { return }
+        lastError = nil
+        // Claimed before the first suspension point: `@MainActor` re-enters on
+        // every `await`, so a later latch would let a double tap through.
+        powerTransition = .wakingUp
+        defer { powerTransition = nil }
+        do {
+            let status = try await client.daemonStatus()
+            lastStatus = status
+            guard status.state == .running else {
+                // `wake_up=true` has the daemon enable the motors and play the
+                // animation itself once the backend is up.
+                powerTransition = .startingBackend
+                try await client.startDaemon(wakeUp: true)
+                if await !waitForDaemonRunning(client: client) {
+                    lastError = "Robot backend did not start within \(configuration.daemonStartTimeout)."
+                }
+                return
+            }
+            try await client.setMotorMode(.enabled)
+            try await Task.sleep(for: configuration.motorSettleDelay)
+            let uuid = try await client.wakeUp()
+            await waitForMoveToFinish(uuid, client: client)
+        } catch {
+            lastError = Self.describe(error)
+        }
+    }
+
+    /// Mirror image of wake: the animation must finish *before* power is cut,
+    /// otherwise the head drops wherever it happens to be.
+    func sleep() async {
+        guard let client, powerTransition == nil else { return }
+        lastError = nil
+        powerTransition = .goingToSleep
+        defer { powerTransition = nil }
+        do {
+            let uuid = try await client.gotoSleep()
+            await waitForMoveToFinish(uuid, client: client)
+            try await client.setMotorMode(.disabled)
+        } catch {
+            lastError = Self.describe(error)
+        }
+    }
+}
+
+private extension RobotSession {
+    /// Polls the daemon's authoritative running-move list until `uuid` is gone.
+    /// A timeout returns normally: parking the motors matters more than proof
+    /// that the animation ran to completion.
+    func waitForMoveToFinish(_ uuid: String, client: any RobotAPIClient) async {
+        let deadline = ContinuousClock.now + configuration.moveCompletionTimeout
+        while ContinuousClock.now < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: configuration.movePollInterval)
+            guard let running = try? await client.runningMoveUUIDs() else { continue }
+            if !running.contains(uuid) {
+                return
+            }
+        }
+    }
+
+    /// Waits out the background start job, refreshing `lastStatus` as it goes.
+    func waitForDaemonRunning(client: any RobotAPIClient) async -> Bool {
+        let deadline = ContinuousClock.now + configuration.daemonStartTimeout
+        while ContinuousClock.now < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: configuration.pollInterval)
+            guard let status = try? await client.daemonStatus() else { continue }
+            lastStatus = status
+            switch status.state {
+            case .running: return true
+            case .error, .stopped: return false
+            default: continue
+            }
+        }
+        return false
     }
 }

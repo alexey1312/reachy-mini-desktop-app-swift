@@ -13,6 +13,10 @@ struct ConnectionScreen: View {
     @State private var pendingCandidates: [RobotAddress] = []
     @State private var attemptedCandidates: Set<RobotAddress> = []
     @State private var autoConnectTask: Task<Void, Never>?
+    @State private var rescanTask: Task<Void, Never>?
+
+    /// Upstream's `INTERVALS.DISCOVERY_SCAN`.
+    private let rescanInterval: Duration = .seconds(10)
 
     var body: some View {
         Form {
@@ -36,6 +40,7 @@ struct ConnectionScreen: View {
         .onAppear {
             browser.start()
             enqueueInitialCandidates()
+            startPeriodicRescan()
         }
         .onChange(of: browser.services) { _, services in
             resolveDiscoveredServices(services)
@@ -43,6 +48,8 @@ struct ConnectionScreen: View {
         .onDisappear {
             autoConnectTask?.cancel()
             autoConnectTask = nil
+            rescanTask?.cancel()
+            rescanTask = nil
             browser.stop()
         }
     }
@@ -65,7 +72,15 @@ struct ConnectionScreen: View {
                 #endif
             }
             if browser.services.isEmpty {
-                Text("Searching…").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Searching…")
+                    Text(
+                        "Known addresses are retried every 10 s. A robot whose daemon isn't running "
+                            + "answers nothing on the network — power it on, or enter its address below."
+                    )
+                    .font(.caption)
+                }
+                .foregroundStyle(.secondary)
             }
             ForEach(browser.services) { service in
                 Button {
@@ -126,6 +141,21 @@ struct ConnectionScreen: View {
             candidates.insert(last, at: 0)
         }
         enqueue(candidates)
+    }
+
+    /// A robot powered on after this screen appeared advertises nothing our
+    /// browser can react to when mDNS doesn't reach us, so the known addresses
+    /// have to be retried instead of being written off after one failed pass.
+    private func startPeriodicRescan() {
+        rescanTask?.cancel()
+        rescanTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: rescanInterval)
+                guard !Task.isCancelled, session.phase == .idle else { continue }
+                attemptedCandidates = []
+                enqueueInitialCandidates()
+            }
+        }
     }
 
     private func resolveDiscoveredServices(_ services: [RobotBrowser.DiscoveredService]) {

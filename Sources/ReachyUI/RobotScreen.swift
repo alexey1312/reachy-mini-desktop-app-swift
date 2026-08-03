@@ -51,6 +51,11 @@ struct RobotScreen: View {
             LabeledContent("Address", value: session.address?.displayString ?? "—")
             if let status = session.lastStatus {
                 LabeledContent("Daemon state", value: String(describing: status.state))
+                // A `disabled` robot answers every motion command and stays limp,
+                // so the motor mode belongs next to the daemon state.
+                if let mode = status.backendStatus?.value1?.motorControlMode {
+                    LabeledContent("Motors", value: mode.rawValue)
+                }
             }
             HStack {
                 Text("Link")
@@ -97,13 +102,31 @@ struct RobotScreen: View {
             } label: {
                 Label("Wake up", systemImage: "sun.max")
             }
+            .disabled(session.powerTransition != nil)
             Button {
                 Task { await session.sleep() }
             } label: {
                 Label("Go to sleep", systemImage: "moon.zzz")
             }
+            .disabled(session.powerTransition != nil)
+            if let transition = session.powerTransition {
+                HStack {
+                    ProgressView()
+                    Text(Self.description(of: transition))
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .disabled(!isConnected)
+    }
+
+    /// Starting a cold backend can take up to 90 s — silence would read as a hang.
+    private static func description(of transition: RobotSession.PowerTransition) -> String {
+        switch transition {
+        case .startingBackend: "Starting the robot backend… this can take a minute"
+        case .wakingUp: "Waking up…"
+        case .goingToSleep: "Going to sleep…"
+        }
     }
 
     private var isConnected: Bool {

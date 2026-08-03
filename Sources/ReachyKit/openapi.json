@@ -2938,10 +2938,7 @@
      "robot_name",
      "state",
      "wireless_version",
-     "desktop_app_daemon",
-     "simulation_enabled",
-     "mockup_sim_enabled",
-     "backend_status"
+     "desktop_app_daemon"
     ],
     "title": "DaemonStatus",
     "description": "Status of the Reachy Mini daemon."
@@ -3537,7 +3534,6 @@
     "required": [
      "ready",
      "motor_control_mode",
-     "last_alive",
      "control_loop_stats"
     ],
     "title": "RobotBackendStatus",

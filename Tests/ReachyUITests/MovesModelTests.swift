@@ -26,8 +26,14 @@ private final class MovesUIClient: RobotAPIClient, @unchecked Sendable {
         status
     }
 
-    func wakeUp() async throws {}
-    func gotoSleep() async throws {}
+    func wakeUp() async throws -> String {
+        "wake"
+    }
+
+    func gotoSleep() async throws -> String {
+        "sleep"
+    }
+
     func listMoves(dataset _: String) async throws -> [String] {
         lock.withLock { listCalls += 1 }
         return ["happy_move"]
