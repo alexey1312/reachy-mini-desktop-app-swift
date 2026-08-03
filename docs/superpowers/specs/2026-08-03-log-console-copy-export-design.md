@@ -50,8 +50,8 @@ case-sensitive on upper-case tokens to avoid classifying prose such as "error ra
 
 ### Pause
 
-Pause stops the display, not ingestion. Incoming lines accumulate in `pending`; the toolbar shows a `+N` badge;
-Resume appends them in order. The log stays complete on screen and in the export.
+Pause stops the display, not ingestion. Incoming lines accumulate in `pending`, the status bar reads
+`paused · +N new`, and Resume appends them in order. The log stays complete on screen and in the export.
 
 ### Buffer
 
@@ -68,8 +68,9 @@ filter per arriving line would not hold up at 20 000 lines.
 ### Presentation
 
 Monospaced text is kept. Timestamp renders `.secondary`; error red, warning orange, debug muted. Auto-scroll
-follows the tail until the user scrolls away, at which point a "Jump to latest" control appears. The subtitle shows
-`N lines`, or `N of M` while a filter is active.
+follows the tail until the user scrolls away, at which point a "Jump to latest" control appears. A bottom status bar
+shows `N lines`, or `N of M` while a filter is active, plus the pause state. Tail tracking uses a zero-height
+sentinel row, because the scroll-position APIs are iOS 18+ and the floor here is iOS 17.
 
 ### Copy
 
@@ -81,8 +82,8 @@ helper holds the only platform branch: `#if os(iOS)` UIPasteboard, `#else` NSPas
 `ShareLink(item: LogExport)` where `LogExport: Transferable` holds a snapshot of the visible entries (a COW array
 reference, cheap to construct on every toolbar render) and serializes lazily inside `DataRepresentation`, so the
 text is built only when the user actually shares. Suggested file name
-`reachy-daemon-<host>-<yyyyMMdd-HHmmss>.txt`, content type `UTType.plainText` — more reliably handled by the iOS
-share sheet than a `.log` extension.
+`reachy-daemon-<host>-<yyyyMMdd>T<HHmmss>.txt` stamped in UTC, content type `UTType.plainText` — more reliably
+handled by the iOS share sheet than a `.log` extension.
 
 The file opens with a metadata header, because an exported log is read detached from the app and must state what was
 captured and whether a filter truncated it:
