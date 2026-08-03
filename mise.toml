@@ -82,7 +82,13 @@ run = "echo 'Git hooks:' && git config core.hooksPath && ls .githooks/"
 
 [tasks.project]
 description = "Generate Xcode project for app targets (Apps/)"
-run = "cd Apps && tuist generate --no-open"
+# Explicit path: /usr/local/bin/tuist (tuistenv) can shadow mise's pinned tuist
+run = """
+#!/bin/bash
+set -euo pipefail
+TUIST="$(./bin/mise where tuist)/tuist"
+cd Apps && exec "$TUIST" generate --no-open
+"""
 
 [tasks.clean]
 description = "Clean build artifacts"
