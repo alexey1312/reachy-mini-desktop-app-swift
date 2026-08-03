@@ -22,6 +22,37 @@ struct SimulatorIntegrationTests {
         #expect(handshake.status.simulationEnabled == true)
     }
 
+    @Test("set_target moves the head (visible in the state stream)", .timeLimit(.minutes(1)))
+    func teleop() async throws {
+        let client = try SetTargetClient(address: address, minSendInterval: .milliseconds(10))
+        await client.connect()
+
+        // Stream a yaw target for a while, then check the observed head pose moved.
+        let targetYaw = 0.4
+        let sender = Task {
+            for _ in 0 ..< 40 {
+                await client.send(.init(yaw: targetYaw))
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+        defer {
+            sender.cancel()
+            Task { await client.disconnect() }
+        }
+
+        let stream = try StateStreamClient(address: address)
+        var bestYaw = 0.0
+        for await state in stream.states() {
+            if let yaw = state.headPose?.value1?.yaw {
+                bestYaw = max(bestYaw, abs(yaw))
+                if bestYaw > 0.2 {
+                    break
+                }
+            }
+        }
+        #expect(bestYaw > 0.2, "head yaw should approach the streamed target")
+    }
+
     @Test("state stream delivers ~20 Hz", .timeLimit(.minutes(1)))
     func stateStream() async throws {
         let client = try StateStreamClient(address: address)

@@ -6,6 +6,12 @@ struct RobotScreen: View {
     let session: RobotSession
 
     var body: some View {
+        NavigationStack {
+            content
+        }
+    }
+
+    private var content: some View {
         Form {
             statusSection
             controlSection
@@ -56,6 +62,13 @@ struct RobotScreen: View {
 
     private var controlSection: some View {
         Section("Control") {
+            if let address = session.address {
+                NavigationLink {
+                    ControllerScreen(address: address)
+                } label: {
+                    Label("Controller", systemImage: "gamecontroller")
+                }
+            }
             Button {
                 Task { await session.wake() }
             } label: {
