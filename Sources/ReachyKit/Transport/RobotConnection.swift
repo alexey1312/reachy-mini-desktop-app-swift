@@ -1,0 +1,59 @@
+import Foundation
+import OpenAPIRuntime
+import OpenAPIURLSession
+
+/// Owns the HTTP client for one robot daemon and performs the connection handshake.
+///
+/// The handshake establishes robot identity (hardware id, display name) and daemon
+/// version before anything else — the version drives graceful degradation, and the
+/// hardware id is the only safe way to deduplicate robots seen at several addresses.
+public actor RobotConnection {
+    public let address: RobotAddress
+    private let client: Client
+
+    public init(address: RobotAddress, session: URLSession = .shared) throws {
+        guard let serverURL = address.rootURL else {
+            throw ReachyKitError.invalidAddress(address)
+        }
+        self.address = address
+        client = Client(
+            serverURL: serverURL,
+            transport: URLSessionTransport(configuration: .init(session: session))
+        )
+    }
+
+    /// Result of a successful handshake with the daemon.
+    public struct Handshake: Sendable {
+        public let identity: RobotIdentity
+        public let status: Components.Schemas.DaemonStatus
+    }
+
+    public func handshake() async throws -> Handshake {
+        let status = try await client.getDaemonStatusApiDaemonStatusGet().ok.body.json
+
+        // hardware-id returns a string map (component serials); flatten deterministically
+        // so the same robot always yields the same identity string.
+        let hardwareMap = try await client.getRobotHardwareIdApiDaemonHardwareIdGet()
+            .ok.body.json.additionalProperties
+        let hardwareID = hardwareMap
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: ";")
+
+        let name = try? await client.getRobotDisplayNameApiDaemonRobotNameGet().ok.body.json.name
+
+        return Handshake(
+            identity: RobotIdentity(
+                hardwareID: hardwareID,
+                name: name ?? status.robotName,
+                daemonVersion: status.version
+            ),
+            status: status
+        )
+    }
+
+    /// One-shot full state via REST — fallback only; prefer `StateStreamClient`.
+    public func fullState() async throws -> Components.Schemas.FullState {
+        try await client.getFullStateApiStateFullGet().ok.body.json
+    }
+}

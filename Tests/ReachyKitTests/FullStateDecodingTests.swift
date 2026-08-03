@@ -1,0 +1,37 @@
+import Foundation
+@testable import ReachyKit
+import Testing
+
+@Suite("FullState decoding")
+struct FullStateDecodingTests {
+    private func fixtureData(_ name: String) throws -> Data {
+        let url = try #require(Bundle.module.url(
+            forResource: name,
+            withExtension: "json",
+            subdirectory: "Fixtures"
+        ))
+        return try Data(contentsOf: url)
+    }
+
+    @Test("decodes a realistic state payload with unknown future fields")
+    func decodesFixture() throws {
+        let data = try fixtureData("full_state")
+        let state = try JSONDecoder.reachyDaemon.decode(Components.Schemas.FullState.self, from: data)
+
+        #expect(state.controlMode == .enabled)
+        #expect(state.bodyYaw == 0.25)
+        #expect(state.headPose?.value1?.yaw == -0.3)
+        #expect(state.antennasPosition == [0.1, -0.1])
+        // passive_joints is null with the default kinematics engine
+        #expect(state.passiveJoints == nil)
+        #expect(state.doa?.speechDetected == true)
+        #expect(state.doa?.angle == 1.5707)
+    }
+
+    @Test("all-null payload decodes to empty state (graceful degradation)")
+    func decodesEmpty() throws {
+        let state = try JSONDecoder.reachyDaemon.decode(Components.Schemas.FullState.self, from: Data("{}".utf8))
+        #expect(state.controlMode == nil)
+        #expect(state.headPose == nil)
+    }
+}

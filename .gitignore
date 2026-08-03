@@ -1,0 +1,22 @@
+# Swift / SPM
+.build/
+.swiftpm/
+Package.resolved.orig
+
+# Xcode / Tuist
+*.xcodeproj
+*.xcworkspace
+Apps/Derived/
+DerivedData/
+xcuserdata/
+
+# Coverage
+*.profraw
+*.profdata
+
+# Environment
+.envrc
+mise.local.toml
+
+# macOS
+.DS_Store

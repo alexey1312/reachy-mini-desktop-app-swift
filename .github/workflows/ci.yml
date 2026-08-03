@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  MISE_GITHUB_GITHUB_ATTESTATIONS: false
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+        with:
+          experimental: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check formatting (Swift + Markdown)
+        run: mise run format-check
+
+      - name: Lint (SwiftLint + actionlint)
+        run: mise run lint
+
+  build-test:
+    name: Build & Test (macOS)
+    runs-on: macos-15
+    needs: lint
+    env:
+      DEVELOPER_DIR: "/Applications/Xcode_26.2.app/Contents/Developer"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Swift 6.3 toolchain
+        run: |
+          curl -fLo swift-6.3.pkg "https://download.swift.org/swift-6.3-release/xcode/swift-6.3-RELEASE/swift-6.3-RELEASE-osx.pkg"
+          sudo installer -pkg swift-6.3.pkg -target /
+          TOOLCHAINS=$(plutil -extract CFBundleIdentifier raw /Library/Developer/Toolchains/swift-6.3-RELEASE.xctoolchain/Info.plist)
+          echo "TOOLCHAINS=$TOOLCHAINS" >> "$GITHUB_ENV"
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: ${{ runner.os }}-swift-6.3-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-swift-6.3-spm-
+
+      - uses: jdx/mise-action@v4
+        with:
+          experimental: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Build (including tests)
+        run: swift build --build-tests 2>&1 | xcsift
+
+      - name: Test
+        # Build tests separately to avoid hangs from concurrent build + test execution
+        run: swift test --skip-build --parallel 2>&1 | xcsift

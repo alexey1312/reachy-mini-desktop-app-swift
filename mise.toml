@@ -1,0 +1,104 @@
+# =============================================================================
+# mise Configuration for ReachyMini
+# =============================================================================
+# Bootstrap: run ./bootstrap.sh once after cloning. No global mise needed —
+# ./bin/mise is a self-contained bootstrap binary (mise generate bootstrap).
+#
+# To update the embedded mise version:
+#   mise generate bootstrap > ./bin/mise && chmod +x ./bin/mise
+# =============================================================================
+
+[settings]
+experimental = true
+legacy_version_file = false
+
+# Safety net for developers who skipped ./bootstrap.sh: wire git hooks on
+# directory entry via the native core.hooksPath mechanism.
+[hooks]
+enter = """
+git config core.hooksPath .githooks 2>/dev/null || true
+"""
+
+[tools]
+# --- Swift Development ---
+# Swift itself is managed by swiftly via .swift-version, not by mise.
+swiftformat = "0.62.1" # Swift code formatting
+swiftlint = "0.63.3"   # Swift linting
+xcsift = "1.3.1"       # xcodebuild/swift output filtering
+tuist = "4.203.1"      # Xcode project generation (Apps/)
+
+# --- Documentation & Formatting ---
+dprint = "0.55.2" # Markdown formatting
+
+# --- Git & CI ---
+hk = "1.53.0"         # Git hooks manager (version must match hk.pkl package URI)
+actionlint = "1.7.12" # GitHub Actions linting
+git-cliff = "2.13.1"  # Changelog generation
+
+[tasks.build]
+description = "Build the Swift package (debug)"
+run = "swift build 2>&1 | xcsift"
+
+[tasks."build:release"]
+description = "Build the Swift package (release)"
+run = "swift build --configuration release 2>&1 | xcsift"
+
+[tasks.test]
+description = "Run all tests (parallel)"
+run = "swift build --build-tests 2>&1 | xcsift && swift test --skip-build --parallel 2>&1 | xcsift"
+
+[tasks."test:filter"]
+description = "Run tests with filter (usage: mise run test:filter ReachyKitTests)"
+run = "swift test --parallel --filter {{arg(name='filter')}} 2>&1 | xcsift"
+
+[tasks.lint]
+description = "Run SwiftLint and actionlint"
+run = """
+swiftlint lint --strict Sources Tests 2>&1 | xcsift
+actionlint
+"""
+
+[tasks.format]
+description = "Format all files (Swift + Markdown)"
+run = "hk fix --all 2>&1 | grep -E '^(✔|✗|hk )' || true"
+
+[tasks.format-check]
+description = "Check all formatting (CI)"
+run = """
+set -o pipefail
+hk check --all 2>&1 | grep -E '^(✔|✗|hk )'
+"""
+
+[tasks.setup]
+description = "Show git hooks status"
+run = "echo 'Git hooks:' && git config core.hooksPath && ls .githooks/"
+
+[tasks.project]
+description = "Generate Xcode project for app targets (Apps/)"
+run = "cd Apps && tuist generate --no-open"
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = "swift package clean && rm -rf .build"
+
+[tasks.changelog]
+description = "Generate CHANGELOG.md from git history"
+run = "git-cliff -o CHANGELOG.md"
+
+[tasks.update-spec]
+description = "Fetch latest daemon OpenAPI spec from pollen-robotics/reachy_mini"
+run = """
+curl -fsSL https://raw.githubusercontent.com/pollen-robotics/reachy_mini/main/docs/source/API/openapi.json \
+  -o Sources/ReachyKit/openapi.json
+python3 Scripts/normalize-openapi.py Sources/ReachyKit/openapi.json
+git diff --stat Sources/ReachyKit/openapi.json
+"""
+
+[tasks.sim-daemon]
+description = "Run simulated Reachy Mini daemon (MuJoCo) reachable from LAN devices"
+run = """
+#!/bin/bash
+set -euo pipefail
+# ponytail: uvx pulls reachy-mini from PyPI on every run; pin a version here once the API stabilizes
+uvx --from "reachy-mini[mujoco]" reachy-mini-daemon --sim --fastapi-host 0.0.0.0 "$@"
+"""

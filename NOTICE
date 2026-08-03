@@ -1,0 +1,14 @@
+ReachyMini — native Swift client for Reachy Mini Wireless
+Copyright 2026 Aleksei Kakoulin
+
+This is an independent, unofficial client for the Reachy Mini robot by
+Pollen Robotics (https://www.pollen-robotics.com). It is not affiliated
+with, endorsed by, or sponsored by Pollen Robotics. "Reachy Mini" is a
+product name of Pollen Robotics; it is used here solely to describe
+compatibility.
+
+The robot daemon HTTP/WebSocket API behavior was studied from the
+Apache-2.0 licensed repositories pollen-robotics/reachy-mini-desktop-app
+and pollen-robotics/reachy_mini, which serve as the behavioral
+specification for this client. No source code from those repositories is
+included in this project.
