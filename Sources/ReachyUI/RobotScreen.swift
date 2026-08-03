@@ -68,6 +68,11 @@ struct RobotScreen: View {
                 } label: {
                     Label("Controller", systemImage: "gamecontroller")
                 }
+                NavigationLink {
+                    MovesScreen(address: address)
+                } label: {
+                    Label("Moves & expressions", systemImage: "music.note")
+                }
             }
             Button {
                 Task { await session.wake() }

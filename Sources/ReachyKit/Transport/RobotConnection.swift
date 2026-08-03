@@ -72,4 +72,24 @@ public actor RobotConnection {
     public func gotoSleep() async throws {
         _ = try await client.playGotoSleepApiMovePlayGotoSleepPost().ok
     }
+
+    // MARK: Recorded moves (dances / emotions / music libraries)
+
+    /// Move names available in a HF dataset, e.g. `pollen-robotics/reachy-mini-dances-library`.
+    public func listMoves(dataset: String) async throws -> [String] {
+        try await client.listRecordedMoveDatasetApiMoveRecordedMoveDatasetsListDatasetNameGet(
+            path: .init(datasetName: dataset)
+        ).ok.body.json
+    }
+
+    /// Starts a recorded move; returns its UUID for `stopMove`.
+    public func playMove(dataset: String, move: String) async throws -> String {
+        try await client.playRecordedMoveDatasetApiMovePlayRecordedMoveDatasetDatasetNameMoveNamePost(
+            path: .init(datasetName: dataset, moveName: move)
+        ).ok.body.json.uuid
+    }
+
+    public func stopMove(uuid: String) async throws {
+        _ = try await client.stopMoveApiMoveStopPost(body: .json(.init(uuid: uuid))).ok
+    }
 }
