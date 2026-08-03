@@ -67,6 +67,36 @@ public enum RigidTransform {
         simd_double3x3(simd_quatd(angle: angle, axis: simd_normalize(axis)))
     }
 
+    /// Shortest rotation carrying `from` onto `to`, both assumed unit length.
+    ///
+    /// Rodrigues' formula degenerates when the vectors are parallel or opposed —
+    /// the cross product vanishes and the axis is undefined — so those are handled
+    /// before it is applied.
+    public static func alignment(from: SIMD3<Double>, to: SIMD3<Double>) -> simd_double3x3 {
+        let dot = simd_dot(from, to)
+        if dot > Self.alignmentThreshold {
+            return matrix_identity_double3x3
+        }
+        if dot < -Self.alignmentThreshold {
+            // Opposed: any perpendicular axis works, so pick one that is not
+            // itself parallel to the input.
+            let seed = abs(from.x) < 0.9 ? SIMD3<Double>(1, 0, 0) : SIMD3<Double>(0, 1, 0)
+            let axis = simd_normalize(simd_cross(from, seed))
+            return rotation(axis: axis, angle: .pi)
+        }
+        let axis = simd_cross(from, to)
+        let sine = simd_length(axis)
+        let skew = simd_double3x3(rows: [
+            SIMD3(0, -axis.z, axis.y),
+            SIMD3(axis.z, 0, -axis.x),
+            SIMD3(-axis.y, axis.x, 0),
+        ])
+        let scale = (1 - dot) / (sine * sine)
+        return matrix_identity_double3x3 + skew + skew * skew * scale
+    }
+
+    private static let alignmentThreshold = 0.99999
+
     private static let gimbalLockThreshold = 0.99999
 }
 

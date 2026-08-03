@@ -60,7 +60,10 @@ public struct RobotJointState: Sendable, Equatable {
     /// `head_joints` carries `[body_yaw, stewart_1 ... stewart_6]` and is the
     /// preferred source; `body_yaw` alone is the fallback for streams that did not
     /// ask for the motor angles.
-    public static func resolve(_ frame: RobotStateFrame) -> RobotJointState {
+    public static func resolve(
+        _ frame: RobotStateFrame,
+        solver: PassiveJointSolver? = nil
+    ) -> RobotJointState {
         var state = RobotJointState()
         if let joints = frame.headJoints, joints.count >= 7 {
             state.bodyYaw = joints[0]
@@ -76,8 +79,16 @@ public struct RobotJointState: Sendable, Equatable {
             state.antennaLeft = -antennas[1]
             state.antennaRight = -antennas[0]
         }
+        // A Placo-backed daemon sends these; every other one leaves them out, which
+        // is why the client can work them out itself.
         if let passive = frame.passiveJoints, passive.count == 21 {
             state.passive = passive
+        } else if let solver, let pose = frame.headPose?.transform {
+            state.passive = solver.solve(
+                headPose: pose,
+                bodyYaw: state.bodyYaw,
+                stewart: state.stewart
+            )
         }
         return state
     }

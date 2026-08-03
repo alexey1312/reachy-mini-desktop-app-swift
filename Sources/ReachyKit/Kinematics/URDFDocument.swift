@@ -63,6 +63,30 @@ public struct URDFDocument: Sendable, Equatable {
         joints.filter(\.kind.isMovable)
     }
 
+    /// Where `link`'s frame sits relative to the root, with every joint at zero.
+    ///
+    /// This rest configuration is the frame the description's own constants are
+    /// written in, which is what makes the Stewart geometry derivable from the
+    /// URDF instead of hard-coded.
+    public func restTransformFromRoot(_ link: String) -> simd_double4x4? {
+        guard linksByName[link] != nil else { return nil }
+        var chain: [URDFJoint] = []
+        var current = link
+        while let joint = parentJoint[current] {
+            chain.append(joint)
+            current = joint.parent
+        }
+        guard current == rootLinkName else { return nil }
+        return chain.reversed().reduce(matrix_identity_double4x4) { $0 * $1.origin.matrix }
+    }
+
+    /// `to`'s rest frame expressed in `from`'s.
+    public func restTransform(from: String, to: String) -> simd_double4x4? {
+        guard let origin = restTransformFromRoot(from),
+              let target = restTransformFromRoot(to) else { return nil }
+        return origin.inverse * target
+    }
+
     /// Every distinct mesh referenced by a `<visual>`. Collision geometry is never
     /// parsed, so it cannot leak in here and cause needless downloads.
     public var visualMeshFilenames: Set<String> {

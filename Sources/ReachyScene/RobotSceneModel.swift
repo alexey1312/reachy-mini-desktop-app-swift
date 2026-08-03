@@ -29,14 +29,19 @@ public final class RobotSceneModel {
     /// angle the user just dragged to.
     public let camera = OrbitCamera()
 
-    /// Until the passive joints are solved, the head is placed straight from the
-    /// daemon's pose. Exposed so the raw tree can be inspected.
+    /// The head is also placed straight from the daemon's pose. The linkage
+    /// algorithm points each rod correctly but never enforces its length, so
+    /// driving the head directly keeps it exactly where the robot says it is.
     public var placesHeadDirectly = true
+    /// Off shows the raw tree with every wrist at zero — useful for seeing what
+    /// the solver is contributing.
+    public var solvesPassiveJoints = true
 
     private let address: RobotAddress
     private let client: any RobotAPIClient
     private let cache: GeometryCache
     private var graph: RobotSceneGraph?
+    private var solver: PassiveJointSolver?
     private var geometryTask: Task<Void, Never>?
     private var streamTask: Task<Void, Never>?
     private var lastPublishedFrameAt: Date?
@@ -88,6 +93,9 @@ public final class RobotSceneModel {
         guard !Task.isCancelled else { return }
         let graph = RobotSceneGraph(urdf: geometry.urdf, meshes: meshes)
         self.graph = graph
+        // Derived from the description that was just downloaded, so the linkage is
+        // solved with this robot's dimensions rather than assumed ones.
+        solver = StewartGeometry(urdf: geometry.urdf).map(PassiveJointSolver.init)
         container.addChild(graph.root)
         // Framing has to wait for the meshes: before they exist the model has no
         // extent, and a camera aimed at an empty point ends up inside the robot.
@@ -116,7 +124,7 @@ public final class RobotSceneModel {
     /// SwiftUI: at 20 Hz that would invalidate the view on every frame.
     private func consume(_ update: StateStreamUpdate) {
         guard let frame = update.frame else { return }
-        graph?.apply(RobotJointState.resolve(frame))
+        graph?.apply(RobotJointState.resolve(frame, solver: solvesPassiveJoints ? solver : nil))
         if placesHeadDirectly {
             graph?.applyHeadPose(frame.headPose?.transform)
         }

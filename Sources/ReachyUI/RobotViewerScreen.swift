@@ -91,6 +91,10 @@ struct RobotViewerScreen: View {
                     get: { model.placesHeadDirectly },
                     set: { model.placesHeadDirectly = $0 }
                 ))
+                Toggle("Solve Stewart linkage", isOn: Binding(
+                    get: { model.solvesPassiveJoints },
+                    set: { model.solvesPassiveJoints = $0 }
+                ))
                 if let lastFrameAt = model.lastFrameAt {
                     Text("Last frame \(lastFrameAt.formatted(date: .omitted, time: .standard))")
                 }
