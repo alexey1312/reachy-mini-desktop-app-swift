@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Observation
 
 /// Connection lifecycle for one robot: handshake, health polling, wake/sleep.
@@ -36,6 +37,7 @@ public final class RobotSession {
     private let makeClient: @Sendable (RobotAddress) throws -> any RobotAPIClient
     private var client: (any RobotAPIClient)?
     private var pollTask: Task<Void, Never>?
+    private var pathMonitor: NWPathMonitor?
 
     /// Production session talking to a real daemon.
     public convenience init(configuration: Configuration = .init()) {
@@ -64,6 +66,7 @@ public final class RobotSession {
             phase = .connected(handshake.identity)
             KnownRobots.lastAddress = address
             startPolling(identity: handshake.identity)
+            startPathMonitor(identity: handshake.identity)
         } catch {
             lastError = "\(error)"
             phase = .idle
@@ -73,6 +76,8 @@ public final class RobotSession {
     public func disconnect() {
         pollTask?.cancel()
         pollTask = nil
+        pathMonitor?.cancel()
+        pathMonitor = nil
         client = nil
         lastStatus = nil
         phase = .idle
@@ -96,7 +101,34 @@ public final class RobotSession {
         }
     }
 
+    /// Network changes shouldn't wait for the next poll tick: losing the path
+    /// drops to `.unreachable` immediately; regaining it restarts polling now.
+    private func startPathMonitor(identity: RobotIdentity) {
+        pathMonitor?.cancel()
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let satisfied = path.status == .satisfied
+            Task { @MainActor in
+                self?.pathChanged(satisfied: satisfied, identity: identity)
+            }
+        }
+        monitor.start(queue: .main)
+        pathMonitor = monitor
+    }
+
+    private func pathChanged(satisfied: Bool, identity: RobotIdentity) {
+        guard client != nil else { return }
+        if !satisfied {
+            if case .connected = phase {
+                phase = .unreachable(identity)
+            }
+        } else if case .unreachable = phase {
+            startPolling(identity: identity)
+        }
+    }
+
     private func startPolling(identity: RobotIdentity) {
+        pollTask?.cancel()
         pollTask = Task { [configuration] in
             var consecutiveSuccesses = 0
             while !Task.isCancelled {

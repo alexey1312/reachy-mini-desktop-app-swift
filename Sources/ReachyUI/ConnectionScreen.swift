@@ -9,6 +9,7 @@ struct ConnectionScreen: View {
     @State private var browser = RobotBrowser()
     @State private var manualInput = KnownRobots.lastAddress.map(\.displayString) ?? ""
     @State private var resolving: String?
+    @State private var autoConnectAttempted = false
 
     var body: some View {
         Form {
@@ -29,7 +30,10 @@ struct ConnectionScreen: View {
                 ProgressView("Connecting…")
             }
         }
-        .onAppear { browser.start() }
+        .onAppear {
+            browser.start()
+            autoConnectToLastRobot()
+        }
         .onDisappear { browser.stop() }
     }
 
@@ -78,7 +82,20 @@ struct ConnectionScreen: View {
                 Task { await session.connect(to: address) }
             }
             .disabled(RobotAddress(parsing: manualInput) == nil)
+            if KnownRobots.lastAddress != nil {
+                Button("Forget last robot", role: .destructive) {
+                    KnownRobots.lastAddress = nil
+                    manualInput = ""
+                }
+            }
         }
+    }
+
+    /// One shot per screen lifetime: reconnect to the previously used robot.
+    private func autoConnectToLastRobot() {
+        guard !autoConnectAttempted, let last = KnownRobots.lastAddress, session.phase == .idle else { return }
+        autoConnectAttempted = true
+        Task { await session.connect(to: last) }
     }
 
     private func connect(to service: RobotBrowser.DiscoveredService) {
