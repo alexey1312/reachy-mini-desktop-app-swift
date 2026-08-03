@@ -60,4 +60,16 @@ public actor RobotConnection {
     public func fullState() async throws -> Components.Schemas.FullState {
         try await client.getFullStateApiStateFullGet().ok.body.json
     }
+
+    public func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
+        try await client.getDaemonStatusApiDaemonStatusGet().ok.body.json
+    }
+
+    public func wakeUp() async throws {
+        _ = try await client.playWakeUpApiMovePlayWakeUpPost().ok
+    }
+
+    public func gotoSleep() async throws {
+        _ = try await client.playGotoSleepApiMovePlayGotoSleepPost().ok
+    }
 }

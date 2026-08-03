@@ -30,6 +30,7 @@ let project = Project(
             sources: ["ReachySpike/Sources/**"],
             dependencies: [
                 .package(product: "ReachyKit"),
+                .package(product: "ReachyUI"),
             ]
         ),
     ]

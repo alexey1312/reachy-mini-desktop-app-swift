@@ -1,0 +1,77 @@
+import ReachyKit
+import SwiftUI
+
+/// Connected-robot screen: identity, live daemon status, wake/sleep.
+struct RobotScreen: View {
+    let session: RobotSession
+
+    var body: some View {
+        Form {
+            statusSection
+            controlSection
+            if let error = session.lastError {
+                Section {
+                    Text(error)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.red)
+                }
+            }
+            Section {
+                Button("Disconnect", role: .destructive) {
+                    session.disconnect()
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var identity: RobotIdentity? {
+        switch session.phase {
+        case let .connected(identity), let .unreachable(identity): identity
+        default: nil
+        }
+    }
+
+    private var statusSection: some View {
+        Section("Robot") {
+            LabeledContent("Name") { Text(identity?.name ?? "—") }
+            LabeledContent("Daemon") { Text(identity?.daemonVersion ?? "—") }
+            LabeledContent("Address") { Text(session.address?.displayString ?? "—") }
+            LabeledContent("Link") {
+                if case .unreachable = session.phase {
+                    Label("Unreachable — reconnecting…", systemImage: "wifi.exclamationmark")
+                        .foregroundStyle(.orange)
+                } else {
+                    Label("Connected", systemImage: "checkmark.circle")
+                        .foregroundStyle(.green)
+                }
+            }
+            if let status = session.lastStatus {
+                LabeledContent("Daemon state") { Text(String(describing: status.state)) }
+            }
+        }
+    }
+
+    private var controlSection: some View {
+        Section("Control") {
+            Button {
+                Task { await session.wake() }
+            } label: {
+                Label("Wake up", systemImage: "sun.max")
+            }
+            Button {
+                Task { await session.sleep() }
+            } label: {
+                Label("Go to sleep", systemImage: "moon.zzz")
+            }
+        }
+        .disabled(!isConnected)
+    }
+
+    private var isConnected: Bool {
+        if case .connected = session.phase {
+            return true
+        }
+        return false
+    }
+}

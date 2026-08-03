@@ -9,6 +9,7 @@ let package = Package(
     ],
     products: [
         .library(name: "ReachyKit", targets: ["ReachyKit"]),
+        .library(name: "ReachyUI", targets: ["ReachyUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.7.0"),
@@ -26,6 +27,11 @@ let package = Package(
             plugins: [
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator"),
             ]
+        ),
+        .target(
+            name: "ReachyUI",
+            dependencies: ["ReachyKit"],
+            exclude: ["AGENTS.md", "CLAUDE.md"]
         ),
         .testTarget(
             name: "ReachyKitTests",
