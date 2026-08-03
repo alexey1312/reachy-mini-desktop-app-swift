@@ -26,12 +26,18 @@ Goal: working skeleton + confirmation that no platform restriction blocks the pr
 - **WebRTC signaling (was part of phase 2 risk)** — port 8443 is plain `ws://` (no TLS), GStreamer `webrtcsink`
   signalling protocol confirmed live. See `webrtc.md`.
 
-## Pending on-device checks (need the Tuist app shell)
+- **Spike app (`Apps/ReachySpike`)** — Tuist multiplatform target (iPhone/iPad/Mac) with the phase-0 Info.plist keys.
+  Verified in the iOS Simulator against the sim daemon: `NWBrowser` finds `reachy_mini` via `_reachy-mini._tcp`
+  (the daemon does advertise mDNS), handshake succeeds, state stream counts frames with a live Hz readout.
+  Note: sim daemon v1.9.0 emits **10 Hz on the wire** (measured independently), not the documented 20 — the spike's
+  rate counter is honest; re-measure on real hardware.
 
-- [ ] Local Network permission prompt shows; denial detected via discovery timeout; Settings deep link works.
+## Pending on-device checks (real iPhone + iPad; simulator can't test these)
+
+- [ ] Local Network permission prompt shows; denial detected (spike flags `PolicyDenied` browser state); Settings
+      deep link works.
 - [ ] `NSAllowsLocalNetworking` passes plain HTTP to raw IPs and `.local` names without ATS errors.
-- [ ] `NWBrowser` finds the simulated daemon (`_reachy-mini._tcp` / `_http._tcp`); `.local` resolution works.
-- [ ] 20 Hz stream stable on iPhone + iPad for ≥ 5 min; reconnect after Wi-Fi switch.
+- [ ] Stream stable on iPhone + iPad for ≥ 5 min; reconnect after Wi-Fi switch.
 
 ## Open questions
 

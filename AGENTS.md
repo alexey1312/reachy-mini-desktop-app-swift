@@ -20,6 +20,8 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 - Swift itself is managed by swiftly via `.swift-version`, not by mise.
 - Tool versions are pinned in `mise.toml` + `mise.lock`. After editing `[tools]`: `trash mise.lock && ./bin/mise lock`.
 - The `hk` version in `mise.toml` must match the `hk@X.Y.Z` package URI in `hk.pkl` (bump together).
+- `mise run project` (tuist generate) needs a one-time `./bin/mise x -- tuist auth login` — the project is connected
+  to tuist.dev (`alexey1312/reachy-mini-desktop-app-swift` in `Apps/Tuist.swift`).
 
 ## Quick Reference
 

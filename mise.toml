@@ -61,7 +61,7 @@ run = "REACHY_SIM_HOST=127.0.0.1 swift test --parallel --filter SimulatorIntegra
 [tasks.lint]
 description = "Run SwiftLint and actionlint"
 run = """
-swiftlint lint --strict Sources Tests 2>&1 | xcsift
+swiftlint lint --strict Sources Tests Apps/ReachySpike 2>&1 | xcsift
 actionlint
 """
 

@@ -1,0 +1,81 @@
+import SwiftUI
+
+/// Phase 0.4 device-check screen: discovery, manual connect, stream counter.
+/// Checklist it serves — see docs/research/phase0.md.
+struct SpikeView: View {
+    @State private var model = SpikeModel()
+    @State private var discovery = DiscoveryModel()
+
+    var body: some View {
+        Form {
+            discoverySection
+            connectSection
+            streamSection
+        }
+        .formStyle(.grouped)
+        .onAppear { discovery.start() }
+        .onDisappear { discovery.stop() }
+    }
+
+    private var discoverySection: some View {
+        Section("Discovery (Bonjour)") {
+            ForEach(Array(discovery.browserStates.sorted(by: { $0.key < $1.key })), id: \.key) { type, state in
+                LabeledContent(type) {
+                    Text(state).font(.caption.monospaced())
+                }
+            }
+            if discovery.permissionLooksDenied {
+                Label("Local Network permission denied", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                #if os(iOS)
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                #endif
+            }
+            if discovery.services.isEmpty {
+                Text("No robots found").foregroundStyle(.secondary)
+            }
+            ForEach(discovery.services) { service in
+                LabeledContent(service.name) {
+                    Text(service.type).font(.caption.monospaced())
+                }
+            }
+            Button("Restart discovery") { discovery.start() }
+        }
+    }
+
+    private var connectSection: some View {
+        Section("Connection") {
+            TextField("Host (IP or name.local)", text: $model.host)
+                .autocorrectionDisabled()
+            #if os(iOS)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+            #endif
+            Button("Connect (handshake)") {
+                Task { await model.connect() }
+            }
+            if let summary = model.handshakeSummary {
+                Text(summary).font(.caption.monospaced())
+            }
+            if let error = model.lastError {
+                Text(error)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var streamSection: some View {
+        Section("State stream (20 Hz expected)") {
+            Button(model.isStreaming ? "Stop stream" : "Start stream") {
+                model.toggleStream()
+            }
+            LabeledContent("Frames") { Text("\(model.frameCount)") }
+            LabeledContent("Rate") { Text(String(format: "%.1f Hz", model.hertz)) }
+        }
+    }
+}
