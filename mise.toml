@@ -132,5 +132,9 @@ if [ ! -x "$VENV/bin/mjpython" ] || [ "$INSTALLED" != "$EXPECTED" ]; then
   printf '%s' "$EXPECTED" > "$STAMP"
 fi
 "$VENV/bin/python" -c 'import importlib.metadata as m; assert m.version("reachy-mini") == "1.9.0"'
+# Without the scanner GStreamer's plugin loader silently fails, webrtcsink can't
+# find the Opus encoder ("No caps found for stream audio_0") and no WebRTC
+# producer is ever registered on :8443.
+export GST_PLUGIN_SCANNER="$PWD/$VENV/lib/python3.12/site-packages/gstreamer_libs/libexec/gstreamer-1.0/gst-plugin-scanner"
 exec "$VENV/bin/mjpython" -m reachy_mini.daemon.app.main --sim --fastapi-host 0.0.0.0 "$@"
 """

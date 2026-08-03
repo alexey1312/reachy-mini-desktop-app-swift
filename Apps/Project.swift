@@ -25,6 +25,10 @@ let project = Project(
                 "NSAppTransportSecurity": .dictionary([
                     "NSAllowsLocalNetworking": .boolean(true),
                 ]),
+                // Phase 2 camera: WebRTC mic uplink (client mic → robot speaker)
+                "NSMicrophoneUsageDescription": .string(
+                    "Talk to people near your Reachy Mini through its speaker."
+                ),
                 "UILaunchScreen": .dictionary([:]),
             ]),
             sources: ["ReachySpike/Sources/**"],

@@ -128,4 +128,11 @@ public actor RobotConnection {
     public func stopSound() async throws {
         _ = try await client.stopSoundApiMediaStopSoundPost().ok
     }
+
+    /// Re-acquires camera/audio hardware for the daemon's WebRTC producer.
+    /// The simulator registers no producer until this is called; on a real
+    /// robot it's a harmless no-op when media is already held.
+    public func acquireMedia() async throws {
+        _ = try await client.acquireMediaApiMediaAcquirePost().ok
+    }
 }

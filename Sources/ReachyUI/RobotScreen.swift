@@ -84,6 +84,13 @@ struct RobotScreen: View {
                 } label: {
                     Label("Daemon logs", systemImage: "terminal")
                 }
+                if session.lastStatus?.wirelessVersion == true || session.lastStatus?.simulationEnabled == true {
+                    NavigationLink {
+                        CameraScreen(address: address)
+                    } label: {
+                        Label("Camera", systemImage: "video")
+                    }
+                }
             }
             Button {
                 Task { await session.wake() }

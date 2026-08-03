@@ -53,6 +53,22 @@ struct SimulatorIntegrationTests {
         #expect(bestYaw > 0.2, "head yaw should approach the streamed target")
     }
 
+    @Test("webrtc signaling negotiates up to the robot's SDP offer", .timeLimit(.minutes(1)))
+    func webrtcSignaling() async throws {
+        // The sim registers its producer only after media acquire.
+        let connection = try RobotConnection(address: address)
+        try? await connection.acquireMedia()
+
+        let client = try CameraSignalingClient(address: address)
+        for await event in await client.events() {
+            if case let .offer(_, sdp) = event {
+                #expect(sdp.hasPrefix("v=0"))
+                break
+            }
+        }
+        await client.disconnect()
+    }
+
     @Test("state stream delivers ~20 Hz", .timeLimit(.minutes(1)))
     func stateStream() async throws {
         let client = try StateStreamClient(address: address)

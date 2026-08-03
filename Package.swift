@@ -9,12 +9,14 @@ let package = Package(
     ],
     products: [
         .library(name: "ReachyKit", targets: ["ReachyKit"]),
+        .library(name: "ReachyMedia", targets: ["ReachyMedia"]),
         .library(name: "ReachyUI", targets: ["ReachyUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.7.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.8.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.1.0"),
+        .package(url: "https://github.com/stasel/WebRTC.git", from: "150.0.0"),
     ],
     targets: [
         .target(
@@ -29,8 +31,15 @@ let package = Package(
             ]
         ),
         .target(
+            name: "ReachyMedia",
+            dependencies: [
+                "ReachyKit",
+                .product(name: "WebRTC", package: "WebRTC"),
+            ]
+        ),
+        .target(
             name: "ReachyUI",
-            dependencies: ["ReachyKit"],
+            dependencies: ["ReachyKit", "ReachyMedia"],
             exclude: ["AGENTS.md", "CLAUDE.md"]
         ),
         .testTarget(
