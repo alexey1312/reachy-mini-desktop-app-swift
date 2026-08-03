@@ -10,6 +10,9 @@ import OpenAPIURLSession
 public actor RobotConnection {
     public let address: RobotAddress
     private let client: Client
+    /// Mesh downloads run to tens of megabytes; the 3.5 s health-poll budget would
+    /// abort them, so they get their own session.
+    private let assetSession: URLSession
 
     public init(address: RobotAddress, session: URLSession? = nil) throws {
         guard let serverURL = address.rootURL else {
@@ -29,6 +32,16 @@ public actor RobotConnection {
             serverURL: serverURL,
             transport: URLSessionTransport(configuration: .init(session: resolvedSession))
         )
+        // An injected session belongs to a test harness — reuse it so stubbed
+        // protocols still intercept asset requests.
+        if let session {
+            assetSession = session
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.timeoutIntervalForRequest = 20
+            configuration.timeoutIntervalForResource = 120
+            assetSession = URLSession(configuration: configuration)
+        }
     }
 
     /// Result of a successful handshake with the daemon.
@@ -170,6 +183,47 @@ public actor RobotConnection {
     /// Recorded music is owned by the daemon's media player, separately from the move task.
     public func stopSound() async throws {
         _ = try await client.stopSoundApiMediaStopSoundPost().ok
+    }
+
+    /// The robot's own URDF, about 250 KB of XML wrapped in a one-key JSON object.
+    /// Geometry comes from the robot rather than the app bundle, so the model
+    /// always matches the machine in front of the user.
+    public func urdf() async throws -> String {
+        let payload = try await client.getUrdfApiKinematicsUrdfGet().ok.body.json.additionalProperties
+        guard let xml = payload["urdf"], !xml.isEmpty else {
+            throw ReachyKitError.daemonRejected(statusCode: 200)
+        }
+        return xml
+    }
+
+    /// A mesh referenced by the URDF, as raw bytes.
+    ///
+    /// The generated client cannot fetch this: it declares `application/json` for
+    /// every response and sends a matching `Accept`, while the daemon answers
+    /// `model/stl` — the runtime rejects the reply before reading a byte.
+    public func stlAsset(named filename: String) async throws -> Data {
+        guard let url = address.httpURL(path: "/api/kinematics/stl/\(filename)") else {
+            throw ReachyKitError.invalidAddress(address)
+        }
+        let (data, response) = try await assetSession.data(from: url)
+        guard let http = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        guard http.statusCode == 200 else {
+            throw ReachyKitError.fromStatusCode(http.statusCode)
+        }
+        guard !data.isEmpty else {
+            throw URLError(.zeroByteResource)
+        }
+        return data
+    }
+
+    /// Which kinematics engine the daemon runs — the one thing that decides
+    /// whether `passive_joints` ever arrives populated.
+    public func kinematicsInfo() async throws -> KinematicsInfo {
+        let container = try await client.getKinematicsInfoApiKinematicsInfoGet().ok.body.json
+        let data = try JSONEncoder().encode(container)
+        return try JSONDecoder().decode(KinematicsInfo.self, from: data)
     }
 
     /// Re-acquires camera/audio hardware for the daemon's WebRTC producer.

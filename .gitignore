@@ -18,6 +18,8 @@ xcuserdata/
 .envrc
 mise.local.toml
 .venv-sim/
+.venv-sim-placo/
+CLAUDE.local.md
 
 # macOS
 .DS_Store

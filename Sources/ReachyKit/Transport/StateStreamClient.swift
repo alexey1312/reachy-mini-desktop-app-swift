@@ -15,23 +15,30 @@ public struct StateStreamDiagnostics: Equatable, Sendable {
 /// One WebSocket frame and the diagnostics accumulated through that frame.
 public struct StateStreamUpdate: Sendable {
     public let state: Components.Schemas.FullState?
+    /// The same frame decoded by hand, for consumers that need the head pose as a
+    /// matrix. See ``RobotStateFrame`` for why the generated type is not enough.
+    public let frame: RobotStateFrame?
     public let diagnostics: StateStreamDiagnostics
 }
 
-/// Streams the robot's full state from `ws://<host>:<port>/api/state/ws/full` (20 Hz).
+/// Streams the robot's full state from `ws://<host>:<port>/api/state/ws/full`.
 ///
-/// Reconnects forever with exponential backoff until the stream's consumer cancels.
-/// Streams use `.bufferingNewest(1)`, so slow consumers always observe the newest update.
+/// The daemon sends 10 frames per second unless `Configuration.options` asks for
+/// another rate. Reconnects forever with exponential backoff until the stream's
+/// consumer cancels. Streams use `.bufferingNewest(1)`, so slow consumers always
+/// observe the newest update.
 public struct StateStreamClient: Sendable {
     public struct Configuration: Sendable {
         public var initialBackoff: Duration = .milliseconds(500)
         public var maxBackoff: Duration = .seconds(15)
+        /// Empty by default, which reproduces the daemon's own defaults exactly.
+        public var options = StateStreamOptions()
         public init() {}
     }
 
     public static let statePath = "/api/state/ws/full"
 
-    private let url: URL
+    let url: URL
     private let configuration: Configuration
     private let session: URLSession
 
@@ -40,7 +47,10 @@ public struct StateStreamClient: Sendable {
         configuration: Configuration = .init(),
         session: URLSession = .shared
     ) throws {
-        guard let url = address.webSocketURL(path: Self.statePath) else {
+        guard let url = address.webSocketURL(
+            path: Self.statePath,
+            queryItems: configuration.options.queryItems
+        ) else {
             throw ReachyKitError.invalidAddress(address)
         }
         self.url = url
@@ -80,19 +90,23 @@ public struct StateStreamClient: Sendable {
                         }
 
                         guard let data else {
-                            continuation.yield(.init(state: nil, diagnostics: diagnostics))
+                            continuation.yield(.init(state: nil, frame: nil, diagnostics: diagnostics))
                             continue
                         }
+                        // Decoded separately and never folded into diagnostics: the
+                        // generated schema stays the health signal, so a viewer-only
+                        // decode problem cannot masquerade as a broken stream.
+                        let frame = try? decoder.decode(RobotStateFrame.self, from: data)
                         do {
                             let state = try decoder.decode(Components.Schemas.FullState.self, from: data)
                             diagnostics.decodedFrames += 1
-                            continuation.yield(.init(state: state, diagnostics: diagnostics))
+                            continuation.yield(.init(state: state, frame: frame, diagnostics: diagnostics))
                             backoff = configuration.initialBackoff
                         } catch {
                             diagnostics.decodeFailures += 1
                             diagnostics.lastFailureDescription = Self.failureDescription(error)
                             diagnostics.lastFailureAt = Date()
-                            continuation.yield(.init(state: nil, diagnostics: diagnostics))
+                            continuation.yield(.init(state: nil, frame: frame, diagnostics: diagnostics))
                         }
                     }
                 } catch {

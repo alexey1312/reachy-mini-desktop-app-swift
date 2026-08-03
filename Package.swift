@@ -4,12 +4,14 @@ import PackageDescription
 let package = Package(
     name: "ReachyMini",
     platforms: [
-        .macOS(.v14),
-        .iOS(.v17),
+        // RealityView (the 3D robot viewer) is iOS 18 / macOS 15.
+        .macOS(.v15),
+        .iOS(.v18),
     ],
     products: [
         .library(name: "ReachyKit", targets: ["ReachyKit"]),
         .library(name: "ReachyMedia", targets: ["ReachyMedia"]),
+        .library(name: "ReachyScene", targets: ["ReachyScene"]),
         .library(name: "ReachyUI", targets: ["ReachyUI"]),
     ],
     dependencies: [
@@ -38,8 +40,12 @@ let package = Package(
             ]
         ),
         .target(
+            name: "ReachyScene",
+            dependencies: ["ReachyKit"]
+        ),
+        .target(
             name: "ReachyUI",
-            dependencies: ["ReachyKit", "ReachyMedia"],
+            dependencies: ["ReachyKit", "ReachyMedia", "ReachyScene"],
             exclude: ["AGENTS.md", "CLAUDE.md"]
         ),
         .testTarget(
@@ -48,6 +54,10 @@ let package = Package(
             resources: [
                 .copy("Fixtures"),
             ]
+        ),
+        .testTarget(
+            name: "ReachySceneTests",
+            dependencies: ["ReachyScene", "ReachyKit"]
         ),
         .testTarget(
             name: "ReachyUITests",

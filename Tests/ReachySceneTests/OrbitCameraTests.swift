@@ -1,0 +1,103 @@
+@testable import ReachyScene
+import RealityKit
+import simd
+import Testing
+
+@MainActor
+@Suite("Orbit camera")
+struct OrbitCameraTests {
+    /// A Reachy Mini is roughly 28 cm tall and stands on the origin.
+    private var robotBounds: BoundingBox {
+        BoundingBox(min: SIMD3(-0.09, 0, -0.09), max: SIMD3(0.09, 0.28, 0.09))
+    }
+
+    /// The bug this class exists to fix: framing an empty scene left the camera at
+    /// the origin, which is inside the robot once it finally loads.
+    @Test("framing puts the camera outside the model")
+    func framingEscapesTheModel() {
+        let camera = OrbitCamera()
+        camera.frame(robotBounds)
+        let position = camera.entity.position(relativeTo: nil)
+        #expect(simd_distance(position, robotBounds.center) > simd_length(robotBounds.extents) / 2)
+    }
+
+    @Test("framing scales the distance to the model, not to a fixed guess")
+    func framingScalesWithSize() {
+        let near = OrbitCamera()
+        near.frame(robotBounds)
+        let far = OrbitCamera()
+        far.frame(BoundingBox(min: SIMD3(-1, 0, -1), max: SIMD3(1, 3, 1)))
+
+        let nearDistance = simd_distance(near.entity.position(relativeTo: nil), robotBounds.center)
+        let farDistance = simd_distance(far.entity.position(relativeTo: nil), SIMD3(0, 1.5, 0))
+        #expect(farDistance > nearDistance * 5)
+    }
+
+    @Test("dragging changes the viewpoint but keeps the distance")
+    func draggingOrbits() {
+        let camera = OrbitCamera()
+        camera.frame(robotBounds)
+        let before = camera.entity.position(relativeTo: nil)
+
+        camera.drag(translation: SIMD2(120, 0))
+        let after = camera.entity.position(relativeTo: nil)
+
+        #expect(simd_distance(before, after) > 0.01)
+        let radiusBefore = simd_distance(before, robotBounds.center)
+        let radiusAfter = simd_distance(after, robotBounds.center)
+        #expect(abs(radiusBefore - radiusAfter) < 1e-4)
+    }
+
+    /// Past the pole the up vector degenerates and the image flips over.
+    @Test("elevation stops short of straight overhead")
+    func elevationIsClamped() {
+        let camera = OrbitCamera()
+        camera.frame(robotBounds)
+        camera.drag(translation: SIMD2(0, 100_000))
+        let position = camera.entity.position(relativeTo: nil)
+        let horizontal = simd_length(SIMD2(position.x - robotBounds.center.x, position.z - robotBounds.center.z))
+        #expect(horizontal > 0.001)
+    }
+
+    @Test("pinching in moves the camera closer")
+    func magnifyPullsIn() {
+        let camera = OrbitCamera()
+        camera.frame(robotBounds)
+        let before = simd_distance(camera.entity.position(relativeTo: nil), robotBounds.center)
+
+        camera.magnify(by: 2)
+        let after = simd_distance(camera.entity.position(relativeTo: nil), robotBounds.center)
+        #expect(after < before)
+    }
+
+    /// Gestures report cumulative values; without releasing the anchor a second
+    /// drag would restart from the original angle and the view would jump.
+    @Test("a new gesture continues from where the last one stopped")
+    func gesturesCompose() {
+        let camera = OrbitCamera()
+        camera.frame(robotBounds)
+
+        camera.drag(translation: SIMD2(60, 0))
+        camera.endGesture()
+        let afterFirst = camera.entity.position(relativeTo: nil)
+
+        camera.drag(translation: SIMD2(60, 0))
+        let afterSecond = camera.entity.position(relativeTo: nil)
+        #expect(simd_distance(afterFirst, afterSecond) > 0.01)
+    }
+
+    @Test("zooming cannot pass through the model or fly away")
+    func zoomIsBounded() {
+        let camera = OrbitCamera()
+        camera.frame(robotBounds)
+
+        camera.magnify(by: 1000)
+        let closest = simd_distance(camera.entity.position(relativeTo: nil), robotBounds.center)
+        #expect(closest > 0.01)
+
+        camera.endGesture()
+        camera.magnify(by: 0.0001)
+        let farthest = simd_distance(camera.entity.position(relativeTo: nil), robotBounds.center)
+        #expect(farthest < 10)
+    }
+}

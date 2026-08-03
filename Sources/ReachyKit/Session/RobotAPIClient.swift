@@ -14,6 +14,9 @@ public protocol RobotAPIClient: Sendable {
     func runningMoveUUIDs() async throws -> Set<String>
     func stopMove(uuid: String) async throws
     func stopSound() async throws
+    func urdf() async throws -> String
+    func stlAsset(named filename: String) async throws -> Data
+    func kinematicsInfo() async throws -> KinematicsInfo
 }
 
 /// Defaults keep lightweight session test doubles focused on the behavior they exercise.
@@ -43,6 +46,18 @@ public extension RobotAPIClient {
     }
 
     func stopSound() async throws {
+        throw URLError(.unsupportedURL)
+    }
+
+    func urdf() async throws -> String {
+        throw URLError(.unsupportedURL)
+    }
+
+    func stlAsset(named _: String) async throws -> Data {
+        throw URLError(.unsupportedURL)
+    }
+
+    func kinematicsInfo() async throws -> KinematicsInfo {
         throw URLError(.unsupportedURL)
     }
 }

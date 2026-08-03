@@ -85,6 +85,14 @@ struct RobotScreen: View {
                     Label("Moves & expressions", systemImage: "music.note")
                 }
                 NavigationLink {
+                    RobotViewerScreen(address: address)
+                } label: {
+                    Label("3D model", systemImage: "cube.transparent")
+                }
+                // Read-only, so it needs no motors — but the geometry and state
+                // routes are both behind the backend.
+                .disabled(!session.isBackendRunning)
+                NavigationLink {
                     LogConsoleScreen(address: address)
                 } label: {
                     Label("Daemon logs", systemImage: "terminal")

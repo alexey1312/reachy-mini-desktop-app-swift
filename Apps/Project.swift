@@ -12,7 +12,7 @@ let project = Project(
             destinations: [.iPhone, .iPad, .mac],
             product: .app,
             bundleId: "com.alexey1312.ReachyMiniSpike",
-            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            deploymentTargets: .multiplatform(iOS: "18.0", macOS: "15.0"),
             infoPlist: .extendingDefault(with: [
                 // Phase 0.4 device checks: Local Network permission + Bonjour + ATS
                 "NSLocalNetworkUsageDescription": .string(

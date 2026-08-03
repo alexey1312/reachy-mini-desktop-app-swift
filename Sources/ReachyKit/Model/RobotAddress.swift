@@ -52,19 +52,28 @@ public struct RobotAddress: Hashable, Sendable, Codable {
     }
 
     /// URL for a WebSocket endpoint, e.g. `ws://host:8000/api/state/ws/full`.
-    public func webSocketURL(path: String) -> URL? {
-        url(scheme: "ws", path: path)
+    public func webSocketURL(path: String, queryItems: [URLQueryItem] = []) -> URL? {
+        url(scheme: "ws", path: path, queryItems: queryItems)
+    }
+
+    /// URL for a plain HTTP endpoint. Needed where the generated OpenAPI client
+    /// cannot be used — it declares `application/json` for every response, so a
+    /// binary payload like an STL mesh fails before the bytes are read.
+    public func httpURL(path: String, queryItems: [URLQueryItem] = []) -> URL? {
+        url(scheme: "http", path: path, queryItems: queryItems)
     }
 
     /// Foundation's `URLComponents` rejects bare IPv6 literals in `host` — they must be
     /// pre-bracketed by the caller (upstream issue #269 was exactly this class of bug).
-    private func url(scheme: String, path: String) -> URL? {
+    private func url(scheme: String, path: String, queryItems: [URLQueryItem] = []) -> URL? {
         guard !host.isEmpty else { return nil }
         var components = URLComponents()
         components.scheme = scheme
         components.host = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
         components.port = port
         components.path = path
+        // Staying nil for the empty case keeps existing URLs byte-identical (no "?").
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
         return components.url
     }
 }
