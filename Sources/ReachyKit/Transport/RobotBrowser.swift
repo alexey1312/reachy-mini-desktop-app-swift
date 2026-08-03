@@ -25,7 +25,7 @@ public final class RobotBrowser {
     public private(set) var browserStates: [String: String] = [:]
     private var browsers: [NWBrowser] = []
 
-    public static let serviceTypes = ["_reachy-mini._tcp", "_http._tcp"]
+    public nonisolated static let serviceTypes = ["_reachy-mini._tcp", "_http._tcp"]
 
     public init() {}
 
@@ -34,7 +34,15 @@ public final class RobotBrowser {
     }
 
     public var permissionLooksDenied: Bool {
-        browserStates.values.contains { $0.contains("PolicyDenied") || $0.contains("-65570") }
+        browserStates.values.contains(where: Self.stateLooksPolicyDenied)
+    }
+
+    nonisolated static func stateLooksPolicyDenied(_ state: String) -> Bool {
+        state.contains("PolicyDenied") || state.contains("-65570")
+    }
+
+    nonisolated static func acceptsService(name: String, type: String) -> Bool {
+        !type.hasPrefix("_http") || name.localizedCaseInsensitiveContains("reachy")
     }
 
     public func start() {
@@ -48,11 +56,9 @@ public final class RobotBrowser {
             }
             browser.browseResultsChangedHandler = { [weak self] results, _ in
                 let found = results.compactMap { result -> DiscoveredService? in
-                    guard case let .service(name, serviceType, _, _) = result.endpoint else { return nil }
-                    // Legacy _http._tcp: only instances that look like a Reachy
-                    if serviceType.hasPrefix("_http"), !name.lowercased().contains("reachy") {
-                        return nil
-                    }
+                    guard case let .service(name, serviceType, _, _) = result.endpoint,
+                          Self.acceptsService(name: name, type: serviceType)
+                    else { return nil }
                     return DiscoveredService(name: name, type: serviceType, endpoint: result.endpoint)
                 }
                 Task { @MainActor in
@@ -89,8 +95,10 @@ public enum BonjourResolver {
                         }
                         switch state {
                         case .ready:
-                            if case let .hostPort(host, port) = connection.currentPath?.remoteEndpoint {
-                                finish(RobotAddress(host: Self.hostString(host), port: Int(port.rawValue)))
+                            if case let .hostPort(host, port) = connection.currentPath?.remoteEndpoint,
+                               let host = Self.hostString(host)
+                            {
+                                finish(RobotAddress(host: host, port: Int(port.rawValue)))
                             } else {
                                 finish(nil)
                             }
@@ -113,20 +121,20 @@ public enum BonjourResolver {
         }
     }
 
-    static func hostString(_ host: NWEndpoint.Host) -> String {
+    static func hostString(_ host: NWEndpoint.Host) -> String? {
         switch host {
         case let .ipv4(address):
-            // NWEndpoint appends an interface zone ("%lo0") that is garbage in a URL
-            stripZone("\(address)")
+            // NWEndpoint appends an interface zone ("%lo0") that is garbage in a URL.
+            return stripZone("\(address)")
         case let .ipv6(address):
-            // Zone is only meaningful (and required) for link-local addresses.
-            // ponytail: fe80:: keeps its zone; URL layer must %-encode it — revisit
-            // when a real link-local robot shows up
-            "\(address)".hasPrefix("fe80") ? "\(address)" : stripZone("\(address)")
+            let value = "\(address)"
+            // A link-local address cannot be routed without its interface zone.
+            guard !value.lowercased().hasPrefix("fe80:") || value.contains("%") else { return nil }
+            return value.lowercased().hasPrefix("fe80:") ? value : stripZone(value)
         case let .name(name, _):
-            name
+            return name
         @unknown default:
-            "\(host)"
+            return nil
         }
     }
 

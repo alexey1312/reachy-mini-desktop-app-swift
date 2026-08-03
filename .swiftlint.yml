@@ -6,6 +6,7 @@ excluded:
   - .build
   - Sources/ReachyKit/Generated
   - Apps/Derived
+  - Apps/DerivedData
 
 disabled_rules:
   - trailing_comma

@@ -48,7 +48,11 @@ run = "swift build --configuration release 2>&1 | xcsift"
 
 [tasks.test]
 description = "Run all tests (parallel)"
-run = "swift build --build-tests 2>&1 | xcsift && swift test --skip-build --parallel 2>&1 | xcsift"
+run = """
+set -o pipefail
+swift build --build-tests 2>&1 | xcsift
+swift test --skip-build --parallel 2>&1 | xcsift
+"""
 
 [tasks."test:filter"]
 description = "Run tests with filter (usage: mise run test:filter ReachyKitTests)"
@@ -61,6 +65,7 @@ run = "REACHY_SIM_HOST=127.0.0.1 swift test --parallel --filter SimulatorIntegra
 [tasks.lint]
 description = "Run SwiftLint and actionlint"
 run = """
+set -o pipefail
 swiftlint lint --strict Sources Tests Apps/ReachySpike 2>&1 | xcsift
 actionlint
 """
@@ -113,14 +118,19 @@ run = """
 #!/bin/bash
 set -euo pipefail
 # macOS: MuJoCo GUI requires mjpython, and uv has known MuJoCo issues — plain pip venv.
-# ponytail: unpinned reachy-mini; pin a version here once the API stabilizes
 VENV=.venv-sim
-# Explicit path: system PATH can shadow mise's python with an ancient one
+REQUIREMENTS=Scripts/sim-requirements.txt
+STAMP="$VENV/.requirements.sha256"
+EXPECTED="$(shasum -a 256 "$REQUIREMENTS" | awk '{print $1}')"
+# Explicit path: system PATH can shadow mise's python with an ancient one.
 PYTHON="$(./bin/mise where python)/bin/python3"
-if [ ! -x "$VENV/bin/mjpython" ]; then
+INSTALLED="$(test -f "$STAMP" && cat "$STAMP" || true)"
+if [ ! -x "$VENV/bin/mjpython" ] || [ "$INSTALLED" != "$EXPECTED" ]; then
+  rm -rf "$VENV"
   "$PYTHON" -m venv "$VENV"
-  "$VENV/bin/pip" install --quiet --upgrade pip
-  "$VENV/bin/pip" install --quiet "reachy-mini[mujoco]"
+  "$VENV/bin/python" -m pip install --quiet --requirement "$REQUIREMENTS"
+  printf '%s' "$EXPECTED" > "$STAMP"
 fi
+"$VENV/bin/python" -c 'import importlib.metadata as m; assert m.version("reachy-mini") == "1.9.0"'
 exec "$VENV/bin/mjpython" -m reachy_mini.daemon.app.main --sim --fastapi-host 0.0.0.0 "$@"
 """

@@ -47,9 +47,19 @@ and wires git hooks. Swift itself is managed by [swiftly](https://www.swift.org/
 
 ## Development without hardware
 
-The daemon supports a MuJoCo simulation mode. Run `./bin/mise run sim-daemon` on a Mac and point the app (or an iPhone
-on the same network) at it. The daemon's OpenAPI spec is committed at `Sources/ReachyKit/openapi.json` and refreshed
-with `./bin/mise run update-spec`.
+The daemon supports a MuJoCo simulation mode. `./bin/mise run sim-daemon` creates a project-local environment from
+`Scripts/sim-requirements.txt`; the tested daemon baseline is pinned to **1.9.0**. Point the app (or an iPhone on the
+same trusted network) at the Mac. The daemon's OpenAPI spec is committed at `Sources/ReachyKit/openapi.json` and
+refreshed with `./bin/mise run update-spec`.
+
+## Compatibility and network security
+
+Daemon 1.9.0 is the minimum tested version. Newer 1.x daemons connect with a compatibility warning; older or
+different-major versions are rejected before commands are sent. See
+[ADR 0001](docs/adr/0001-daemon-compatibility-and-lan-security.md) for the policy.
+
+The daemon provides **no authentication or encryption**. Use this client only on a trusted private LAN or the robot's
+own access point. Never expose daemon port 8000 through port forwarding or a public address.
 
 ## Status
 

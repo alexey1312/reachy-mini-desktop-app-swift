@@ -29,6 +29,8 @@ link-local IPv6). Our rules:
   prompt, detect denial via timeout, and deep-link to Settings.
 - ATS: `NSAppTransportSecurity → NSAllowsLocalNetworking: true` — allows plain HTTP to `.local`/link-local only. Never
   use blanket `NSExceptionDomains`.
+- The daemon transport is plaintext and unauthenticated. Support only trusted private LANs or the robot AP; show this
+  limitation in connection UI and never encourage public routing/port forwarding.
 
 ## Robot facts
 

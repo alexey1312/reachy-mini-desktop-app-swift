@@ -15,6 +15,11 @@ final class SpikeModel {
     private(set) var isStreaming = false
     private(set) var frameCount = 0
     private(set) var hertz: Double = 0
+    private(set) var streamDiagnostics = StateStreamDiagnostics()
+
+    var invalidFrameCount: Int {
+        streamDiagnostics.decodeFailures + streamDiagnostics.unsupportedFrames
+    }
 
     private var streamTask: Task<Void, Never>?
     private var arrivals: [ContinuousClock.Instant] = []
@@ -56,11 +61,15 @@ final class SpikeModel {
             let client = try StateStreamClient(address: address)
             frameCount = 0
             arrivals = []
+            streamDiagnostics = .init()
             isStreaming = true
             streamTask = Task { [weak self] in
-                for await _ in client.states() {
+                for await update in client.updates() {
                     guard let self else { break }
-                    recordFrame()
+                    streamDiagnostics = update.diagnostics
+                    if update.state != nil {
+                        recordFrame()
+                    }
                 }
             }
         } catch {

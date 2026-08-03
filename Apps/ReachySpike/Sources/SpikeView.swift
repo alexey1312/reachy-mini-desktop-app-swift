@@ -1,10 +1,11 @@
+import ReachyKit
 import SwiftUI
 
 /// Phase 0.4 device-check screen: discovery, manual connect, stream counter.
 /// Checklist it serves — see docs/research/phase0.md.
 struct SpikeView: View {
     @State private var model = SpikeModel()
-    @State private var discovery = DiscoveryModel()
+    @State private var discovery = RobotBrowser()
 
     var body: some View {
         Form {
@@ -76,6 +77,16 @@ struct SpikeView: View {
             }
             LabeledContent("Frames") { Text("\(model.frameCount)") }
             LabeledContent("Rate") { Text(String(format: "%.1f Hz", model.hertz)) }
+            if model.streamDiagnostics.decodeFailures > 0 || model.streamDiagnostics.unsupportedFrames > 0 {
+                Label(
+                    "Invalid frames: \(model.invalidFrameCount)",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .foregroundStyle(.orange)
+                if let failure = model.streamDiagnostics.lastFailureDescription {
+                    Text(failure).font(.caption.monospaced())
+                }
+            }
         }
     }
 }

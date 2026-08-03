@@ -46,9 +46,12 @@ Found by this run: entering `ip:port` in the host field tripped the IPv6-bracket
 bracketed pseudo-hostname that ATS rejected. Fixed with `RobotAddress(parsing:)` (host / host:port / [v6]:port /
 bare IPv6), regression-tested.
 
-## Open questions
+## Remaining hardware checks
 
-- **O-3**: daemon has no authentication — anyone on the LAN can command the robot. Documented; product decision
-  needed before public release.
-- **O-4**: Pollen's API stability guarantees; robot behavior when a client disconnects mid-app.
 - **WebRTC on real hardware**: sim has no TLS on 8443 — re-verify on a physical Wireless robot.
+- **Disconnect during motion**: daemon-side behavior still requires a physical safety test; server-side safety remains
+  authoritative. Client behavior is covered by session cancellation and move-monitor tests.
+
+O-3 and O-4 are closed by [ADR 0001](../adr/0001-daemon-compatibility-and-lan-security.md): daemon 1.9.0 is the pinned
+minimum/tested baseline, compatibility is enforced during handshake, and v1 is explicitly limited to trusted private
+LANs because the daemon has no authentication or encryption.

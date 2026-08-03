@@ -40,7 +40,11 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
 
 - No MJPEG endpoint exists. Camera is WebRTC-only (signaling `ws://<host>:8443`, GStreamer webrtcsink, single H.264
   Constrained Baseline 3.1 stream, Opus audio, STUN `stun.l.google.com:19302`).
-- Daemon has NO authentication (open question O-3) — anyone on the LAN can command the robot.
+- Daemon 1.9.0 is the minimum and tested API baseline. Enforce
+  `DaemonCompatibilityPolicy` during the first status handshake: reject older/different-major versions, warn for
+  newer 1.x or unknown versions, and tolerate unknown JSON fields. See `docs/adr/0001-daemon-compatibility-and-lan-security.md`.
+- The daemon has no authentication or encryption. v1 supports trusted private LAN/robot AP only; never imply that a
+  client-side token adds security and never expose port 8000 publicly.
 - 9 actuators: `body_rotation`, `stewart_1..6`, `left_antenna`, `right_antenna`. Safety limits are clamped server-side.
 - `passive_joints` in the state stream is `null` with the default kinematics engine; the 21 Stewart passive joints are
   computed client-side only for 3D visualization (phase 2, Swift port of upstream `kinematics-wasm` crate).

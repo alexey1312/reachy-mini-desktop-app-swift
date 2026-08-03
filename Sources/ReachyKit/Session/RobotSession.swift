@@ -34,6 +34,7 @@ public final class RobotSession {
     public private(set) var address: RobotAddress?
     public private(set) var lastStatus: Components.Schemas.DaemonStatus?
     public private(set) var lastError: String?
+    public private(set) var compatibilityWarning: String?
     public private(set) var currentMove: MovePlayback?
     public private(set) var isStoppingMove = false
     /// Explicit Disconnect suppresses discovery-driven reconnect until the user connects again.
@@ -88,6 +89,7 @@ public final class RobotSession {
             }
             self.client = client
             lastStatus = handshake.status
+            compatibilityWarning = handshake.compatibility.warningMessage
             phase = .connected(handshake.identity)
             KnownRobots.lastAddress = address
             startPolling(identity: handshake.identity)
@@ -213,6 +215,7 @@ public final class RobotSession {
         client = nil
         address = nil
         lastStatus = nil
+        compatibilityWarning = nil
         currentMove = nil
         isStoppingMove = false
         moveCache = [:]

@@ -40,5 +40,9 @@ let package = Package(
                 .copy("Fixtures"),
             ]
         ),
+        .testTarget(
+            name: "ReachyUITests",
+            dependencies: ["ReachyUI", "ReachyKit"]
+        ),
     ]
 )

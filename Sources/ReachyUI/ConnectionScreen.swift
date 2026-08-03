@@ -85,6 +85,12 @@ struct ConnectionScreen: View {
 
     private var manualSection: some View {
         Section("Manual address") {
+            Label(
+                "The daemon uses unencrypted HTTP without authentication. Connect only on a trusted private network.",
+                systemImage: "lock.open.trianglebadge.exclamationmark"
+            )
+            .font(.caption)
+            .foregroundStyle(.orange)
             TextField("host, host:port, or IP", text: $manualInput)
                 .autocorrectionDisabled()
             #if os(iOS)

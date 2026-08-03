@@ -35,10 +35,25 @@ public actor RobotConnection {
     public struct Handshake: Sendable {
         public let identity: RobotIdentity
         public let status: Components.Schemas.DaemonStatus
+        public let compatibility: DaemonCompatibility
+
+        public init(
+            identity: RobotIdentity,
+            status: Components.Schemas.DaemonStatus,
+            compatibility: DaemonCompatibility? = nil
+        ) {
+            self.identity = identity
+            self.status = status
+            self.compatibility = compatibility ?? DaemonCompatibilityPolicy.evaluate(identity.daemonVersion)
+        }
     }
 
     public func handshake() async throws -> Handshake {
         let status = try await client.getDaemonStatusApiDaemonStatusGet().ok.body.json
+        let compatibility = DaemonCompatibilityPolicy.evaluate(status.version)
+        if case let .unsupported(reported, minimum) = compatibility {
+            throw ReachyKitError.unsupportedDaemonVersion(reported: reported, minimum: minimum)
+        }
 
         // hardware-id returns a string map (component serials); flatten deterministically
         // so the same robot always yields the same identity string. The simulated daemon
@@ -61,7 +76,8 @@ public actor RobotConnection {
                 name: name ?? status.robotName,
                 daemonVersion: status.version
             ),
-            status: status
+            status: status,
+            compatibility: compatibility
         )
     }
 

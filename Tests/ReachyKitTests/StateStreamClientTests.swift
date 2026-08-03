@@ -42,6 +42,36 @@ struct StateStreamClientTests {
         #expect(received == 3)
     }
 
+    @Test("malformed frame is counted and the following frame still decodes", .timeLimit(.minutes(1)))
+    func malformedFrameDoesNotKillStream() async throws {
+        let server = try LocalWebSocketServer { connection in
+            LocalWebSocketServer.sendText(#"{"body_yaw":"not-a-number"}"#, over: connection)
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+                LocalWebSocketServer.sendText(#"{"body_yaw":0.75}"#, over: connection)
+            }
+        }
+        defer { server.stop() }
+        let port = try await server.readyPort()
+        let client = try StateStreamClient(address: .init(host: "127.0.0.1", port: Int(port)))
+
+        var finalDiagnostics = StateStreamDiagnostics()
+        var decodedYaw: Double?
+        for await update in client.updates() {
+            finalDiagnostics = update.diagnostics
+            if let state = update.state {
+                decodedYaw = state.bodyYaw
+                break
+            }
+        }
+
+        #expect(decodedYaw == 0.75)
+        #expect(finalDiagnostics.receivedFrames == 2)
+        #expect(finalDiagnostics.decodedFrames == 1)
+        #expect(finalDiagnostics.decodeFailures == 1)
+        #expect(finalDiagnostics.lastFailureDescription != nil)
+        #expect(finalDiagnostics.lastFailureAt != nil)
+    }
+
     @Test("invalid host throws invalidAddress")
     func invalidAddress() {
         #expect(throws: ReachyKitError.self) {

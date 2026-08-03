@@ -39,6 +39,14 @@ struct FullStateDecodingTests {
         #expect(state.timestamp != nil)
     }
 
+    @Test("schema type changes fail explicitly")
+    func rejectsIncompatibleTypeChange() {
+        let data = Data(#"{"body_yaw":"quarter turn"}"#.utf8)
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder.reachyDaemon.decode(Components.Schemas.FullState.self, from: data)
+        }
+    }
+
     @Test("all-null payload decodes to empty state (graceful degradation)")
     func decodesEmpty() throws {
         let state = try JSONDecoder.reachyDaemon.decode(Components.Schemas.FullState.self, from: Data("{}".utf8))

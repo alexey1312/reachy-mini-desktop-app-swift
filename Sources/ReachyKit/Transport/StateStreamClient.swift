@@ -1,11 +1,27 @@
 import Foundation
 
+/// Cumulative, privacy-safe health information for one state-stream subscription.
+public struct StateStreamDiagnostics: Equatable, Sendable {
+    public var receivedFrames = 0
+    public var decodedFrames = 0
+    public var decodeFailures = 0
+    public var unsupportedFrames = 0
+    public var lastFailureDescription: String?
+    public var lastFailureAt: Date?
+
+    public init() {}
+}
+
+/// One WebSocket frame and the diagnostics accumulated through that frame.
+public struct StateStreamUpdate: Sendable {
+    public let state: Components.Schemas.FullState?
+    public let diagnostics: StateStreamDiagnostics
+}
+
 /// Streams the robot's full state from `ws://<host>:<port>/api/state/ws/full` (20 Hz).
 ///
 /// Reconnects forever with exponential backoff until the stream's consumer cancels.
-/// The stream buffers `.bufferingNewest(1)`: a slow consumer always observes the
-/// newest state, coalescing the 20 Hz feed to its own pace (render at display rate,
-/// not packet rate — lesson from upstream).
+/// Streams use `.bufferingNewest(1)`, so slow consumers always observe the newest update.
 public struct StateStreamClient: Sendable {
     public struct Configuration: Sendable {
         public var initialBackoff: Duration = .milliseconds(500)
@@ -32,39 +48,57 @@ public struct StateStreamClient: Sendable {
         self.session = session
     }
 
-    /// Latest-wins stream of robot state. Never throws; ends only on cancellation.
-    public func states() -> AsyncStream<Components.Schemas.FullState> {
+    /// Latest-wins state plus cumulative frame diagnostics. A malformed frame is
+    /// reported and skipped without reconnecting or terminating the stream.
+    public func updates() -> AsyncStream<StateStreamUpdate> {
         let (stream, continuation) = AsyncStream.makeStream(
-            of: Components.Schemas.FullState.self,
+            of: StateStreamUpdate.self,
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task { [url, configuration, session] in
             let decoder = JSONDecoder.reachyDaemon
             var backoff = configuration.initialBackoff
+            var diagnostics = StateStreamDiagnostics()
             while !Task.isCancelled {
                 let socket = session.webSocketTask(with: url)
                 socket.resume()
                 do {
-                    while true {
+                    while !Task.isCancelled {
                         let message = try await socket.receive()
-                        let data: Data? = switch message {
-                        case let .data(data): data
-                        case let .string(text): Data(text.utf8)
-                        @unknown default: nil
+                        diagnostics.receivedFrames += 1
+                        let data: Data?
+                        switch message {
+                        case let .data(payload):
+                            data = payload
+                        case let .string(text):
+                            data = Data(text.utf8)
+                        @unknown default:
+                            data = nil
+                            diagnostics.unsupportedFrames += 1
+                            diagnostics.lastFailureDescription = "Unsupported WebSocket frame type"
+                            diagnostics.lastFailureAt = Date()
                         }
-                        // ponytail: undecodable frames are dropped silently; surface a
-                        // decode-error counter once there's UI to show it in
-                        if let data, let state = try? decoder.decode(Components.Schemas.FullState.self, from: data) {
-                            continuation.yield(state)
+
+                        guard let data else {
+                            continuation.yield(.init(state: nil, diagnostics: diagnostics))
+                            continue
+                        }
+                        do {
+                            let state = try decoder.decode(Components.Schemas.FullState.self, from: data)
+                            diagnostics.decodedFrames += 1
+                            continuation.yield(.init(state: state, diagnostics: diagnostics))
                             backoff = configuration.initialBackoff
+                        } catch {
+                            diagnostics.decodeFailures += 1
+                            diagnostics.lastFailureDescription = Self.failureDescription(error)
+                            diagnostics.lastFailureAt = Date()
+                            continuation.yield(.init(state: nil, diagnostics: diagnostics))
                         }
                     }
                 } catch {
                     socket.cancel(with: .goingAway, reason: nil)
                 }
-                if Task.isCancelled {
-                    break
-                }
+                guard !Task.isCancelled else { break }
                 try? await Task.sleep(for: backoff)
                 backoff = min(backoff * 2, configuration.maxBackoff)
             }
@@ -72,5 +106,27 @@ public struct StateStreamClient: Sendable {
         }
         continuation.onTermination = { _ in task.cancel() }
         return stream
+    }
+
+    /// Compatibility wrapper for consumers interested only in valid states.
+    public func states() -> AsyncStream<Components.Schemas.FullState> {
+        let (stream, continuation) = AsyncStream.makeStream(
+            of: Components.Schemas.FullState.self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        let task = Task {
+            for await update in updates() {
+                if let state = update.state {
+                    continuation.yield(state)
+                }
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
+        return stream
+    }
+
+    private static func failureDescription(_ error: any Error) -> String {
+        String(describing: error).prefix(240).description
     }
 }

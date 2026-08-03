@@ -5,40 +5,31 @@ import SwiftUI
 struct MovesScreen: View {
     let session: RobotSession
 
-    /// Upstream `src/constants/choreographies.ts` libraries
-    private static let libraries: [(title: String, dataset: String)] = [
-        ("Dances", "pollen-robotics/reachy-mini-dances-library"),
-        ("Emotions", "pollen-robotics/reachy-mini-emotions-library"),
-        ("Music", "Anne-Charlotte/music"),
-    ]
-
-    @State private var selection = 0
-    @State private var moves: [String] = []
-    @State private var loading = false
-    @State private var startingMove = false
+    @State private var model = MovesModel()
 
     var body: some View {
+        @Bindable var model = model
         Form {
             Section {
-                Picker("Library", selection: $selection) {
-                    ForEach(Self.libraries.indices, id: \.self) { index in
-                        Text(Self.libraries[index].title).tag(index)
+                Picker("Library", selection: $model.selection) {
+                    ForEach(MovesModel.libraries.indices, id: \.self) { index in
+                        Text(MovesModel.libraries[index].title).tag(index)
                     }
                 }
                 .pickerStyle(.segmented)
             }
             Section {
-                if loading {
+                if model.loading {
                     ProgressView()
-                } else if moves.isEmpty {
+                } else if model.moves.isEmpty {
                     Text("No moves").foregroundStyle(.secondary)
                 }
-                ForEach(moves, id: \.self) { move in
+                ForEach(model.moves, id: \.self) { move in
                     Button {
-                        play(move)
+                        Task { await model.play(move, session: session) }
                     } label: {
                         HStack {
-                            Text(displayName(move))
+                            Text(MovesModel.displayName(move))
                             Spacer()
                             if session.currentMove?.move == move {
                                 Image(systemName: "waveform")
@@ -48,7 +39,7 @@ struct MovesScreen: View {
                             }
                         }
                     }
-                    .disabled(startingMove || session.isStoppingMove)
+                    .disabled(model.startingMove || session.isStoppingMove)
                 }
             }
             if let lastError = session.lastError {
@@ -87,46 +78,17 @@ struct MovesScreen: View {
         }
         .toolbar {
             Button {
-                Task { await load(refresh: true) }
+                Task { await model.load(session: session, refresh: true) }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .disabled(loading)
+            .disabled(model.loading)
         }
-        .task(id: selection) {
-            await load()
+        .task(id: model.selection) {
+            await model.load(session: session)
         }
         .onDisappear {
             Task { await session.stopMove() }
-        }
-    }
-
-    private func displayName(_ move: String) -> String {
-        move.replacingOccurrences(of: "_", with: " ")
-    }
-
-    @MainActor
-    private func load(refresh: Bool = false) async {
-        let dataset = Self.libraries[selection].dataset
-        loading = true
-        defer { loading = false }
-        do {
-            let loaded = try await session.moves(in: dataset, refresh: refresh)
-            guard !Task.isCancelled else { return }
-            moves = loaded
-        } catch {
-            if !Task.isCancelled {
-                moves = []
-            }
-        }
-    }
-
-    private func play(_ move: String) {
-        let dataset = Self.libraries[selection].dataset
-        startingMove = true
-        Task {
-            defer { startingMove = false }
-            try? await session.playMove(dataset: dataset, move: move)
         }
     }
 }

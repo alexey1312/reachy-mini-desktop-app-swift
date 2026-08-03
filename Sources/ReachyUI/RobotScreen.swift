@@ -15,6 +15,12 @@ struct RobotScreen: View {
         Form {
             statusSection
             controlSection
+            if let warning = session.compatibilityWarning {
+                Section {
+                    Label(warning, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+            }
             if let error = session.lastError {
                 Section {
                     Text(error)
