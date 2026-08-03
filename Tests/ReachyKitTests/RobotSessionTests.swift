@@ -23,14 +23,18 @@ private final class MockRobotClient: RobotAPIClient, @unchecked Sendable {
     private let wakeFailure: ReachyKitError?
     private let startFailure: ReachyKitError?
 
+    private let reportedMotorMode: Components.Schemas.MotorControlMode
+
     init(
         probes: [Probe],
         state: Components.Schemas.DaemonState = .running,
+        motorMode: Components.Schemas.MotorControlMode = .enabled,
         wakeFailure: ReachyKitError? = nil,
         startFailure: ReachyKitError? = nil
     ) {
         self.probes = probes
         self.state = state
+        reportedMotorMode = motorMode
         self.wakeFailure = wakeFailure
         self.startFailure = startFailure
     }
@@ -57,7 +61,7 @@ private final class MockRobotClient: RobotAPIClient, @unchecked Sendable {
         {"robot_name": "testbot", "state": "\(currentState.rawValue)", "wireless_version": false,
          "desktop_app_daemon": false, "simulation_enabled": true,
          "mockup_sim_enabled": false,
-         "backend_status": {"ready": true, "motor_control_mode": "enabled",
+         "backend_status": {"ready": true, "motor_control_mode": "\(reportedMotorMode.rawValue)",
                             "last_alive": null, "control_loop_stats": {}}}
         """
         // swiftlint:disable:next force_try
@@ -246,6 +250,45 @@ struct RobotSessionTests {
         _ = await (first, second)
         #expect(client.wakeCalls == 1)
         session.disconnect()
+    }
+
+    @Test("a running backend with powered motors counts as awake")
+    func awakeWhenRunningAndEnabled() async {
+        let session = makeSession(client: MockRobotClient(probes: []))
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        #expect(session.isBackendRunning)
+        #expect(session.isAwake)
+        session.disconnect()
+    }
+
+    @Test("powered-down motors are not awake even with a running backend")
+    func notAwakeWhenMotorsDisabled() async {
+        let client = MockRobotClient(probes: [], motorMode: .disabled)
+        let session = makeSession(client: client)
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        // The daemon accepts motion commands in this state and moves nothing.
+        #expect(session.isBackendRunning)
+        #expect(!session.isAwake)
+        #expect(session.motorMode == .disabled)
+        session.disconnect()
+    }
+
+    @Test("a stopped backend is neither running nor awake")
+    func notRunningWhenStopped() async {
+        let client = MockRobotClient(probes: [], state: .stopped)
+        let session = makeSession(client: client)
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        #expect(!session.isBackendRunning)
+        #expect(!session.isAwake)
+        session.disconnect()
+    }
+
+    @Test("readiness is unknown, not awake, before any status arrives")
+    func notAwakeWhenDisconnected() {
+        let session = makeSession(client: MockRobotClient(probes: []))
+        #expect(!session.isBackendRunning)
+        #expect(!session.isAwake)
+        #expect(session.motorMode == nil)
     }
 
     @Test("sleep disables the motors only after the animation finished")

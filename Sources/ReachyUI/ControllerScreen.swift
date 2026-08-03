@@ -4,6 +4,7 @@ import SwiftUI
 /// Live teleop: joystick drives head yaw/pitch, sliders the rest.
 /// Targets stream over `ws/set_target`; the daemon clamps safety limits.
 struct ControllerScreen: View {
+    let session: RobotSession
     let address: RobotAddress
 
     @State private var client: SetTargetClient?
@@ -18,33 +19,46 @@ struct ControllerScreen: View {
 
     var body: some View {
         Form {
-            Section("Head — drag: yaw / pitch") {
-                JoystickPad { x, y in
-                    target.yaw = -x * headAngle
-                    target.pitch = y * headAngle
-                    push()
-                }
-                .frame(maxWidth: 280)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            }
-            Section("Head") {
-                slider("Roll", value: $target.roll, range: -headAngle ... headAngle, format: .degrees)
-                slider("Height", value: $target.z, range: -0.03 ... 0.03, format: .millimeters)
-            }
-            Section("Body") {
-                slider("Body yaw", value: $target.bodyYaw, range: -fullTurn ... fullTurn, format: .degrees)
-            }
-            Section("Antennas") {
-                slider("Left", value: $target.antennaLeft, range: -antennaRange ... antennaRange, format: .degrees)
-                slider("Right", value: $target.antennaRight, range: -antennaRange ... antennaRange, format: .degrees)
-            }
-            Section {
-                Button("Reset to neutral") {
-                    target = .init()
-                    push()
+            if !session.isAwake {
+                Section {
+                    AsleepBanner(session: session)
                 }
             }
+            Group {
+                Section("Head — drag: yaw / pitch") {
+                    JoystickPad { x, y in
+                        target.yaw = -x * headAngle
+                        target.pitch = y * headAngle
+                        push()
+                    }
+                    .frame(maxWidth: 280)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+                Section("Head") {
+                    slider("Roll", value: $target.roll, range: -headAngle ... headAngle, format: .degrees)
+                    slider("Height", value: $target.z, range: -0.03 ... 0.03, format: .millimeters)
+                }
+                Section("Body") {
+                    slider("Body yaw", value: $target.bodyYaw, range: -fullTurn ... fullTurn, format: .degrees)
+                }
+                Section("Antennas") {
+                    slider("Left", value: $target.antennaLeft, range: -antennaRange ... antennaRange, format: .degrees)
+                    slider(
+                        "Right",
+                        value: $target.antennaRight,
+                        range: -antennaRange ... antennaRange,
+                        format: .degrees
+                    )
+                }
+                Section {
+                    Button("Reset to neutral") {
+                        target = .init()
+                        push()
+                    }
+                }
+            }
+            .disabled(!session.isAwake)
             if let setupError {
                 Section {
                     Text(setupError)
@@ -56,6 +70,12 @@ struct ControllerScreen: View {
         .formStyle(.grouped)
         .navigationTitle("Controller")
         .onAppear { start() }
+        .onChange(of: session.isAwake) { _, awake in
+            // Targets accumulated while asleep would be replayed as one jump.
+            if awake {
+                target = .init()
+            }
+        }
         .onDisappear {
             let client = client
             Task { await client?.disconnect() }

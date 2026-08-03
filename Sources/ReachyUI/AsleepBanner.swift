@@ -1,0 +1,42 @@
+import ReachyKit
+import SwiftUI
+
+/// Explains why motion controls are inert and offers the one action that fixes
+/// it. Silently disabling them reads as a broken screen — the daemon answers
+/// motion commands from an asleep robot without moving anything.
+struct AsleepBanner: View {
+    let session: RobotSession
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: "moon.zzz")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.callout.weight(.medium))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if session.powerTransition != nil {
+                ProgressView()
+            } else {
+                Button("Wake up") {
+                    Task { await session.wake() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private var title: String {
+        session.isBackendRunning ? "Robot is asleep" : "Robot backend is stopped"
+    }
+
+    private var detail: String {
+        session.isBackendRunning
+            ? "The motors are off, so the robot accepts commands without moving."
+            : "Motion, teleop and the state stream stay unavailable until it starts."
+    }
+}

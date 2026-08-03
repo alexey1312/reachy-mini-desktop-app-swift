@@ -75,7 +75,7 @@ struct RobotScreen: View {
         Section("Control") {
             if let address = session.address {
                 NavigationLink {
-                    ControllerScreen(address: address)
+                    ControllerScreen(session: session, address: address)
                 } label: {
                     Label("Controller", systemImage: "gamecontroller")
                 }
@@ -89,12 +89,15 @@ struct RobotScreen: View {
                 } label: {
                     Label("Daemon logs", systemImage: "terminal")
                 }
-                if session.lastStatus?.wirelessVersion == true || session.lastStatus?.simulationEnabled == true {
+                if hasCamera {
                     NavigationLink {
                         CameraScreen(address: address)
                     } label: {
                         Label("Camera", systemImage: "video")
                     }
+                    // Video needs no motors — an asleep robot still streams — but
+                    // `daemon.stop()` tears the media server down with the backend.
+                    .disabled(!session.isBackendRunning)
                 }
             }
             Button {
@@ -127,6 +130,10 @@ struct RobotScreen: View {
         case .wakingUp: "Waking up…"
         case .goingToSleep: "Going to sleep…"
         }
+    }
+
+    private var hasCamera: Bool {
+        session.lastStatus?.wirelessVersion == true || session.lastStatus?.simulationEnabled == true
     }
 
     private var isConnected: Bool {

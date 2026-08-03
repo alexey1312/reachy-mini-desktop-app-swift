@@ -10,6 +10,11 @@ struct MovesScreen: View {
     var body: some View {
         @Bindable var model = model
         Form {
+            if !session.isAwake {
+                Section {
+                    AsleepBanner(session: session)
+                }
+            }
             Section {
                 Picker("Library", selection: $model.selection) {
                     ForEach(MovesModel.libraries.indices, id: \.self) { index in
@@ -39,7 +44,8 @@ struct MovesScreen: View {
                             }
                         }
                     }
-                    .disabled(model.startingMove || session.isStoppingMove)
+                    // Browsing the library stays available; only playback needs a woken robot.
+                    .disabled(model.startingMove || session.isStoppingMove || !session.isAwake)
                 }
             }
             if let lastError = session.lastError {
