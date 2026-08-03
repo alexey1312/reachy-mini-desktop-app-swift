@@ -24,4 +24,21 @@ public extension RobotSession {
     var isAwake: Bool {
         isBackendRunning && motorMode == .enabled
     }
+
+    /// The daemon's own fault text, e.g. "Power supply not connected".
+    ///
+    /// `Daemon.status()` copies a backend error up to the top level and forces
+    /// `state` to `error`, so the top-level field is the one that usually carries
+    /// it; the per-flavour fields are the fallback.
+    var backendFault: String? {
+        let candidates = [
+            lastStatus?.error,
+            lastStatus?.backendStatus?.value1?.error,
+            lastStatus?.backendStatus?.value2?.error,
+            lastStatus?.backendStatus?.value3?.error,
+        ]
+        return candidates
+            .compactMap(\.self)
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
 }

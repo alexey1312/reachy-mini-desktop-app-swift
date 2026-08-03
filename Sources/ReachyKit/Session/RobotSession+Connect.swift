@@ -1,0 +1,170 @@
+import Foundation
+
+/// What the current daemon status says about driving the robot.
+private enum ReadinessVerdict {
+    case ready
+    /// `state` is ahead of `backend.ready` — the one case worth waiting out.
+    case keepWaiting
+    case backendDown
+    case failed(Error)
+}
+
+public extension RobotSession {
+    /// Starts the backend from the readiness step, then re-runs the gate.
+    ///
+    /// `wakeUp: false` is the safety contract of this button: `wake_up=true` has
+    /// the daemon enable the motors and play the wake-up animation by itself, and
+    /// the user asked to start the backend, not to move the robot.
+    func startBackend() async {
+        guard let client, powerTransition == nil,
+              case let .connecting(.backendUnavailable(identity, _)) = phase
+        else { return }
+        let attemptID = connectionAttemptID
+        lastError = nil
+        powerTransition = .startingBackend
+        defer { powerTransition = nil }
+
+        guard await runBackendStart(wakeUp: false, client: client) else { return }
+        // `runBackendStart` only returns true once `waitForDaemonRunning` has seen
+        // `.running`, so `lastStatus` is both fresh and in the right state.
+        guard isAttemptLive(attemptID), let status = lastStatus else { return }
+        phase = .connecting(.checkingBackend(identity))
+        _ = await settleReadiness(
+            identity: identity,
+            status: status,
+            client: client,
+            attemptID: attemptID,
+            automatically: false
+        )
+    }
+
+    /// Escape hatch from the readiness step. The daemon log console and the status
+    /// screen are exactly what you need to work out why a backend won't start, so
+    /// refusing to connect would lock the user out of the diagnosis.
+    func proceedWithoutBackend() {
+        guard case let .connecting(.backendUnavailable(identity, _)) = phase else { return }
+        _ = finishConnected(identity: identity)
+    }
+}
+
+extension RobotSession {
+    /// Connect-time readiness gate.
+    ///
+    /// `state == .running` flips before the backend has finished coming up, so the
+    /// only honest signal is a 200 from the `get_backend`-guarded `/api/state/full`.
+    /// Unlike upstream this loop is bounded and asymmetric: we never start a backend
+    /// during connect, so a stopped or faulted one is reported at once instead of
+    /// being retried at 2 Hz. Only the `running`-but-still-503 window actually spins.
+    func settleReadiness(
+        identity: RobotIdentity,
+        status: Components.Schemas.DaemonStatus,
+        client: any RobotAPIClient,
+        attemptID: UUID,
+        automatically: Bool
+    ) async -> Bool {
+        var status = status
+        let deadline = ContinuousClock.now + configuration.readinessTimeout
+
+        while isAttemptLive(attemptID) {
+            let verdict = await readinessVerdict(for: status, client: client)
+            guard isAttemptLive(attemptID) else { return false }
+
+            switch verdict {
+            case .ready:
+                return finishConnected(identity: identity)
+            case .backendDown:
+                return haltOnUnavailableBackend(identity: identity)
+            case let .failed(error):
+                return failAttempt(.backend, error: error, address: address, automatically: automatically)
+            case .keepWaiting:
+                guard ContinuousClock.now < deadline else {
+                    return haltOnUnavailableBackend(identity: identity)
+                }
+                guard let refreshed = await refreshedStatus(
+                    client: client, attemptID: attemptID, current: status
+                ) else { return false }
+                status = refreshed
+            }
+        }
+        return false
+    }
+
+    func finishConnected(identity: RobotIdentity) -> Bool {
+        phase = .connected(identity)
+        startPolling(identity: identity)
+        startPathMonitor(identity: identity)
+        return true
+    }
+
+    /// Terminal but recoverable, and latched even for automatic attempts: finding
+    /// the robot with its backend down *is* a successful search, there is nothing
+    /// left to probe, and falling back to `.idle` would have the 10 s rescan
+    /// hammer the same robot forever.
+    func haltOnUnavailableBackend(identity: RobotIdentity) -> Bool {
+        phase = .connecting(.backendUnavailable(identity, daemonMessage: backendFault))
+        return false
+    }
+
+    /// Automatic attempts must land back on `.idle`: the candidate sweep and the
+    /// periodic rescan both gate on it, so latching a failure there would silently
+    /// stop the app from ever reconnecting.
+    func failAttempt(
+        _ stage: ConnectionStage,
+        error: Error,
+        address: RobotAddress?,
+        automatically: Bool
+    ) -> Bool {
+        let message = Self.describe(error)
+        resetConnectionState()
+        lastError = message
+        guard !automatically, let address else { return false }
+        self.address = address
+        phase = .connecting(.failed(stage, message: message))
+        return false
+    }
+
+    /// A superseded or cancelled attempt must never write back to the session —
+    /// the readiness stage suspends several times, and every resumption is a
+    /// chance for a stale attempt to resurrect `.connected`.
+    func isAttemptLive(_ attemptID: UUID) -> Bool {
+        connectionAttemptID == attemptID && !Task.isCancelled
+    }
+}
+
+private extension RobotSession {
+    func readinessVerdict(
+        for status: Components.Schemas.DaemonStatus,
+        client: any RobotAPIClient
+    ) async -> ReadinessVerdict {
+        switch status.state {
+        case .running:
+            do {
+                try await client.probeBackendReady()
+                return .ready
+            } catch ReachyKitError.backendNotRunning {
+                return .keepWaiting
+            } catch {
+                return .failed(error)
+            }
+        case .error, .stopped, .notInitialized:
+            return .backendDown
+        default:
+            return .keepWaiting // `.starting` / `.stopping` are genuinely in transit
+        }
+    }
+
+    /// Waits a poll interval and re-reads the status. A transient read failure
+    /// keeps the previous one; `nil` means the attempt is dead and the caller bails.
+    func refreshedStatus(
+        client: any RobotAPIClient,
+        attemptID: UUID,
+        current: Components.Schemas.DaemonStatus
+    ) async -> Components.Schemas.DaemonStatus? {
+        try? await Task.sleep(for: configuration.readinessPollInterval)
+        guard isAttemptLive(attemptID) else { return nil }
+        guard let refreshed = try? await client.daemonStatus() else { return current }
+        guard isAttemptLive(attemptID) else { return nil }
+        lastStatus = refreshed
+        return refreshed
+    }
+}

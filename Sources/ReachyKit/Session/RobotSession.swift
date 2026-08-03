@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Observation
+import OpenAPIRuntime
 
 /// Connection lifecycle for one robot: handshake, health polling, wake/sleep and recorded moves.
 @MainActor
@@ -8,9 +9,34 @@ import Observation
 public final class RobotSession {
     public enum ConnectionPhase: Equatable, Sendable {
         case idle
-        case connecting
+        case connecting(ConnectionStep)
         case connected(RobotIdentity)
         case unreachable(RobotIdentity)
+    }
+
+    /// Where a connection attempt currently stands. Split out of `.connecting`
+    /// so a failure names the step it happened on instead of collapsing into one
+    /// opaque spinner.
+    public enum ConnectionStep: Equatable, Sendable {
+        case handshaking
+        case checkingBackend(RobotIdentity)
+        /// The handshake succeeded but the robot backend is down. Terminal until
+        /// the user picks one of start / proceed / cancel — starting it here would
+        /// move the robot without being asked.
+        case backendUnavailable(RobotIdentity, daemonMessage: String?)
+        /// Latched for explicit connects only; automatic attempts fall back to
+        /// `.idle` so the candidate loop keeps sweeping.
+        case failed(ConnectionStage, message: String)
+    }
+
+    /// The steps a connection walks through, in order — the stepper's row model.
+    public enum ConnectionStage: Int, CaseIterable, Equatable, Sendable {
+        case connect
+        case backend
+    }
+
+    public enum StageOutcome: Equatable, Sendable {
+        case pending, active, done, attention, failed
     }
 
     /// Wake and sleep are long enough — a cold backend start is budgeted at 90 s —
@@ -40,34 +66,56 @@ public final class RobotSession {
         public var daemonStartTimeout: Duration = .seconds(90)
         /// Motors need a moment to hold their pose before the animation starts.
         public var motorSettleDelay: Duration = .milliseconds(300)
+        /// Connect-time readiness budget. We never start a backend during connect,
+        /// so a stopped one is reported at once — this only covers the window
+        /// between `state == running` and `backend.ready`.
+        public var readinessTimeout: Duration = .seconds(8)
+        public var readinessPollInterval: Duration = .milliseconds(500)
 
         public init() {}
     }
 
-    public private(set) var phase: ConnectionPhase = .idle
-    public private(set) var address: RobotAddress?
-    public private(set) var lastStatus: Components.Schemas.DaemonStatus?
-    public private(set) var lastError: String?
+    // `internal(set)` rather than `private(set)`: the connect and power protocols
+    // live in sibling files, and a `private` setter is scoped to this one.
+    public internal(set) var phase: ConnectionPhase = .idle
+    public internal(set) var address: RobotAddress?
+    public internal(set) var lastStatus: Components.Schemas.DaemonStatus?
+    public internal(set) var lastError: String?
     public private(set) var compatibilityWarning: String?
     public private(set) var currentMove: MovePlayback?
     public private(set) var isStoppingMove = false
-    public private(set) var powerTransition: PowerTransition?
+    public internal(set) var powerTransition: PowerTransition?
     /// Explicit Disconnect suppresses discovery-driven reconnect until the user connects again.
     public private(set) var automaticConnectionAllowed = true
 
-    private let configuration: Configuration
+    let configuration: Configuration
+    var client: (any RobotAPIClient)?
+    var connectionAttemptID = UUID()
+
     private let makeClient: @Sendable (RobotAddress) throws -> any RobotAPIClient
-    private var client: (any RobotAPIClient)?
     private var pollTask: Task<Void, Never>?
     private var movePollTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
     private var moveCache: [String: [String]] = [:]
-    private var connectionAttemptID = UUID()
 
     /// `ReachyKitError` carries actionable text; raw interpolation would print
     /// the bare case name instead.
+    ///
+    /// The generated client wraps transport failures in a `ClientError` whose
+    /// description carries the whole operation context — around twenty lines of
+    /// `NSError` internals that bury the one sentence worth reading. Unwrap to the
+    /// root cause first, so a refused connection reads as "Could not connect to
+    /// the server."
     static func describe(_ error: Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? "\(error)"
+        let root = rootCause(of: error)
+        return (root as? LocalizedError)?.errorDescription ?? root.localizedDescription
+    }
+
+    private static func rootCause(of error: Error) -> Error {
+        if let clientError = error as? ClientError {
+            return rootCause(of: clientError.underlyingError)
+        }
+        return error
     }
 
     /// Production session talking to a real daemon.
@@ -96,7 +144,7 @@ public final class RobotSession {
         connectionAttemptID = attemptID
         resetConnectionState()
         self.address = address
-        phase = .connecting
+        phase = .connecting(.handshaking)
         lastError = nil
 
         do {
@@ -108,21 +156,28 @@ public final class RobotSession {
                 }
                 return false
             }
+            // Claimed before the readiness stage so `startBackend()` has something
+            // to talk to while the attempt sits on `.backendUnavailable`. Only the
+            // stepper is mounted then, so the rest of the surface stays unreachable.
             self.client = client
             lastStatus = handshake.status
             compatibilityWarning = handshake.compatibility.warningMessage
-            phase = .connected(handshake.identity)
             KnownRobots.lastAddress = address
-            startPolling(identity: handshake.identity)
-            startPathMonitor(identity: handshake.identity)
-            return true
+            phase = .connecting(.checkingBackend(handshake.identity))
+            return await settleReadiness(
+                identity: handshake.identity,
+                status: handshake.status,
+                client: client,
+                attemptID: attemptID,
+                automatically: automatically
+            )
         } catch {
             guard connectionAttemptID == attemptID else { return false }
-            resetConnectionState()
-            if !Task.isCancelled {
-                lastError = Self.describe(error)
+            guard !Task.isCancelled else {
+                resetConnectionState()
+                return false
             }
-            return false
+            return failAttempt(.connect, error: error, address: address, automatically: automatically)
         }
     }
 
@@ -208,7 +263,7 @@ public final class RobotSession {
         lastError = errors.isEmpty ? nil : errors.sorted().joined(separator: "\n")
     }
 
-    private func resetConnectionState() {
+    func resetConnectionState() {
         pollTask?.cancel()
         pollTask = nil
         movePollTask?.cancel()
@@ -259,7 +314,7 @@ public final class RobotSession {
 
     /// Network changes shouldn't wait for the next poll tick: losing the path
     /// drops to `.unreachable` immediately; regaining it restarts polling now.
-    private func startPathMonitor(identity: RobotIdentity) {
+    func startPathMonitor(identity: RobotIdentity) {
         pathMonitor?.cancel()
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
@@ -283,7 +338,7 @@ public final class RobotSession {
         }
     }
 
-    private func startPolling(identity: RobotIdentity) {
+    func startPolling(identity: RobotIdentity) {
         pollTask?.cancel()
         pollTask = Task { [configuration] in
             var consecutiveSuccesses = 0
@@ -307,93 +362,5 @@ public final class RobotSession {
                 }
             }
         }
-    }
-}
-
-// MARK: - Wake / sleep
-
-/// Both transitions are multi-step protocols against the daemon, not single
-/// calls: `/move/play/wake_up` and `/move/play/goto_sleep` only play animations
-/// and never touch the motor control mode, and they answer 503 while the robot
-/// backend is down. Enabling and cutting motor power is the caller's job.
-public extension RobotSession {
-    /// The branch is picked from a freshly fetched status rather than `lastStatus`,
-    /// which may be a poll interval out of date — long enough to send motor
-    /// commands at a backend that is already gone.
-    func wake() async {
-        guard let client, powerTransition == nil else { return }
-        lastError = nil
-        // Claimed before the first suspension point: `@MainActor` re-enters on
-        // every `await`, so a later latch would let a double tap through.
-        powerTransition = .wakingUp
-        defer { powerTransition = nil }
-        do {
-            let status = try await client.daemonStatus()
-            lastStatus = status
-            guard status.state == .running else {
-                // `wake_up=true` has the daemon enable the motors and play the
-                // animation itself once the backend is up.
-                powerTransition = .startingBackend
-                try await client.startDaemon(wakeUp: true)
-                if await !waitForDaemonRunning(client: client) {
-                    lastError = "Robot backend did not start within \(configuration.daemonStartTimeout)."
-                }
-                return
-            }
-            try await client.setMotorMode(.enabled)
-            try await Task.sleep(for: configuration.motorSettleDelay)
-            let uuid = try await client.wakeUp()
-            await waitForMoveToFinish(uuid, client: client)
-        } catch {
-            lastError = Self.describe(error)
-        }
-    }
-
-    /// Mirror image of wake: the animation must finish *before* power is cut,
-    /// otherwise the head drops wherever it happens to be.
-    func sleep() async {
-        guard let client, powerTransition == nil else { return }
-        lastError = nil
-        powerTransition = .goingToSleep
-        defer { powerTransition = nil }
-        do {
-            let uuid = try await client.gotoSleep()
-            await waitForMoveToFinish(uuid, client: client)
-            try await client.setMotorMode(.disabled)
-        } catch {
-            lastError = Self.describe(error)
-        }
-    }
-}
-
-private extension RobotSession {
-    /// Polls the daemon's authoritative running-move list until `uuid` is gone.
-    /// A timeout returns normally: parking the motors matters more than proof
-    /// that the animation ran to completion.
-    func waitForMoveToFinish(_ uuid: String, client: any RobotAPIClient) async {
-        let deadline = ContinuousClock.now + configuration.moveCompletionTimeout
-        while ContinuousClock.now < deadline, !Task.isCancelled {
-            try? await Task.sleep(for: configuration.movePollInterval)
-            guard let running = try? await client.runningMoveUUIDs() else { continue }
-            if !running.contains(uuid) {
-                return
-            }
-        }
-    }
-
-    /// Waits out the background start job, refreshing `lastStatus` as it goes.
-    func waitForDaemonRunning(client: any RobotAPIClient) async -> Bool {
-        let deadline = ContinuousClock.now + configuration.daemonStartTimeout
-        while ContinuousClock.now < deadline, !Task.isCancelled {
-            try? await Task.sleep(for: configuration.pollInterval)
-            guard let status = try? await client.daemonStatus() else { continue }
-            lastStatus = status
-            switch status.state {
-            case .running: return true
-            case .error, .stopped: return false
-            default: continue
-            }
-        }
-        return false
     }
 }

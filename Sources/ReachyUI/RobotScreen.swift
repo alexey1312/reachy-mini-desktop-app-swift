@@ -63,10 +63,20 @@ struct RobotScreen: View {
                 if case .unreachable = session.phase {
                     Label("Unreachable — reconnecting…", systemImage: "wifi.exclamationmark")
                         .foregroundStyle(.orange)
+                } else if !session.isBackendRunning {
+                    // Reachable but not drivable: claiming a green "Connected" here
+                    // is what sent users looking for a network problem they don't have.
+                    Label("Backend stopped", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
                 } else {
                     Label("Connected", systemImage: "checkmark.circle")
                         .foregroundStyle(.green)
                 }
+            }
+            if let fault = session.backendFault {
+                Label(fault, systemImage: "wrench.and.screwdriver")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
             }
         }
     }
@@ -123,21 +133,12 @@ struct RobotScreen: View {
             if let transition = session.powerTransition {
                 HStack {
                     ProgressView()
-                    Text(Self.description(of: transition))
+                    Text(transition.statusText)
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .disabled(!isConnected)
-    }
-
-    /// Starting a cold backend can take up to 90 s — silence would read as a hang.
-    private static func description(of transition: RobotSession.PowerTransition) -> String {
-        switch transition {
-        case .startingBackend: "Starting the robot backend… this can take a minute"
-        case .wakingUp: "Waking up…"
-        case .goingToSleep: "Going to sleep…"
-        }
     }
 
     private var hasCamera: Bool {

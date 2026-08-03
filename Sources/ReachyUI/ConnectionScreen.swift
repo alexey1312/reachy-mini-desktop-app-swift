@@ -19,22 +19,31 @@ struct ConnectionScreen: View {
     private let rescanInterval: Duration = .seconds(10)
 
     var body: some View {
-        Form {
-            discoverySection
-            manualSection
-            if let error = session.lastError {
-                Section {
-                    Text(error)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.red)
+        Group {
+            if needsDecision {
+                // Start / continue / cancel: the discovery list underneath would
+                // only compete with a choice the user has to make.
+                Form {
+                    ConnectionStepper(session: session)
                 }
-            }
-        }
-        .formStyle(.grouped)
-        .disabled(session.phase == .connecting)
-        .overlay {
-            if session.phase == .connecting {
-                ProgressView("Connecting…")
+                .formStyle(.grouped)
+            } else {
+                Form {
+                    if isProbing {
+                        ConnectionStepper(session: session)
+                    }
+                    discoverySection
+                    manualSection
+                    if let error = session.lastError {
+                        Section {
+                            Text(error)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+                .formStyle(.grouped)
+                .disabled(isProbing)
             }
         }
         .onAppear {
@@ -51,6 +60,23 @@ struct ConnectionScreen: View {
             rescanTask?.cancel()
             rescanTask = nil
             browser.stop()
+        }
+    }
+
+    /// An attempt is in flight and will resolve itself. Shown inline so the
+    /// discovery list stays put while the candidate sweep walks its addresses.
+    private var isProbing: Bool {
+        switch session.phase {
+        case .connecting(.handshaking), .connecting(.checkingBackend): true
+        default: false
+        }
+    }
+
+    /// The attempt stopped and needs the user.
+    private var needsDecision: Bool {
+        switch session.phase {
+        case .connecting(.backendUnavailable), .connecting(.failed): true
+        default: false
         }
     }
 

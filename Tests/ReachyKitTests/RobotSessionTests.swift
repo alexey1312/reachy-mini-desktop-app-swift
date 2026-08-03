@@ -172,7 +172,7 @@ struct RobotSessionTests {
         session.disconnect()
     }
 
-    @Test("handshake failure returns to idle with error")
+    @Test("explicit handshake failure latches the connect step")
     func handshakeFailure() async {
         struct FailingClient: RobotAPIClient {
             func handshake() async throws -> RobotConnection.Handshake {
@@ -193,8 +193,16 @@ struct RobotSessionTests {
         }
         let session = RobotSession { _ in FailingClient() }
         await session.connect(to: RobotAddress(host: "10.0.0.9"))
-        #expect(session.phase == .idle)
+
+        guard case let .connecting(.failed(stage, message)) = session.phase else {
+            Issue.record("expected a failed connect step, got \(session.phase)")
+            return
+        }
+        #expect(stage == .connect)
+        #expect(!message.isEmpty)
         #expect(session.lastError != nil)
+        // Retained so the stepper can name the target and offer "Try again".
+        #expect(session.address != nil)
     }
 
     @Test("wake enables the motors before playing the animation")

@@ -10,6 +10,10 @@ import OpenAPIURLSession
 public actor RobotConnection {
     public let address: RobotAddress
     private let client: Client
+    /// The readiness probe reads a status code, never a body, so it deliberately
+    /// bypasses the generated client. It also gets upstream's 10 s budget rather
+    /// than the 3.5 s tuned for the 3 s status poll.
+    private let readinessSession: URLSession
     /// Mesh downloads run to tens of megabytes; the 3.5 s health-poll budget would
     /// abort them, so they get their own session.
     private let assetSession: URLSession
@@ -20,28 +24,26 @@ public actor RobotConnection {
         }
         self.address = address
 
-        let resolvedSession: URLSession
-        if let session {
-            resolvedSession = session
-        } else {
+        func makeSession(timeout: TimeInterval, resourceTimeout: TimeInterval? = nil) -> URLSession {
+            // An injected session belongs to a test harness — reuse it so stubbed
+            // protocols still intercept every request.
+            if let session {
+                return session
+            }
             let configuration = URLSessionConfiguration.ephemeral
-            configuration.timeoutIntervalForRequest = 3.5
-            resolvedSession = URLSession(configuration: configuration)
+            configuration.timeoutIntervalForRequest = timeout
+            if let resourceTimeout {
+                configuration.timeoutIntervalForResource = resourceTimeout
+            }
+            return URLSession(configuration: configuration)
         }
+
         client = Client(
             serverURL: serverURL,
-            transport: URLSessionTransport(configuration: .init(session: resolvedSession))
+            transport: URLSessionTransport(configuration: .init(session: makeSession(timeout: 3.5)))
         )
-        // An injected session belongs to a test harness — reuse it so stubbed
-        // protocols still intercept asset requests.
-        if let session {
-            assetSession = session
-        } else {
-            let configuration = URLSessionConfiguration.ephemeral
-            configuration.timeoutIntervalForRequest = 20
-            configuration.timeoutIntervalForResource = 120
-            assetSession = URLSession(configuration: configuration)
-        }
+        readinessSession = makeSession(timeout: 10)
+        assetSession = makeSession(timeout: 20, resourceTimeout: 120)
     }
 
     /// Result of a successful handshake with the daemon.
@@ -62,7 +64,7 @@ public actor RobotConnection {
     }
 
     public func handshake() async throws -> Handshake {
-        let status = try await client.getDaemonStatusApiDaemonStatusGet().ok.body.json
+        let status = try await daemonStatus()
         let compatibility = DaemonCompatibilityPolicy.evaluate(status.version)
         if case let .unsupported(reported, minimum) = compatibility {
             throw ReachyKitError.unsupportedDaemonVersion(reported: reported, minimum: minimum)
@@ -96,11 +98,48 @@ public actor RobotConnection {
 
     /// One-shot full state via REST — fallback only; prefer `StateStreamClient`.
     public func fullState() async throws -> Components.Schemas.FullState {
-        try await client.getFullStateApiStateFullGet().ok.body.json
+        switch try await client.getFullStateApiStateFullGet() {
+        case let .ok(response):
+            return try response.body.json
+        case .unprocessableContent:
+            throw ReachyKitError.daemonRejected(statusCode: 422)
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
+    }
+
+    /// The readiness gate. `daemonStatus().state == .running` flips before the
+    /// backend finishes coming up; this route is guarded by the daemon's
+    /// `get_backend`, which answers 503 until `backend.ready` is set — so a 200
+    /// here is the first honest "the robot can be driven" signal.
+    ///
+    /// Only the status code carries that signal, so the body is never decoded:
+    /// going through the generated client made readiness depend on whether our
+    /// schema could parse the payload, and a live daemon serves `last_alive` in a
+    /// format the generated ISO-8601 date decoder rejects — a ready robot then
+    /// looked like a failed connection.
+    public func probeBackendReady() async throws {
+        guard let url = address.httpURL(path: "/api/state/full") else {
+            throw ReachyKitError.invalidAddress(address)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        let (_, response) = try await readinessSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ReachyKitError.daemonRejected(statusCode: -1)
+        }
+        guard (200 ..< 300).contains(http.statusCode) else {
+            throw ReachyKitError.fromStatusCode(http.statusCode)
+        }
     }
 
     public func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
-        try await client.getDaemonStatusApiDaemonStatusGet().ok.body.json
+        switch try await client.getDaemonStatusApiDaemonStatusGet() {
+        case let .ok(response):
+            return try response.body.json
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
     }
 
     /// Plays the wake-up animation. Motors must already be enabled — the daemon

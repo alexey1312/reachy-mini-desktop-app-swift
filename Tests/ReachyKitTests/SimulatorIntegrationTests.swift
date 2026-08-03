@@ -22,6 +22,16 @@ struct SimulatorIntegrationTests {
         #expect(handshake.status.simulationEnabled == true)
     }
 
+    /// The readiness gate against a real daemon: `/api/state/full` is guarded by
+    /// `get_backend`, so a 200 here is what `state == running` alone can't promise.
+    @Test("readiness probe passes on a live backend")
+    func readinessProbe() async throws {
+        let connection = try RobotConnection(address: address)
+        let status = try await connection.daemonStatus()
+        try #require(status.state == .running, "sim daemon must be running for this test")
+        try await connection.probeBackendReady()
+    }
+
     @Test("set_target moves the head (visible in the state stream)", .timeLimit(.minutes(1)))
     func teleop() async throws {
         let client = try SetTargetClient(address: address, minSendInterval: .milliseconds(10))

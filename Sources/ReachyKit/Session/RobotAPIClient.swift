@@ -5,6 +5,7 @@ import Foundation
 public protocol RobotAPIClient: Sendable {
     func handshake() async throws -> RobotConnection.Handshake
     func daemonStatus() async throws -> Components.Schemas.DaemonStatus
+    func probeBackendReady() async throws
     func wakeUp() async throws -> String
     func gotoSleep() async throws -> String
     func setMotorMode(_ mode: Components.Schemas.MotorControlMode) async throws
@@ -21,6 +22,11 @@ public protocol RobotAPIClient: Sendable {
 
 /// Defaults keep lightweight session test doubles focused on the behavior they exercise.
 public extension RobotAPIClient {
+    /// Succeeds rather than throwing like its neighbours: a throwing default would
+    /// route every double that doesn't script readiness into `.backendUnavailable`,
+    /// turning an unimplemented method into a connection failure.
+    func probeBackendReady() async throws {}
+
     func setMotorMode(_: Components.Schemas.MotorControlMode) async throws {
         throw URLError(.unsupportedURL)
     }
