@@ -16,7 +16,14 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
   when a daemon runs.
 - WebSockets are NOT in the spec (FastAPI omits them). Known endpoints (from
   `reachy_mini/src/reachy_mini/daemon/app/routers/`):
-  - `/api/state/ws/full` — full robot state at 20 Hz (primary; take everything from here, REST `state/*` is fallback)
+  - `/api/state/ws/full` — full robot state (primary; take everything from here, REST `state/*` is fallback).
+    Accepts query parameters that the spec cannot show. Defaults, read off `routers/state.py`:
+    `frequency=10.0` (NOT 20 — and since the handler sleeps *after* building each frame, the real rate is a little
+    lower), `with_head_pose=true`, `with_body_yaw=true`, `with_antenna_positions=true`, everything else false,
+    including `with_head_joints` and `use_pose_matrix`. Modelled in `StateStreamOptions`.
+    - **Never send `with_target_*`.** The frame builder asserts on them and the loop's blanket `except` swallows it,
+      so the socket stays open and delivers nothing ever again. The only outward sign is a deduplicated
+      `Skipping full-state frame:` line in the daemon journal. `StateStreamOptions` cannot express these on purpose.
   - `/api/move/ws/set_target` — live teleop
   - `/api/move/ws/updates`, `/api/move/ws/raw/write`
   - `/logs/ws/daemon` — daemon journal (NOTE: mounted at app root, not under `/api`, and ONLY with
@@ -46,7 +53,13 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
 - The daemon has no authentication or encryption. v1 supports trusted private LAN/robot AP only; never imply that a
   client-side token adds security and never expose port 8000 publicly.
 - 9 actuators: `body_rotation`, `stewart_1..6`, `left_antenna`, `right_antenna`. Safety limits are clamped server-side.
-- `passive_joints` in the state stream is `null` with the default kinematics engine; the 21 Stewart passive joints are
-  computed client-side only for 3D visualization (phase 2, Swift port of upstream `kinematics-wasm` crate).
-- URDF + STL meshes are served by the daemon: `GET /api/kinematics/urdf`, `GET /api/kinematics/stl/{filename}`.
+- `passive_joints` in the state stream is `null` unless the daemon was launched with `--kinematics-engine Placo`; the
+  default `AnalyticalKinematics` never computes them and there is no API to switch engines. The 21 Stewart passive
+  joints are therefore worked out client-side, for 3D visualization only. Upstream's `kinematics-wasm` crate describes
+  the behavior to reproduce — read it as a specification, never as code to port.
+- URDF + STL meshes are served by the daemon: `GET /api/kinematics/urdf` (a `{"urdf": "<xml>"}` object, ~250 KB) and
+  `GET /api/kinematics/stl/{filename}` (raw bytes as `model/stl` — its docstring claiming to return a *path* is
+  stale). The generated client cannot fetch the STL: it declares `application/json` for every response.
+- `GET /api/kinematics/info` reports only `{"info": {"engine", "collision check"}}` — no joint names, no limits. Those
+  live in the URDF alone.
 - DoA angle (microphone direction of arrival) is in radians: 0 = left, π/2 = front/back, π = right.

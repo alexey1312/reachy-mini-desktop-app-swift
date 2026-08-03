@@ -71,7 +71,7 @@ struct SpikeView: View {
     }
 
     private var streamSection: some View {
-        Section("State stream (20 Hz expected)") {
+        Section("State stream (10 Hz by default)") {
             Button(model.isStreaming ? "Stop stream" : "Start stream") {
                 model.toggleStream()
             }

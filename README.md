@@ -18,16 +18,16 @@ Haptics, Siri and App Intents, Live Activities, an Apple Watch remote, and a pat
 - **Wireless only.** On the Wireless model the daemon runs on the robot itself (`http://reachy-mini.local:8000`), so
   this app is a pure network client. The Lite model (daemon on a USB-connected computer) is out of scope for v1 — a
   Lite owner can still connect if the daemon runs on a reachable host in the same network.
-- **No camera in v1.** The daemon exposes camera video via WebRTC only (there is no MJPEG endpoint); WebRTC lands in
-  phase 2 together with two-way audio.
+- **Camera is WebRTC-only.** The daemon exposes no MJPEG endpoint, so video and two-way audio go through WebRTC.
 
 ## Architecture
 
-| Layer       | What                                                                                                                                |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `ReachyKit` | SPM package: generated OpenAPI client, WebSocket state stream (20 Hz), discovery, domain model. Swift 6, strict concurrency, no UI. |
-| `ReachyUI`  | Shared SwiftUI + RealityKit views (phase 1+).                                                                                       |
-| `Apps/`     | Thin per-platform shells, generated with Tuist.                                                                                     |
+| Layer         | What                                                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `ReachyKit`   | SPM package: generated OpenAPI client, WebSocket state stream, discovery, URDF and kinematics. Swift 6, strict concurrency, no UI. |
+| `ReachyScene` | RealityKit scene built from the robot's own URDF and meshes.                                                                       |
+| `ReachyUI`    | Shared SwiftUI views.                                                                                                              |
+| `Apps/`       | Thin per-platform shells, generated with Tuist.                                                                                    |
 
 ## Getting started
 
@@ -63,8 +63,11 @@ own access point. Never expose daemon port 8000 through port forwarding or a pub
 
 ## Status
 
-Phase 0 — risk removal: generated API client, state stream from a simulated daemon, on-device validation of Local
-Network permission and ATS local-networking rules.
+Phase 2. Connection, discovery and network resilience are in place, along with live teleop, recorded moves, the daemon
+log console, the WebRTC camera with two-way audio, and a 3D viewer that mirrors the robot from its own URDF.
+
+Still open in this phase: the Stewart platform's passive joints are computed client-side for the 3D view (the daemon
+only reports them under the Placo kinematics engine), and BLE Wi-Fi provisioning.
 
 ## License
 

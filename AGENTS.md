@@ -42,9 +42,9 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 |              |                                                                                                                     |
 | ------------ | ------------------------------------------------------------------------------------------------------------------- |
 | Robot API    | `http://<robot>:8000/api`, OpenAPI 3.1 spec committed at `Sources/ReachyKit/openapi.json`                           |
-| State stream | WebSocket `/api/state/ws/full` at 20 Hz (not in the OpenAPI spec — hand-written client)                             |
+| State stream | WebSocket `/api/state/ws/full`, 10 Hz by default (not in the OpenAPI spec — hand-written client)                    |
 | Upstream     | `pollen-robotics/reachy-mini-desktop-app` + `pollen-robotics/reachy_mini` — **specification only, never copy code** |
-| Packages     | `ReachyKit` (transport + domain, no UI) → `ReachyUI` (SwiftUI) → `Apps/` (Tuist shells)                             |
+| Packages     | `ReachyKit` (transport + domain) → `ReachyMedia` (WebRTC) / `ReachyScene` (RealityKit) → `ReachyUI` → `Apps/`       |
 
 ## Project Rules
 

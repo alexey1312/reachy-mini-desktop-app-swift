@@ -21,7 +21,8 @@ Goal: working skeleton + confirmation that no platform restriction blocks the pr
   issues on macOS → plain pip venv (`mise run sim-daemon`). `--fastapi-host 0.0.0.0` exposes it to LAN devices.
 
 - **Simulated daemon end-to-end** — daemon v1.9.0 in MuJoCo sim answers REST (`/api/daemon/status`), streams
-  `/api/state/ws/full` at 20 Hz; `RobotConnection.handshake()` + `StateStreamClient` verified live
+  `/api/state/ws/full`; `RobotConnection.handshake()` + `StateStreamClient` verified live (recorded here as 20 Hz —
+  the daemon actually defaults to 10, corrected in phase 2)
   (`mise run test:sim`). Real WS frame recorded as test fixture (`full_state_recorded.json`). Two daemon realities
   the committed spec doesn't tell you: sim returns `{"hardware_id": null}` (identity falls back to robot name), and
   daemon payloads carry fields newer than the spec (tolerated by design).
