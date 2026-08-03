@@ -22,8 +22,12 @@ final class SpikeModel {
     func connect() async {
         lastError = nil
         handshakeSummary = nil
+        guard let address = RobotAddress(parsing: host) else {
+            lastError = "Invalid address: \(host)"
+            return
+        }
         do {
-            let connection = try RobotConnection(address: RobotAddress(host: host))
+            let connection = try RobotConnection(address: address)
             let handshake = try await connection.handshake()
             handshakeSummary = """
             name: \(handshake.identity.name ?? "—")
@@ -44,8 +48,12 @@ final class SpikeModel {
             isStreaming = false
             return
         }
+        guard let address = RobotAddress(parsing: host) else {
+            lastError = "Invalid address: \(host)"
+            return
+        }
         do {
-            let client = try StateStreamClient(address: RobotAddress(host: host))
+            let client = try StateStreamClient(address: address)
             frameCount = 0
             arrivals = []
             isStreaming = true

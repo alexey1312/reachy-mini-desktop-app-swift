@@ -12,6 +12,39 @@ public struct RobotAddress: Hashable, Sendable, Codable {
         self.port = port
     }
 
+    /// Parses user input: `host`, `host:port`, `[v6]`, `[v6]:port`, or bare IPv6.
+    /// Users paste addresses with ports (phase-0 device testing proved it) — a bare
+    /// `host` field that treats ":" as IPv6 produces garbage URLs.
+    public init?(parsing input: String) {
+        let s = input.trimmingCharacters(in: .whitespaces)
+        guard !s.isEmpty else { return nil }
+
+        if s.hasPrefix("[") {
+            guard let end = s.firstIndex(of: "]") else { return nil }
+            let host = String(s[s.index(after: s.startIndex) ..< end])
+            let rest = s[s.index(after: end)...]
+            if rest.isEmpty {
+                self.init(host: host)
+            } else if rest.hasPrefix(":"), let port = Int(rest.dropFirst()) {
+                self.init(host: host, port: port)
+            } else {
+                return nil
+            }
+            return
+        }
+
+        switch s.count(where: { $0 == ":" }) {
+        case 0:
+            self.init(host: s)
+        case 1:
+            guard let i = s.firstIndex(of: ":"), let port = Int(s[s.index(after: i)...]) else { return nil }
+            self.init(host: String(s[..<i]), port: port)
+        default:
+            // Multiple colons: bare IPv6 literal
+            self.init(host: s)
+        }
+    }
+
     /// Root URL of the daemon, e.g. `http://reachy-mini.local:8000`.
     /// Generated OpenAPI operation paths already include the `/api` prefix.
     public var rootURL: URL? {
