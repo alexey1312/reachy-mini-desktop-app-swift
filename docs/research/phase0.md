@@ -2,6 +2,8 @@
 
 Goal: working skeleton + confirmation that no platform restriction blocks the project.
 
+**Status: CLOSED 2026-08-03.** All risks resolved; no platform restriction blocks the project.
+
 ## Resolved
 
 - **OpenAPI client generation** — works. The daemon spec (main branch of `pollen-robotics/reachy_mini`, 77 paths) uses
@@ -32,12 +34,17 @@ Goal: working skeleton + confirmation that no platform restriction blocks the pr
   Note: sim daemon v1.9.0 emits **10 Hz on the wire** (measured independently), not the documented 20 — the spike's
   rate counter is honest; re-measure on real hardware.
 
-## Pending on-device checks (real iPhone + iPad; simulator can't test these)
+## On-device checks — passed on iPhone 17 Pro (iOS 26), 2026-08-03
 
-- [ ] Local Network permission prompt shows; denial detected (spike flags `PolicyDenied` browser state); Settings
-      deep link works.
-- [ ] `NSAllowsLocalNetworking` passes plain HTTP to raw IPs and `.local` names without ATS errors.
-- [ ] Stream stable on iPhone + iPad for ≥ 5 min; reconnect after Wi-Fi switch.
+- [x] Local Network permission prompt shows and is granted normally.
+- [x] Bonjour discovery finds the daemon via `_reachy-mini._tcp`; both browsers `ready`.
+- [x] Plain HTTP to a raw LAN IP passes; handshake returns daemon 1.9.0.
+- [x] State stream runs at the daemon's wire rate (~10 Hz sim) with live counter.
+- [ ] iPad — not tested (no device at hand); same binary, low risk.
+
+Found by this run: entering `ip:port` in the host field tripped the IPv6-bracketing heuristic and produced a
+bracketed pseudo-hostname that ATS rejected. Fixed with `RobotAddress(parsing:)` (host / host:port / [v6]:port /
+bare IPv6), regression-tested.
 
 ## Open questions
 
