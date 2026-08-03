@@ -132,6 +132,12 @@ if [ ! -x "$VENV/bin/mjpython" ] || [ "$INSTALLED" != "$EXPECTED" ]; then
   printf '%s' "$EXPECTED" > "$STAMP"
 fi
 "$VENV/bin/python" -c 'import importlib.metadata as m; assert m.version("reachy-mini") == "1.9.0"'
+# `gstreamer_python`'s libgstpython.dylib segfaults while GStreamer scans plugins.
+# Forked (the default) that only surfaces as "External plugin loader failed" and
+# the daemon then hangs before binding :8000; with GST_REGISTRY_FORK=no the
+# segfault kills the daemon outright. The pipeline below needs native elements
+# only, so the plugin is pure liability.
+find "$VENV" -name libgstpython.dylib -exec mv {} {}.disabled ';' 2>/dev/null || true
 # Without the scanner GStreamer's plugin loader silently fails, webrtcsink can't
 # find the Opus encoder ("No caps found for stream audio_0") and no WebRTC
 # producer is ever registered on :8443.
