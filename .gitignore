@@ -17,6 +17,7 @@ xcuserdata/
 # Environment
 .envrc
 mise.local.toml
+.venv-sim/
 
 # macOS
 .DS_Store

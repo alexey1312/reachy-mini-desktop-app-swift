@@ -35,6 +35,9 @@ hk = "1.53.0"         # Git hooks manager (version must match hk.pkl package URI
 actionlint = "1.7.12" # GitHub Actions linting
 git-cliff = "2.13.1"  # Changelog generation
 
+# --- Simulator ---
+python = "3.12" # for sim-daemon venv: mujoco ships no wheels for newer pythons
+
 [tasks.build]
 description = "Build the Swift package (debug)"
 run = "swift build 2>&1 | xcsift"
@@ -99,6 +102,15 @@ description = "Run simulated Reachy Mini daemon (MuJoCo) reachable from LAN devi
 run = """
 #!/bin/bash
 set -euo pipefail
-# ponytail: uvx pulls reachy-mini from PyPI on every run; pin a version here once the API stabilizes
-uvx --from "reachy-mini[mujoco]" reachy-mini-daemon --sim --fastapi-host 0.0.0.0 "$@"
+# macOS: MuJoCo GUI requires mjpython, and uv has known MuJoCo issues — plain pip venv.
+# ponytail: unpinned reachy-mini; pin a version here once the API stabilizes
+VENV=.venv-sim
+# Explicit path: system PATH can shadow mise's python with an ancient one
+PYTHON="$(./bin/mise where python)/bin/python3"
+if [ ! -x "$VENV/bin/mjpython" ]; then
+  "$PYTHON" -m venv "$VENV"
+  "$VENV/bin/pip" install --quiet --upgrade pip
+  "$VENV/bin/pip" install --quiet "reachy-mini[mujoco]"
+fi
+exec "$VENV/bin/mjpython" -m reachy_mini.daemon.app.main --sim --fastapi-host 0.0.0.0 "$@"
 """

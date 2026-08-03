@@ -22,7 +22,9 @@ link-local IPv6). Our rules:
 
 ## iOS/iPadOS requirements (app targets)
 
-- `NSLocalNetworkUsageDescription` + `NSBonjourServices` in Info.plist (service type — open question O-1).
+- `NSLocalNetworkUsageDescription` + `NSBonjourServices` in Info.plist. Daemon mDNS service types (from upstream
+  `src-tauri/src/discovery/mod.rs`): `_reachy-mini._tcp` (primary) and `_http._tcp` (legacy, filter instance names
+  containing "reachy") — declare both.
 - Local Network permission denial is SILENT: discovery returns an empty list, no error. UX must explain before the
   prompt, detect denial via timeout, and deep-link to Settings.
 - ATS: `NSAppTransportSecurity → NSAllowsLocalNetworking: true` — allows plain HTTP to `.local`/link-local only. Never
