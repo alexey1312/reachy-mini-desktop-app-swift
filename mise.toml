@@ -54,6 +54,10 @@ run = "swift build --build-tests 2>&1 | xcsift && swift test --skip-build --para
 description = "Run tests with filter (usage: mise run test:filter ReachyKitTests)"
 run = "swift test --parallel --filter {{arg(name='filter')}} 2>&1 | xcsift"
 
+[tasks."test:sim"]
+description = "Integration tests against a running sim daemon (start with: mise run sim-daemon)"
+run = "REACHY_SIM_HOST=127.0.0.1 swift test --parallel --filter SimulatorIntegrationTests 2>&1 | xcsift"
+
 [tasks.lint]
 description = "Run SwiftLint and actionlint"
 run = """

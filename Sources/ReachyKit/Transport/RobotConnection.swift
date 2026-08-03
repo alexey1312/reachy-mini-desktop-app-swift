@@ -32,13 +32,17 @@ public actor RobotConnection {
         let status = try await client.getDaemonStatusApiDaemonStatusGet().ok.body.json
 
         // hardware-id returns a string map (component serials); flatten deterministically
-        // so the same robot always yields the same identity string.
-        let hardwareMap = try await client.getRobotHardwareIdApiDaemonHardwareIdGet()
+        // so the same robot always yields the same identity string. The simulated daemon
+        // returns null values here, which the generated [String: String] map rejects —
+        // treat that as "no hardware id" rather than a failed handshake.
+        let hardwareMap = try? await client.getRobotHardwareIdApiDaemonHardwareIdGet()
             .ok.body.json.additionalProperties
-        let hardwareID = hardwareMap
-            .sorted { $0.key < $1.key }
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: ";")
+        let hardwareID = hardwareMap.flatMap { map -> String? in
+            map.isEmpty ? nil : map
+                .sorted { $0.key < $1.key }
+                .map { "\($0.key)=\($0.value)" }
+                .joined(separator: ";")
+        }
 
         let name = try? await client.getRobotDisplayNameApiDaemonRobotNameGet().ok.body.json.name
 

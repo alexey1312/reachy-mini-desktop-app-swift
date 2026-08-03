@@ -28,6 +28,17 @@ struct FullStateDecodingTests {
         #expect(state.doa?.angle == 1.5707)
     }
 
+    @Test("decodes a frame recorded from a real simulated daemon (v1.9.0)")
+    func decodesRecordedFrame() throws {
+        let data = try fixtureData("full_state_recorded")
+        let state = try JSONDecoder.reachyDaemon.decode(Components.Schemas.FullState.self, from: data)
+
+        #expect(state.controlMode == .enabled)
+        #expect(state.headPose?.value1 != nil)
+        #expect(state.antennasPosition?.count == 2)
+        #expect(state.timestamp != nil)
+    }
+
     @Test("all-null payload decodes to empty state (graceful degradation)")
     func decodesEmpty() throws {
         let state = try JSONDecoder.reachyDaemon.decode(Components.Schemas.FullState.self, from: Data("{}".utf8))

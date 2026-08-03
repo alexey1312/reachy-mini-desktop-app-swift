@@ -18,6 +18,14 @@ Goal: working skeleton + confirmation that no platform restriction blocks the pr
 - **Simulator launch (was O-2)** — macOS needs `mjpython -m reachy_mini.daemon.app.main --sim`; `uv` has known MuJoCo
   issues on macOS → plain pip venv (`mise run sim-daemon`). `--fastapi-host 0.0.0.0` exposes it to LAN devices.
 
+- **Simulated daemon end-to-end** — daemon v1.9.0 in MuJoCo sim answers REST (`/api/daemon/status`), streams
+  `/api/state/ws/full` at 20 Hz; `RobotConnection.handshake()` + `StateStreamClient` verified live
+  (`mise run test:sim`). Real WS frame recorded as test fixture (`full_state_recorded.json`). Two daemon realities
+  the committed spec doesn't tell you: sim returns `{"hardware_id": null}` (identity falls back to robot name), and
+  daemon payloads carry fields newer than the spec (tolerated by design).
+- **WebRTC signaling (was part of phase 2 risk)** — port 8443 is plain `ws://` (no TLS), GStreamer `webrtcsink`
+  signalling protocol confirmed live. See `webrtc.md`.
+
 ## Pending on-device checks (need the Tuist app shell)
 
 - [ ] Local Network permission prompt shows; denial detected via discovery timeout; Settings deep link works.
@@ -30,4 +38,4 @@ Goal: working skeleton + confirmation that no platform restriction blocks the pr
 - **O-3**: daemon has no authentication — anyone on the LAN can command the robot. Documented; product decision
   needed before public release.
 - **O-4**: Pollen's API stability guarantees; robot behavior when a client disconnects mid-app.
-- **WebRTC signaling (port 8443)**: message format + TLS story on iOS — research note pending (`webrtc.md`).
+- **WebRTC on real hardware**: sim has no TLS on 8443 — re-verify on a physical Wireless robot.
