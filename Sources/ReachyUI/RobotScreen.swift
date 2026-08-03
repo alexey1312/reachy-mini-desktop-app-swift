@@ -34,10 +34,15 @@ struct RobotScreen: View {
 
     private var statusSection: some View {
         Section("Robot") {
-            LabeledContent("Name") { Text(identity?.name ?? "—") }
-            LabeledContent("Daemon") { Text(identity?.daemonVersion ?? "—") }
-            LabeledContent("Address") { Text(session.address?.displayString ?? "—") }
-            LabeledContent("Link") {
+            LabeledContent("Name", value: identity?.name ?? "—")
+            LabeledContent("Daemon", value: identity?.daemonVersion ?? "—")
+            LabeledContent("Address", value: session.address?.displayString ?? "—")
+            if let status = session.lastStatus {
+                LabeledContent("Daemon state", value: String(describing: status.state))
+            }
+            HStack {
+                Text("Link")
+                Spacer()
                 if case .unreachable = session.phase {
                     Label("Unreachable — reconnecting…", systemImage: "wifi.exclamationmark")
                         .foregroundStyle(.orange)
@@ -45,9 +50,6 @@ struct RobotScreen: View {
                     Label("Connected", systemImage: "checkmark.circle")
                         .foregroundStyle(.green)
                 }
-            }
-            if let status = session.lastStatus {
-                LabeledContent("Daemon state") { Text(String(describing: status.state)) }
             }
         }
     }
