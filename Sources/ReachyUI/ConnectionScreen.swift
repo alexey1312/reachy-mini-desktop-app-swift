@@ -129,12 +129,14 @@ struct ConnectionScreen: View {
     /// Tries known/static candidates first; Bonjour results are appended as they resolve.
     private func enqueueInitialCandidates() {
         guard session.automaticConnectionAllowed else { return }
-        var candidates = [
-            RobotAddress(host: "reachy-mini.local"),
-            RobotAddress(host: "reachy-mini.home"),
-        ]
-        #if os(macOS)
-            // The simulator runs on this Mac and may not advertise Bonjour.
+        // Upstream also probes `reachy-mini.home`, which cannot work here: App
+        // Transport Security exempts `.local`, link-local and single-label names
+        // from its HTTPS requirement, and a qualified `.home` name is none of
+        // those. Probing it only ever produced a -1022 error on screen.
+        var candidates = [RobotAddress(host: "reachy-mini.local")]
+        #if os(macOS) || targetEnvironment(simulator)
+            // A simulated daemon runs on this Mac and advertises no Bonjour the
+            // simulator can see; loopback reaches the host either way.
             candidates.insert(RobotAddress(host: "127.0.0.1"), at: 0)
         #endif
         if let last = KnownRobots.lastAddress {

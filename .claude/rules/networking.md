@@ -17,7 +17,10 @@ link-local IPv6). Our rules:
 - Build URLs with `URLComponents` (brackets IPv6 correctly). Drop `fe80::` link-local candidates unless carrying a
   zone ID.
 - Connect must be idempotent and cancellable — no latching state machines.
-- Static fallback hosts upstream probes: `reachy-mini.local`, `reachy-mini.home`.
+- Static fallback host: `reachy-mini.local`. Upstream also probes `reachy-mini.home`; do NOT add it back. ATS waives
+  its HTTPS requirement only for `.local` names, link-local addresses and single-label hosts, so a qualified `.home`
+  name is always refused with `NSURLErrorDomain -1022` — confirmed on a running build. Loopback is probed as well on
+  macOS and in the simulator, where a locally run `sim-daemon` advertises nothing the client can discover.
 - Network change: `NWPathMonitor` + exponential backoff reconnect.
 
 ## iOS/iPadOS requirements (app targets)
