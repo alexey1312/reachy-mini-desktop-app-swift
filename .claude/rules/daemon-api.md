@@ -19,7 +19,8 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
   - `/api/state/ws/full` — full robot state at 20 Hz (primary; take everything from here, REST `state/*` is fallback)
   - `/api/move/ws/set_target` — live teleop
   - `/api/move/ws/updates`, `/api/move/ws/raw/write`
-  - `/api/logs/ws/daemon` — daemon logs
+  - `/logs/ws/daemon` — daemon journal (NOTE: mounted at app root, not under `/api`, and ONLY with
+    `--wireless-version` — absent on the simulator, upgrade rejected with 403)
   - `/api/apps/ws/apps-manager/{job_id}` — install/remove job stream (prefer over polling `job-status`)
 
 ## MVP endpoint subset (what upstream actually calls)

@@ -73,6 +73,11 @@ struct RobotScreen: View {
                 } label: {
                     Label("Moves & expressions", systemImage: "music.note")
                 }
+                NavigationLink {
+                    LogConsoleScreen(address: address)
+                } label: {
+                    Label("Daemon logs", systemImage: "terminal")
+                }
             }
             Button {
                 Task { await session.wake() }
