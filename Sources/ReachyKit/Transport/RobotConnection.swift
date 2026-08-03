@@ -11,14 +11,23 @@ public actor RobotConnection {
     public let address: RobotAddress
     private let client: Client
 
-    public init(address: RobotAddress, session: URLSession = .shared) throws {
+    public init(address: RobotAddress, session: URLSession? = nil) throws {
         guard let serverURL = address.rootURL else {
             throw ReachyKitError.invalidAddress(address)
         }
         self.address = address
+
+        let resolvedSession: URLSession
+        if let session {
+            resolvedSession = session
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.timeoutIntervalForRequest = 3.5
+            resolvedSession = URLSession(configuration: configuration)
+        }
         client = Client(
             serverURL: serverURL,
-            transport: URLSessionTransport(configuration: .init(session: session))
+            transport: URLSessionTransport(configuration: .init(session: resolvedSession))
         )
     }
 
@@ -89,7 +98,18 @@ public actor RobotConnection {
         ).ok.body.json.uuid
     }
 
+    /// Authoritative daemon view of tasks still running, used to detect natural completion.
+    public func runningMoveUUIDs() async throws -> Set<String> {
+        let moves = try await client.getRunningMovesApiMoveRunningGet().ok.body.json
+        return Set(moves.map(\.uuid))
+    }
+
     public func stopMove(uuid: String) async throws {
         _ = try await client.stopMoveApiMoveStopPost(body: .json(.init(uuid: uuid))).ok
+    }
+
+    /// Recorded music is owned by the daemon's media player, separately from the move task.
+    public func stopSound() async throws {
+        _ = try await client.stopSoundApiMediaStopSoundPost().ok
     }
 }

@@ -69,7 +69,7 @@ struct RobotScreen: View {
                     Label("Controller", systemImage: "gamecontroller")
                 }
                 NavigationLink {
-                    MovesScreen(address: address)
+                    MovesScreen(session: session)
                 } label: {
                     Label("Moves & expressions", systemImage: "music.note")
                 }

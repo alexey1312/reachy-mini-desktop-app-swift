@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Recorded moves from the Pollen HF libraries: pick a library, tap to play.
 struct MovesScreen: View {
-    let address: RobotAddress
+    let session: RobotSession
 
     /// Upstream `src/constants/choreographies.ts` libraries
     private static let libraries: [(title: String, dataset: String)] = [
@@ -15,17 +15,14 @@ struct MovesScreen: View {
     @State private var selection = 0
     @State private var moves: [String] = []
     @State private var loading = false
-    @State private var playingMove: String?
-    @State private var playingUUID: String?
-    @State private var lastError: String?
-    @State private var connection: RobotConnection?
+    @State private var startingMove = false
 
     var body: some View {
         Form {
             Section {
                 Picker("Library", selection: $selection) {
-                    ForEach(Self.libraries.indices, id: \.self) { i in
-                        Text(Self.libraries[i].title).tag(i)
+                    ForEach(Self.libraries.indices, id: \.self) { index in
+                        Text(Self.libraries[index].title).tag(index)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -43,7 +40,7 @@ struct MovesScreen: View {
                         HStack {
                             Text(displayName(move))
                             Spacer()
-                            if playingMove == move {
+                            if session.currentMove?.move == move {
                                 Image(systemName: "waveform")
                                     .symbolEffect(.variableColor.iterative)
                             } else {
@@ -51,14 +48,10 @@ struct MovesScreen: View {
                             }
                         }
                     }
+                    .disabled(startingMove || session.isStoppingMove)
                 }
             }
-            if playingUUID != nil {
-                Section {
-                    Button("Stop", role: .destructive) { stop() }
-                }
-            }
-            if let lastError {
+            if let lastError = session.lastError {
                 Section {
                     Text(lastError)
                         .font(.caption.monospaced())
@@ -68,62 +61,72 @@ struct MovesScreen: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Moves")
-        .onAppear { setup() }
-        .onChange(of: selection) { load() }
-        .onDisappear { stop() }
+        .safeAreaInset(edge: .bottom) {
+            if session.currentMove != nil {
+                Button {
+                    Task { await session.stopMove() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if session.isStoppingMove {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "stop.fill")
+                        }
+                        Text(session.isStoppingMove ? "Stopping…" : "Stop")
+                    }
+                    .frame(minWidth: 120)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .tint(.red)
+                .disabled(session.isStoppingMove)
+                .padding()
+            }
+        }
+        .toolbar {
+            Button {
+                Task { await load(refresh: true) }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(loading)
+        }
+        .task(id: selection) {
+            await load()
+        }
+        .onDisappear {
+            Task { await session.stopMove() }
+        }
     }
 
     private func displayName(_ move: String) -> String {
         move.replacingOccurrences(of: "_", with: " ")
     }
 
-    private func setup() {
-        do {
-            connection = try RobotConnection(address: address)
-            load()
-        } catch {
-            lastError = "\(error)"
-        }
-    }
-
-    private func load() {
-        guard let connection else { return }
+    @MainActor
+    private func load(refresh: Bool = false) async {
         let dataset = Self.libraries[selection].dataset
         loading = true
-        moves = []
-        lastError = nil
-        Task {
-            defer { loading = false }
-            do {
-                moves = try await connection.listMoves(dataset: dataset)
-            } catch {
-                lastError = "\(error)"
+        defer { loading = false }
+        do {
+            let loaded = try await session.moves(in: dataset, refresh: refresh)
+            guard !Task.isCancelled else { return }
+            moves = loaded
+        } catch {
+            if !Task.isCancelled {
+                moves = []
             }
         }
     }
 
     private func play(_ move: String) {
-        guard let connection else { return }
         let dataset = Self.libraries[selection].dataset
-        lastError = nil
+        startingMove = true
         Task {
-            do {
-                if let playingUUID {
-                    try? await connection.stopMove(uuid: playingUUID)
-                }
-                playingMove = move
-                playingUUID = try await connection.playMove(dataset: dataset, move: move)
-            } catch {
-                playingMove = nil
-                lastError = "\(error)"
-            }
+            defer { startingMove = false }
+            try? await session.playMove(dataset: dataset, move: move)
         }
-    }
-
-    private func stop() {
-        guard let connection, let uuid = playingUUID else { return }
-        playingMove = nil
-        playingUUID = nil
-        Task { try? await connection.stopMove(uuid: uuid) }
     }
 }

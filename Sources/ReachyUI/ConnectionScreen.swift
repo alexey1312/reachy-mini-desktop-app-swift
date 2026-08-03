@@ -9,7 +9,10 @@ struct ConnectionScreen: View {
     @State private var browser = RobotBrowser()
     @State private var manualInput = KnownRobots.lastAddress.map(\.displayString) ?? ""
     @State private var resolving: String?
-    @State private var autoConnectAttempted = false
+    @State private var resolvedServiceIDs: Set<String> = []
+    @State private var pendingCandidates: [RobotAddress] = []
+    @State private var attemptedCandidates: Set<RobotAddress> = []
+    @State private var autoConnectTask: Task<Void, Never>?
 
     var body: some View {
         Form {
@@ -32,13 +35,24 @@ struct ConnectionScreen: View {
         }
         .onAppear {
             browser.start()
-            autoConnectToLastRobot()
+            enqueueInitialCandidates()
         }
-        .onDisappear { browser.stop() }
+        .onChange(of: browser.services) { _, services in
+            resolveDiscoveredServices(services)
+        }
+        .onDisappear {
+            autoConnectTask?.cancel()
+            autoConnectTask = nil
+            browser.stop()
+        }
     }
 
     private var discoverySection: some View {
         Section("Robots on this network") {
+            if !session.automaticConnectionAllowed {
+                Label("Automatic reconnect paused", systemImage: "pause.circle")
+                    .foregroundStyle(.secondary)
+            }
             if browser.permissionLooksDenied {
                 Label("Local Network permission denied", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
@@ -79,7 +93,7 @@ struct ConnectionScreen: View {
             #endif
             Button("Connect") {
                 guard let address = RobotAddress(parsing: manualInput) else { return }
-                Task { await session.connect(to: address) }
+                connectManually(to: address)
             }
             .disabled(RobotAddress(parsing: manualInput) == nil)
             if KnownRobots.lastAddress != nil {
@@ -91,14 +105,76 @@ struct ConnectionScreen: View {
         }
     }
 
-    /// One shot per screen lifetime: reconnect to the previously used robot.
-    private func autoConnectToLastRobot() {
-        guard !autoConnectAttempted, let last = KnownRobots.lastAddress, session.phase == .idle else { return }
-        autoConnectAttempted = true
-        Task { await session.connect(to: last) }
+    /// Tries known/static candidates first; Bonjour results are appended as they resolve.
+    private func enqueueInitialCandidates() {
+        guard session.automaticConnectionAllowed else { return }
+        var candidates = [
+            RobotAddress(host: "reachy-mini.local"),
+            RobotAddress(host: "reachy-mini.home"),
+        ]
+        #if os(macOS)
+            // The simulator runs on this Mac and may not advertise Bonjour.
+            candidates.insert(RobotAddress(host: "127.0.0.1"), at: 0)
+        #endif
+        if let last = KnownRobots.lastAddress {
+            candidates.insert(last, at: 0)
+        }
+        enqueue(candidates)
+    }
+
+    private func resolveDiscoveredServices(_ services: [RobotBrowser.DiscoveredService]) {
+        guard session.automaticConnectionAllowed else { return }
+        for service in services where !resolvedServiceIDs.contains(service.id) {
+            resolvedServiceIDs.insert(service.id)
+            Task { @MainActor in
+                if let address = await BonjourResolver.resolve(service.endpoint) {
+                    enqueue([address])
+                }
+            }
+        }
+    }
+
+    private func enqueue(_ candidates: [RobotAddress]) {
+        for candidate in candidates
+            where !attemptedCandidates.contains(candidate) && !pendingCandidates.contains(candidate)
+        {
+            pendingCandidates.append(candidate)
+        }
+        startAutoConnectIfNeeded()
+    }
+
+    private func startAutoConnectIfNeeded() {
+        guard autoConnectTask == nil,
+              session.automaticConnectionAllowed,
+              session.phase == .idle,
+              !pendingCandidates.isEmpty
+        else { return }
+
+        autoConnectTask = Task { @MainActor in
+            defer { autoConnectTask = nil }
+            while !Task.isCancelled,
+                  session.automaticConnectionAllowed,
+                  session.phase == .idle,
+                  !pendingCandidates.isEmpty
+            {
+                let candidate = pendingCandidates.removeFirst()
+                attemptedCandidates.insert(candidate)
+                if await session.connect(to: candidate, automatically: true) {
+                    return
+                }
+            }
+        }
+    }
+
+    private func connectManually(to address: RobotAddress) {
+        autoConnectTask?.cancel()
+        autoConnectTask = nil
+        Task { await session.connect(to: address) }
     }
 
     private func connect(to service: RobotBrowser.DiscoveredService) {
+        autoConnectTask?.cancel()
+        autoConnectTask = nil
         resolving = service.id
         Task {
             defer { resolving = nil }
