@@ -45,6 +45,15 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
 
 ## Facts
 
+- Daemon process ≠ robot backend. `/api/daemon/status` answers 200 with `backend_status: null` while the backend is
+  torn down (`daemon.stop()` sets `self.backend = None`); every route behind the `get_backend` dependency
+  (`move/*`, `state/*` incl. `ws/full`, `motors/*`, `kinematics/*`, `volume/*`) answers **503 "Backend not running"**.
+  `camera/*` uses `get_daemon` instead, and `/logs/ws/daemon` is mounted at the app root — both outside that gate.
+- Wake/sleep are multi-step protocols, not single calls: `motors/set_mode/enabled` → 300 ms → `move/play/wake_up`;
+  sleep reverses it (animation first, `set_mode/disabled` only after it finishes). The play routes never touch the
+  motor mode — an asleep robot accepts them, plays the sound, and does not move.
+- `daemon/start?wake_up=<bool>` returns a job id immediately and starts the backend in the background (409 while
+  another job runs); poll `daemon/status` until `running`. With `wake_up=true` the daemon enables the motors itself.
 - No MJPEG endpoint exists. Camera is WebRTC-only (signaling `ws://<host>:8443`, GStreamer webrtcsink, single H.264
   Constrained Baseline 3.1 stream, Opus audio, STUN `stun.l.google.com:19302`).
 - Daemon 1.9.0 is the minimum and tested API baseline. Enforce

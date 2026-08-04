@@ -40,6 +40,8 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 `build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Check app-target code with
 `xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike -destination '...' -skipPackagePluginValidation build`.
 `test:filter` matches type names (`RobotSessionAudioTests`), not `@Suite` display names.
+`mise run lint` pipes through xcsift, which can truncate and report `status: incomplete` while hiding violations —
+rerun `./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike` to see them.
 
 ## Project Context
 
