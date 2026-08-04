@@ -1,24 +1,33 @@
 import Foundation
 
-/// Persistence for the last successfully connected robot address.
+/// Persistence for the robots this app has connected to.
 /// Manual reconnection to a known address is a first-class flow (issue #269).
 public enum KnownRobots {
-    private static let lastAddressKey = "ReachyKit.lastAddress"
     private static let onboardingKey = "ReachyKit.hasCompletedOnboarding"
     private static let provisionedKey = "ReachyKit.pendingProvisionedHardwareID"
 
+    public static var store: KnownRobotStore {
+        KnownRobotStore(defaults: .standard)
+    }
+
+    /// Robots seen through a completed handshake, most recent first.
+    public static var all: [KnownRobot] {
+        store.all
+    }
+
+    /// The address to offer first: what the manual field shows and what the candidate
+    /// sweep tries before anything else. Identity-keyed records live in `all`.
     public static var lastAddress: RobotAddress? {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: lastAddressKey) else { return nil }
-            return try? JSONDecoder().decode(RobotAddress.self, from: data)
-        }
-        set {
-            guard let newValue, let data = try? JSONEncoder().encode(newValue) else {
-                UserDefaults.standard.removeObject(forKey: lastAddressKey)
-                return
-            }
-            UserDefaults.standard.set(data, forKey: lastAddressKey)
-        }
+        get { store.lastAddress }
+        set { store.lastAddress = newValue }
+    }
+
+    public static func remember(identity: RobotIdentity, address: RobotAddress, at date: Date = Date()) {
+        store.remember(identity: identity, address: address, at: date)
+    }
+
+    public static func forget(_ key: String) {
+        store.forget(key)
     }
 
     /// Whether the first-run flow has already run. It only stops onboarding from opening

@@ -85,10 +85,16 @@ enum PreviewScene {
     static func connection(
         _ session: RobotSession,
         browser: RobotBrowser? = nil,
-        manualInput: String = ""
+        manualInput: String = "",
+        knownRobots: KnownRobotsModel? = nil
     ) -> some View {
-        ConnectionScreen(session: session, browser: browser ?? .preview(names: []), manualInput: manualInput)
-            .preview()
+        ConnectionScreen(
+            session: session,
+            browser: browser ?? .preview(names: []),
+            manualInput: manualInput,
+            knownRobots: knownRobots ?? .preview([])
+        )
+        .preview()
     }
 
     static func root(_ session: RobotSession, viewport: ViewportModel? = nil) -> some View {

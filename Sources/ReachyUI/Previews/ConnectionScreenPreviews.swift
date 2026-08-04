@@ -59,6 +59,33 @@ import SwiftUI
     )
 }
 
+// The state this screen exists for: the robot is stored from an earlier handshake but nothing
+// answers at its address, which is what an empty discovery list used to hide.
+#Preview("Connection — known robot not responding") {
+    PreviewScene.connection(
+        .preview(phase: .idle, status: nil, address: nil, automaticConnectionAllowed: false),
+        browser: .preview(names: []),
+        knownRobots: .preview([.preview(status: .unreachable)])
+    )
+}
+
+#Preview("Connection — known robot on the network") {
+    PreviewScene.connection(
+        .preview(phase: .idle, status: nil, address: nil),
+        browser: .preview(names: []),
+        knownRobots: .preview([.preview(status: .reachable)])
+    )
+}
+
+// A stored robot still being probed, beside a second robot only Bonjour knows about.
+#Preview("Connection — known robot and a new one") {
+    PreviewScene.connection(
+        .preview(phase: .idle, status: nil, address: nil),
+        browser: .preview(names: ["reachy-mini-9c81"]),
+        knownRobots: .preview([.preview(status: .checking)])
+    )
+}
+
 #Preview("Connection — manual address typed") {
     PreviewScene.connection(
         .preview(phase: .idle, status: nil, address: nil),
