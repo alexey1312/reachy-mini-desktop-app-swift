@@ -48,12 +48,15 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 ./bin/mise run project        # tuist generate (Apps/)
 ./bin/mise run inspect:bundle # Upload an iOS bundle-size analysis to tuist.dev
 ./bin/mise run sim-daemon     # Simulated robot daemon (MuJoCo, LAN-reachable)
+./bin/mise run test:sim       # Integration tests against a running sim-daemon
 ./bin/mise run update-spec    # Refresh + normalize daemon OpenAPI spec
 ```
 
 `build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Use `build:app` for that; CI runs it as a
 separate job, so app-target breakage no longer reaches `main` unnoticed.
 `test:filter` matches type names (`RobotSessionAudioTests`), not `@Suite` display names.
+`SimulatorIntegrationTests` is gated on `REACHY_SIM_HOST`, so plain `test` **skips it silently and reports green** —
+run `test:sim` against a live `sim-daemon` to exercise it.
 `swift test --skip-build` runs the previously built binary: rebuild with `swift build --build-tests` after editing a
 test, or the run silently verifies stale code.
 Everything pipes through xcsift, which on long runs can truncate and report `status: incomplete` while hiding the real
@@ -95,3 +98,6 @@ Consult `.claude/rules/` when working in the matching area:
 | ----------------------------- | ---------------------------------------- |
 | `.claude/rules/daemon-api.md` | Endpoints, WebSockets, timeouts, jobs    |
 | `.claude/rules/networking.md` | Discovery, ATS, Local Network permission |
+
+Per-target notes live beside the code: `Sources/{ReachyKit,ReachyUI,ReachyScene}/AGENTS.md` (`CLAUDE.md` is a symlink
+to it). Background reading: `docs/adr/` for accepted decisions, `docs/research/webrtc.md` for 8443 signaling quirks.

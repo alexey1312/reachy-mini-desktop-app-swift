@@ -7,5 +7,6 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 - All robot interaction goes through `RobotSession` / `RobotBrowser` from ReachyKit — no direct URLSession here.
 - Screen logic belongs in a `@MainActor @Observable` model beside the view (`MovesModel`, `LogConsoleModel`), covered
   by `Tests/ReachyUITests`; the view stays thin. `@Observable` does honour `didSet`, so derived caches can live there.
-- Deployment floor is iOS 17: `ScrollPosition`, `onScrollPhaseChange` and `onScrollGeometryChange` are iOS 18+. Track
-  scroll position with a zero-height sentinel row and `onAppear`/`onDisappear` instead.
+- Deployment floor is iOS 18 / macOS 15 (`Package.swift`, `Apps/Project.swift`), set by `RealityView`.
+  `ScrollPosition`, `onScrollPhaseChange` and `onScrollGeometryChange` are available; the zero-height sentinel row in
+  `LogConsoleScreen` predates the bump and is not a required pattern.
