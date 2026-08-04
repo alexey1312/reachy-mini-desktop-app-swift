@@ -88,6 +88,9 @@ public final class RobotSession {
     public internal(set) var lastStatus: Components.Schemas.DaemonStatus?
     public internal(set) var lastError: String?
     public internal(set) var compatibilityWarning: String?
+    /// Answered by the handshake, not by the version string: `/api/daemon/robot-name`
+    /// postdates 1.9.0, and the name field is greyed out rather than left to fail on save.
+    public internal(set) var supportsRename = true
     public internal(set) var currentMove: MovePlayback?
     public internal(set) var isStoppingMove = false
     public internal(set) var powerTransition: PowerTransition?
@@ -168,6 +171,7 @@ public final class RobotSession {
             self.client = client
             lastStatus = handshake.status
             compatibilityWarning = handshake.compatibility.warningMessage
+            supportsRename = handshake.supportsRename
             KnownRobots.lastAddress = address
             KnownRobots.remember(identity: handshake.identity, address: address)
             // A robot set up over Bluetooth has arrived under its own identity. This is
@@ -290,6 +294,7 @@ public final class RobotSession {
         address = nil
         lastStatus = nil
         compatibilityWarning = nil
+        supportsRename = true
         currentMove = nil
         isStoppingMove = false
         powerTransition = nil

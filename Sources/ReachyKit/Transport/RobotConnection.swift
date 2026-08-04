@@ -56,15 +56,20 @@ public actor RobotConnection {
         public let identity: RobotIdentity
         public let status: Components.Schemas.DaemonStatus
         public let compatibility: DaemonCompatibility
+        /// Whether `/api/daemon/robot-name` is mounted at all — the route postdates
+        /// daemon 1.9.0, which is still the minimum this app supports.
+        public let supportsRename: Bool
 
         public init(
             identity: RobotIdentity,
             status: Components.Schemas.DaemonStatus,
-            compatibility: DaemonCompatibility? = nil
+            compatibility: DaemonCompatibility? = nil,
+            supportsRename: Bool = true
         ) {
             self.identity = identity
             self.status = status
             self.compatibility = compatibility ?? DaemonCompatibilityPolicy.evaluate(identity.daemonVersion)
+            self.supportsRename = supportsRename
         }
     }
 
@@ -76,17 +81,38 @@ public actor RobotConnection {
         let status = try await daemonStatus()
         let compatibility = DaemonCompatibilityPolicy.evaluate(status.version)
         let hardwareID = await hardwareID(reportedIn: status)
-        let name = try? await client.getRobotDisplayNameApiDaemonRobotNameGet().ok.body.json.name
+        let displayName = await robotDisplayName()
 
         return Handshake(
             identity: RobotIdentity(
                 hardwareID: hardwareID,
-                name: name ?? status.robotName,
+                name: displayName.name ?? status.robotName,
                 daemonVersion: status.version
             ),
             status: status,
-            compatibility: compatibility
+            compatibility: compatibility,
+            supportsRename: displayName.routeExists
         )
+    }
+
+    /// Reads the display name, and doubles as the probe for whether this daemon can be
+    /// renamed at all: 1.9.0 mounts neither verb of `/api/daemon/robot-name`, so the
+    /// route's own 404 is the only signal — the version alone does not distinguish it
+    /// from a newer daemon still reporting `1.9.0`.
+    ///
+    /// Only a 404 counts. Any other failure says nothing about the route, and treating
+    /// it as absence would grey out the field for a robot that renames perfectly well.
+    private func robotDisplayName() async -> (name: String?, routeExists: Bool) {
+        do {
+            switch try await client.getRobotDisplayNameApiDaemonRobotNameGet() {
+            case let .ok(response):
+                return try (response.body.json.name, true)
+            case let .undocumented(statusCode, _):
+                return (nil, statusCode != 404)
+            }
+        } catch {
+            return (nil, true)
+        }
     }
 
     /// The one value the daemon files under `hardware_id` — `sha256(usb serial)[:16]`.
@@ -187,6 +213,9 @@ public actor RobotConnection {
         case .unprocessableContent:
             throw ReachyKitError.daemonRejected(statusCode: 422)
         case let .undocumented(statusCode, _):
+            if statusCode == 404 {
+                throw ReachyKitError.renameUnavailable
+            }
             throw ReachyKitError.fromStatusCode(statusCode)
         }
     }

@@ -16,6 +16,10 @@ public enum ReachyKitError: Error, Sendable, Equatable {
     /// mounted only under `--wireless-version`, so a Lite unit answers 404. Reported
     /// separately because "this robot cannot do that" is not "the request was wrong".
     case wirelessFeaturesUnavailable
+    /// `/api/daemon/robot-name` was added after daemon 1.9.0, which mounts neither
+    /// verb and answers the bare FastAPI 404. Same distinction as
+    /// `wirelessFeaturesUnavailable`: the robot cannot do this, the request was fine.
+    case renameUnavailable
     /// Any other status the daemon rejected the call with.
     case daemonRejected(statusCode: Int)
 
@@ -44,6 +48,8 @@ extension ReachyKitError: LocalizedError {
             "The daemon is busy with another operation; try again in a moment"
         case .wirelessFeaturesUnavailable:
             "This robot does not offer Wi-Fi setup or software updates over the network"
+        case .renameUnavailable:
+            "This daemon cannot rename the robot — update the robot software to change its name"
         case let .daemonRejected(statusCode):
             "The daemon rejected the request (HTTP \(statusCode))"
         }

@@ -21,4 +21,6 @@ Transport + domain core. No UI imports (SwiftUI/UIKit forbidden here). Swift 6 s
   `RobotConnection` both implement it, so the sealing and the screens are shared and the HTTP path is available if the
   ~260-byte sealed payload turns out not to fit one ATT write. `WiFiConfigClient` adds the settings-only routes.
 - `BLECommand` is the whole set the robot answers — anything else comes back as `ECHO:`. Renaming is **not** in it:
-  daemon 1.9.0's dispatch has no `SET_NAME` branch, so a rename only works over HTTP.
+  daemon 1.9.0's dispatch has no `SET_NAME` branch, and it does not mount `POST /api/daemon/robot-name` either — that
+  route postdates the release, so on 1.9.0 a robot cannot be renamed at all. `handshake` probes the route and reports
+  `supportsRename`; the field is greyed out rather than left to 404 on save.

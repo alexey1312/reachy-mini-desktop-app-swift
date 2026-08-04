@@ -14,6 +14,13 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
   develop there). Refresh with `./bin/mise run update-spec` — it also normalizes `anyOf: [X, {type: null}]` branches
   that swift-openapi-generator silently drops (`Scripts/normalize-openapi.py`). Swagger UI at `http://<host>:8000/docs`
   when a daemon runs.
+- **The committed spec describes a daemon newer than 1.9.0, so a generated call can 404 on a supported robot.** `main`
+  is where it comes from, and 1.9.0 is the baseline we accept — the generator cannot know the difference, and neither
+  can the version string (a newer daemon still reports `1.9.0` until it is bumped). Five routes are in the spec and
+  absent from 1.9.0: `daemon/robot-name` (both verbs), `apps/start-app/{app}/no-evict`, and the three
+  `hf-auth/oauth/device/*`. Diff against the robot itself (`curl http://<host>:8000/openapi.json`) before building a
+  screen on a route, and gate the feature on a probe rather than on the version — `RobotConnection.handshake` reads
+  `robot-name` for the display name and takes its 404 as `supportsRename = false`.
 - WebSockets are NOT in the spec (FastAPI omits them). Known endpoints (from
   `reachy_mini/src/reachy_mini/daemon/app/routers/`):
   - `/api/state/ws/full` — full robot state (primary; take everything from here, REST `state/*` is fallback).
@@ -68,7 +75,8 @@ most questions in a glance.
   robot is there, never that a reset finished.
 - The commands are exactly `PING`, `STATUS`, `JOURNAL_{START,READ,STOP}`, `PIN_*`, `UPDATE_{CHECK,START,INFO}`,
   `WIFI_{KEYEX,STATUS,SCAN,CONNECT_ENC,FORGET}`, `CMD_*`. Anything else falls through to `ECHO:`. **There is no
-  `SET_NAME`** — renaming is `POST /api/daemon/robot-name` and needs the robot on a network.
+  `SET_NAME`** — renaming is `POST /api/daemon/robot-name`, which 1.9.0 does not mount either, so such a robot cannot
+  be renamed at all: its name is whatever `--robot-name` the daemon was started with (default `reachy_mini`).
 - The PIN is the last five characters of the Pollen audio device's USB serial (`38fb:1001`, read from
   `/sys/bus/usb/devices/*/serial`), compared verbatim: not necessarily digits, never case-folded. Do not uppercase the
   input field. Upstream states that serial is printed on the robot — it is **not** a separate code, and no route

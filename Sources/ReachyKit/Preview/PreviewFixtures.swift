@@ -180,9 +180,11 @@
             currentMove: MovePlayback? = nil,
             isStoppingMove: Bool = false,
             automaticConnectionAllowed: Bool = true,
+            supportsRename: Bool = true,
             client: PreviewRobotClient = PreviewRobotClient()
         ) -> RobotSession {
             let session = RobotSession { _ in client }
+            session.supportsRename = supportsRename
             session.phase = phase
             session.lastStatus = status
             session.address = address

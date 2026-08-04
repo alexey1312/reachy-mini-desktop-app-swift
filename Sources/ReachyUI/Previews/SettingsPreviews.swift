@@ -13,6 +13,12 @@ import SwiftUI
     PreviewScene.settings(.preview(status: .preview(wirelessVersion: false)))
 }
 
+// `/api/daemon/robot-name` postdates 1.9.0, so the field is greyed out and the footer
+// says what would make it editable — rather than a save that can only 404.
+#Preview("Settings — rename unavailable") {
+    PreviewScene.settings(.preview(supportsRename: false))
+}
+
 // Audio needs the backend up; the rest of the screen does not.
 #Preview("Settings — backend stopped") {
     PreviewScene.settings(.preview(status: .preview(state: .stopped)))

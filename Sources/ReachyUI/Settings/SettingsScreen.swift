@@ -63,6 +63,10 @@ struct SettingsScreen: View {
                     .focused($nameFocused)
                     .autocorrectionDisabled()
                     .onSubmit { rename() }
+                    .disabled(!nameField.isEditable)
+                    // A `Form` row does not grey a disabled `TextField` out on its own,
+                    // and the footer alone reads as a note rather than as a locked field.
+                    .foregroundStyle(nameField.isEditable ? Color.primary : Color.secondary)
                 #if os(iOS)
                     .textInputAutocapitalization(.never)
                 #endif
@@ -87,13 +91,17 @@ struct SettingsScreen: View {
         } header: {
             Text("Robot")
         } footer: {
-            Text("The name identifies this robot on the network. The hardware ID never changes.")
+            Text(nameField.footer)
         }
+    }
+
+    private var nameField: RobotNameField {
+        RobotNameField(supportsRename: session.supportsRename, daemonVersion: identity?.daemonVersion)
     }
 
     private var canRename: Bool {
         let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmed.isEmpty && trimmed != identity?.name && !isRenaming
+        return nameField.isEditable && !trimmed.isEmpty && trimmed != identity?.name && !isRenaming
     }
 
     private func rename() {

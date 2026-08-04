@@ -5,12 +5,14 @@ import Testing
 private final class RenameStubClient: RobotAPIClient, @unchecked Sendable {
     private let lock = NSLock()
     private let stored: String?
+    private let supportsRename: Bool
     private var requested: [String] = []
 
     /// `nil` makes the daemon reject the name with a 422, as it does for an empty
     /// or over-long one.
-    init(stored: String?) {
+    init(stored: String?, supportsRename: Bool = true) {
         self.stored = stored
+        self.supportsRename = supportsRename
     }
 
     var requestedNames: [String] {
@@ -27,7 +29,11 @@ private final class RenameStubClient: RobotAPIClient, @unchecked Sendable {
     }
 
     func handshake() async throws -> RobotConnection.Handshake {
-        .init(identity: RobotIdentity(hardwareID: "hw", name: "old-name", daemonVersion: "1.9.0"), status: status)
+        .init(
+            identity: RobotIdentity(hardwareID: "hw", name: "old-name", daemonVersion: "1.9.0"),
+            status: status,
+            supportsRename: supportsRename
+        )
     }
 
     func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
@@ -70,6 +76,31 @@ struct RobotSessionRenameTests {
         #expect(session.phase == .connected(
             RobotIdentity(hardwareID: "hw", name: "kitchen-reachy", daemonVersion: "1.9.0")
         ))
+    }
+
+    @Test("a daemon without the route leaves the session knowing renaming is off the table")
+    func mirrorsMissingSupport() async {
+        let session = await connectedSession(RenameStubClient(stored: nil, supportsRename: false))
+
+        #expect(!session.supportsRename)
+    }
+
+    @Test("renaming stays available on a daemon that serves the route")
+    func mirrorsSupport() async {
+        let session = await connectedSession(RenameStubClient(stored: "kitchen-reachy"))
+
+        #expect(session.supportsRename)
+    }
+
+    /// Support belongs to the robot that was connected, not to the app: leaving it
+    /// false would keep the field greyed out after switching to a robot that can rename.
+    @Test("disconnecting clears the verdict rather than carrying it to the next robot")
+    func clearsSupportOnDisconnect() async {
+        let session = await connectedSession(RenameStubClient(stored: nil, supportsRename: false))
+
+        session.disconnect()
+
+        #expect(session.supportsRename)
     }
 
     @Test("a rejected name leaves the identity alone")
