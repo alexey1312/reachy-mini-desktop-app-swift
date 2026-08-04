@@ -21,7 +21,9 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 - Tool versions are pinned in `mise.toml` + `mise.lock`. After editing `[tools]`: `trash mise.lock && ./bin/mise lock`.
 - The `hk` version in `mise.toml` must match the `hk@X.Y.Z` package URI in `hk.pkl` (bump together).
 - `mise run project` (tuist generate) needs a one-time `./bin/mise x -- tuist auth login` — the project is connected
-  to tuist.dev (`alexey1312/reachy-mini-desktop-app-swift` in `Apps/Tuist.swift`).
+  to tuist.dev (`alexey1312/reachy-mini-desktop-app-swift` in `Apps/Tuist.swift`). That handle names the **tuist.dev
+  project**, not this repository, and deliberately keeps the pre-rename name: renaming the GitHub repo does not rename
+  the server-side project, so "fixing" it to match `reachy-mini-swift` points generation at a project that does not exist.
 
 ## Quick Reference
 
