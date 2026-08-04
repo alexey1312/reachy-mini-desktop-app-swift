@@ -13,6 +13,10 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 - A container view taking a closure argument _and_ two trailing `@ViewBuilder`s trips SwiftLint's
   `multiple_closures_with_trailing_closure`. Pass the extra behaviour as a child view instead
   (`OnboardingBackButton`), not as a third closure.
+- `background(_:)` defaults to `ignoresSafeAreaEdges: .all`, so a full-bleed backdrop also paints the inset the
+  floating tab bar sits in — bottom on iPhone, top on iPad. That bar is glass and renders whatever it finds there, so
+  it turns dark on that one tab, a frame behind the switch. State the edges (`ViewportView.backdropEdges`); bleed
+  upwards only where a bar pinned to match is waiting for it (`darkTitleBar()`).
 - Deployment floor is iOS 18 / macOS 15 (`Package.swift`, `Apps/Project.swift`), set by `RealityView`.
   `ScrollPosition`, `onScrollPhaseChange` and `onScrollGeometryChange` are available; the zero-height sentinel row in
   `LogConsoleScreen` predates the bump and is not a required pattern.

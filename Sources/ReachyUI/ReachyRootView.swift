@@ -170,7 +170,10 @@ public struct ReachyRootView<Diagnostics: View>: View {
     @ViewBuilder
     private var liveContent: some View {
         if session.isAwake {
-            ViewportView(model: viewport, offersCamera: session.hasCamera)
+            // Upwards only: the title bar above is pinned dark to match the black, while
+            // the tab bar below is glass and has to keep materialising what every other
+            // tab puts under it.
+            ViewportView(model: viewport, offersCamera: session.hasCamera, backdropEdges: [.top, .horizontal])
         } else {
             asleepViewport
         }
