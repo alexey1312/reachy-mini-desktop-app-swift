@@ -216,6 +216,11 @@ description = "Generate Xcode project for app targets (Apps/)"
 run = """
 #!/bin/bash
 set -euo pipefail
+# The storybook target globs `Generated/**`, which is gitignored — tuist rejects a glob whose
+# directory does not exist, so generation fails outright on a fresh clone (and in CI) unless the
+# playbook is written first. Cheap enough to redo every time.
+prefire playbook Sources/ReachyUI/Previews Apps/ReachySpike/Previews \
+  --output Apps/ReachyStorybook/Generated --config Apps
 TUIST="$(./bin/mise where tuist)/tuist"
 cd Apps && exec env -u TOOLCHAINS "$TUIST" generate --no-open
 """

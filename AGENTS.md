@@ -84,9 +84,9 @@ is Linux/BlueZ, so nothing simulates it.
 specification (rule 1), never code to port.
 
 Snapshots live in `Apps/` as an Xcode target because they need an iOS simulator, so `swift test` never sees them.
-`mise run project` fails outright on a fresh clone — `Apps/ReachyStorybook/Generated` is gitignored and only
-`mise run storybook` writes it, while `Project.swift` globs it unconditionally. Generate it once first:
-`./bin/mise x -- prefire playbook Sources/ReachyUI/Previews Apps/ReachySpike/Previews --output Apps/ReachyStorybook/Generated --config Apps`.
+`mise run project` writes the storybook playbook before calling tuist: `Apps/ReachyStorybook/Generated` is gitignored
+and `Project.swift` globs it unconditionally, so generation — and with it `build:app` and every snapshot task — failed
+outright on a fresh clone and in CI until the generator ran. Do not drop that step.
 **Previews compile only in the Xcode targets, so `swift build` cannot vet them** — and Prefire copies each preview
 body into a generated file, where a leading-dot call resolves against the type expected _there_. A `static func`
 helper for an element type therefore belongs on that element (`KnownRobotsModel.Entry.preview`), not on its owner:
