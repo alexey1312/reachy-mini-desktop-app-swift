@@ -19,6 +19,8 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
   which guarantees pinned versions and PATH.
 - Swift itself is managed by swiftly via `.swift-version`, not by mise.
 - Tool versions are pinned in `mise.toml` + `mise.lock`. After editing `[tools]`: `trash mise.lock && ./bin/mise lock`.
+  Find updates with `./bin/mise latest <tool>` — `mise outdated` reports nothing here, because an exact pin always
+  matches its own request.
 - The `hk` version in `mise.toml` must match the `hk@X.Y.Z` package URI in `hk.pkl` (bump together).
 - `mise run project` (tuist generate) needs a one-time `./bin/mise x -- tuist auth login` — the project is connected
   to tuist.dev (`alexey1312/reachy-mini-desktop-app-swift` in `Apps/Tuist.swift`). That handle names the **tuist.dev
@@ -52,8 +54,12 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 `build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Use `build:app` for that; CI runs it as a
 separate job, so app-target breakage no longer reaches `main` unnoticed.
 `test:filter` matches type names (`RobotSessionAudioTests`), not `@Suite` display names.
-`mise run lint` pipes through xcsift, which can truncate and report `status: incomplete` while hiding violations —
-rerun `./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike` to see them.
+`swift test --skip-build` runs the previously built binary: rebuild with `swift build --build-tests` after editing a
+test, or the run silently verifies stale code.
+Everything pipes through xcsift, which on long runs can truncate and report `status: incomplete` while hiding the real
+result — verify the artifact, or rerun the tool directly
+(`./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike`).
+`mise run clean` only clears `.build` — `Apps/DerivedData` (Xcode's, several GB) is not touched.
 
 ## Project Context
 
@@ -74,7 +80,12 @@ rerun `./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike` t
    address (one robot can appear at several addresses — upstream issue #269).
 5. **URLs via `URLComponents` only** — bare string interpolation breaks on IPv6 literals. Drop `fe80::` link-local
    addresses unless carrying a zone ID.
-6. **Conventional commits** — enforced by the commit-msg hook.
+6. **Conventional commits** — enforced by the commit-msg hook. The pre-commit hook stages _every_ modified `*.swift`
+   and `*.md` (`stage` in `hk.pkl`), not only what you `git add` — separate unrelated edits with
+   `git stash push <paths>` first, or they land in one commit.
+7. **Tests wait on conditions, not durations.** A fixed `Task.sleep` before an assertion is a CI flake waiting to
+   happen: the suites are `@MainActor` and a loaded runner starves them. Poll the condition, and give an injected
+   timeout headroom its deadline cannot cut short.
 
 ## Detailed Rules
 
