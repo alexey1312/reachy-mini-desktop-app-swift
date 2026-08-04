@@ -53,9 +53,12 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .build
-          key: ${{ runner.os }}-swift-6.3-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          # Keyed on the workspace path: .build/workspace-state.json records the WebRTC
+          # xcframework absolutely, so a cache restored elsewhere (as after the repo
+          # rename) sends SwiftPM looking where the artifact is not.
+          key: ${{ runner.os }}-swift-6.3-spm-${{ github.workspace }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-swift-6.3-spm-
+            ${{ runner.os }}-swift-6.3-spm-${{ github.workspace }}-
 
       - uses: jdx/mise-action@v4
         with:
@@ -65,12 +68,11 @@ jobs:
       - name: Show Swift version
         run: swift --version
 
-      - name: Build (including tests)
-        run: swift build --build-tests 2>&1 | xcsift
-
-      - name: Test
-        # Build tests separately to avoid hangs from concurrent build + test execution
-        run: swift test --skip-build --parallel 2>&1 | xcsift
+      # Through the mise task, not a copy of its commands: GitHub runs `run:` under
+      # `bash -e` without pipefail, so a piped `swift build … | xcsift` reports
+      # xcsift's exit 0 and a failed build lands as a green job.
+      - name: Build & test
+        run: mise run test
 
   # `swift build` never reaches Apps/ReachySpike — it is an Xcode target, not an SPM
   # one, so nothing but SwiftLint ever looked at it. This job is the only thing that
@@ -85,13 +87,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Swift 6.3 toolchain
-        run: |
-          curl -fLo swift-6.3.pkg "https://download.swift.org/swift-6.3-release/xcode/swift-6.3-RELEASE/swift-6.3-RELEASE-osx.pkg"
-          sudo installer -pkg swift-6.3.pkg -target /
-          TOOLCHAINS=$(plutil -extract CFBundleIdentifier raw /Library/Developer/Toolchains/swift-6.3-RELEASE.xctoolchain/Info.plist)
-          echo "TOOLCHAINS=$TOOLCHAINS" >> "$GITHUB_ENV"
-
+      # Deliberately Xcode's own Swift, with no swift.org toolchain overlaid:
+      # xcodebuild cannot load the local package's manifest under one (its clang
+      # fails to spawn the linker). This job exists to compile the app shell and the
+      # Tuist manifest; build-test is what holds the code to Swift 6.3.
       - uses: jdx/mise-action@v4
         with:
           experimental: true
