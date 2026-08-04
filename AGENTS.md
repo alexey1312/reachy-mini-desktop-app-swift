@@ -37,6 +37,10 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 ./bin/mise run update-spec    # Refresh + normalize daemon OpenAPI spec
 ```
 
+`build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Check app-target code with
+`xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike -destination '...' -skipPackagePluginValidation build`.
+`test:filter` matches type names (`RobotSessionAudioTests`), not `@Suite` display names.
+
 ## Project Context
 
 |              |                                                                                                                     |

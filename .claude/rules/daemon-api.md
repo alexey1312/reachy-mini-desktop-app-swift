@@ -69,3 +69,5 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
   - **`POST /api/volume/set` plays a test sound on every accepted call** (it is in the route's own description).
     Send it once a slider gesture ends, never on each change, or the robot beeps continuously.
   - Out-of-range values come back as 422, so both setters map `.unprocessableContent` explicitly.
+  - On `sim-daemon` these routes drive the **host Mac's own** speaker and mic (`platform: Darwin`), not a robot.
+    Note the level before testing and restore it after.

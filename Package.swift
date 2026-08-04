@@ -41,7 +41,8 @@ let package = Package(
         ),
         .target(
             name: "ReachyScene",
-            dependencies: ["ReachyKit"]
+            dependencies: ["ReachyKit"],
+            exclude: ["AGENTS.md", "CLAUDE.md"]
         ),
         .target(
             name: "ReachyUI",
