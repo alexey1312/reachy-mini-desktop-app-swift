@@ -26,10 +26,10 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
   the server-side project, so "fixing" it to match `reachy-mini-swift` points generation at a project that does not exist.
 - Run every `tuist` command from `Apps/` — `Tuist.swift` lives there and tuist only searches _upward_, so from the repo
   root it finds no manifest and reports the project as unconnected to the server (`run 'tuist init'`).
-- `tuist inspect bundle` takes the **iOS** `.app` only: it expects `Info.plist` at the bundle root, where a macOS
-  bundle keeps it under `Contents/`. Pass the path, not the scheme name — by name it finds both the device and the
-  simulator build and refuses. Size numbers only mean something off a Release archive: a Debug bundle carries
-  `__preview.dylib`, `*.debug.dylib` and the provisioning profile, none of which ship.
+- Use `mise run inspect:bundle [path]` rather than `tuist inspect bundle`: it handles the cwd, defaults to the iOS
+  device bundle, and rejects a macOS one (which keeps `Info.plist` under `Contents/`, where the command wants it at
+  the root). Size numbers only mean something off a Release archive — a Debug bundle carries `__preview.dylib`,
+  `*.debug.dylib` and the provisioning profile, none of which ship.
 - Do **not** set `enableCaching` — without a running cache daemon every compile task waits out a CAS socket deadline,
   and CI has neither the daemon nor cache credentials (this repo is not connected to the tuist.dev project).
 
@@ -44,6 +44,7 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 ./bin/mise run format         # Format all (hk fix --all)
 ./bin/mise run format-check   # CI formatting check
 ./bin/mise run project        # tuist generate (Apps/)
+./bin/mise run inspect:bundle # Upload an iOS bundle-size analysis to tuist.dev
 ./bin/mise run sim-daemon     # Simulated robot daemon (MuJoCo, LAN-reachable)
 ./bin/mise run update-spec    # Refresh + normalize daemon OpenAPI spec
 ```
