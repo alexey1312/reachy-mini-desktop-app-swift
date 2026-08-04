@@ -38,6 +38,22 @@ link-local IPv6). Our rules:
 ## Robot facts
 
 - Wireless AP mode (out of box): SSID `reachy-mini-ap`, password `reachy-mini`, robot IP `10.42.0.1`.
-- BLE Wi-Fi provisioning protocol is documented upstream:
-  `reachy_mini/src/reachy_mini/daemon/app/services/bluetooth/BLE_WIFI_PROVISIONING.md` (phase 2; maps to CryptoKit
-  X25519 + HKDF-SHA256 + AES-GCM).
+- BLE Wi-Fi provisioning, daemon 1.9.0+. Upstream doc:
+  `reachy_mini/src/reachy_mini/daemon/app/services/bluetooth/BLE_WIFI_PROVISIONING.md` (maps to CryptoKit X25519 +
+  HKDF-SHA256 + AES-GCM). The authority is `bluetooth_service.py` beside it, not the doc — **the doc is wrong about
+  replies.** It claims every command notifies, but `CommandCharacteristic.WriteValue` assigns the response value
+  directly; only daemon-proxied commands notify, after an `OK: working` ack. So: write → read → await a notification
+  only if the read was that ack. Awaiting unconditionally hangs on `PING`.
+- The robot advertises the **status** service `…cdef3`, not the command service `…cdef0`, under the local name
+  `ReachyMini` — identical on every unit, so robots are told apart only after connecting, by `…cdef7`.
+- `WIFI_CONNECT_ENC` is ~260 B against iOS's default ATT MTU of 185, and the robot ignores write offsets. Budget every
+  write with `maximumWriteValueLength(for: **.withoutResponse**)` — `ATT_MTU - 3`, the real single-packet capacity.
+  `.withResponse` answers 512 on every iPhone: that is the maximum *attribute* length, reachable only because
+  CoreBluetooth silently splits a longer value into ATT prepare/execute writes, which the robot then receives as
+  separate commands. The command characteristic nevertheless accepts write-with-response only — the write type and
+  the size budget are separate questions. Measure both on hardware before building on top of provisioning.
+- CoreBluetooth reports a read result and a notification through the same `didUpdateValueFor` callback and offers no
+  way to tell them apart. Harmless here: the robot sets the response characteristic's value either way, so a pending
+  read may claim whichever arrives.
+- `WIFI_SCAN` is truncated to 180 bytes (~8–15 SSIDs, no pagination), so manual SSID entry is mandatory, not a
+  fallback. The PIN session dies on disconnect; the wrong-PIN lockout survives it.

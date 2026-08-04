@@ -61,8 +61,18 @@ run `test:sim` against a live `sim-daemon` to exercise it.
 test, or the run silently verifies stale code.
 Everything pipes through xcsift, which on long runs can truncate and report `status: incomplete` while hiding the real
 result — verify the artifact, or rerun the tool directly
-(`./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike`).
+(`./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike`). Always pass those explicit paths — a bare
+`.` walks into `Apps/DerivedData`, and swiftformat then "fails" on generated and vendored sources.
 `mise run clean` only clears `.build` — `Apps/DerivedData` (Xcode's, several GB) is not touched.
+Two files sharing a basename in one target fail as `couldn't build <name>.swift.o because of multiple producers`,
+never as a redeclaration and never naming the other file — check `find Sources -name Foo.swift` before adding one.
+`sim-daemon` **cannot** serve `/wifi/*` or `/update/*`: `--wireless-version` crashes on import (`.venv-sim` has
+neither `nmcli` nor `cryptography`), and `main.py` would run robot-image maintenance on your Mac. Those routes are
+covered by `StubURLProtocol` / `LocalWebSocketServer` and real hardware only. BLE likewise — the robot's GATT service
+is Linux/BlueZ, so nothing simulates it.
+`.venv-sim` does hold the daemon's own source (`lib/python3.12/site-packages/reachy_mini/`) — read
+`daemon/app/routers/*.py` and `daemon/app/services/` there rather than inferring a route's shape. Still a
+specification (rule 1), never code to port.
 
 ## Project Context
 
@@ -85,10 +95,14 @@ result — verify the artifact, or rerun the tool directly
    addresses unless carrying a zone ID.
 6. **Conventional commits** — enforced by the commit-msg hook. The pre-commit hook stages _every_ modified `*.swift`
    and `*.md` (`stage` in `hk.pkl`), not only what you `git add` — separate unrelated edits with
-   `git stash push <paths>` first, or they land in one commit.
+   `git stash push <paths>` first, or they land in one commit. Only those two extensions: `.py`, `.json`, fixtures
+   and hook scripts need an explicit `git add`, and a commit with nothing staged fails before the hook runs.
 7. **Tests wait on conditions, not durations.** A fixed `Task.sleep` before an assertion is a CI flake waiting to
    happen: the suites are `@MainActor` and a loaded runner starves them. Poll the condition, and give an injected
-   timeout headroom its deadline cannot cut short.
+   timeout headroom its deadline cannot cut short. `--parallel` also runs _suites_ concurrently, and `.serialized`
+   orders only within one — a harness holding shared global state passes until a second suite uses it
+   (`StubURLProtocol` binds stubs to their session for exactly this reason). Give async transport tests
+   `.timeLimit(.minutes(1))`, or one hang stalls the whole run.
 
 ## Detailed Rules
 

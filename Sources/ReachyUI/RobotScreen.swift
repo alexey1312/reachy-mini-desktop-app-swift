@@ -12,9 +12,6 @@ struct RobotScreen: View {
         Form {
             statusSection
             controlSection
-            if session.isBackendRunning {
-                AudioSettingsSection(session: session)
-            }
             if let warning = session.compatibilityWarning {
                 Section {
                     Label(warning, systemImage: "exclamationmark.triangle")
@@ -36,6 +33,15 @@ struct RobotScreen: View {
         }
         .formStyle(.grouped)
         .navigationTitle(identity?.name ?? "Robot")
+        .toolbar {
+            ToolbarItem {
+                NavigationLink {
+                    SettingsScreen(session: session)
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            }
+        }
     }
 
     private var identity: RobotIdentity? {

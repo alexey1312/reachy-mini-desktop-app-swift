@@ -25,6 +25,13 @@ let project = Project(
                 "NSAppTransportSecurity": .dictionary([
                     "NSAllowsLocalNetworking": .boolean(true),
                 ]),
+                // BLE Wi-Fi provisioning. The only key a foreground central needs on
+                // iOS 18: no capability, and no pairing prompt either, since the robot
+                // registers a NoInputNoOutput Just-Works agent.
+                // NSBluetoothPeripheralUsageDescription is iOS 12 and earlier — omitted.
+                "NSBluetoothAlwaysUsageDescription": .string(
+                    "Sets up your Reachy Mini's Wi-Fi and recovers a robot that can't reach the network."
+                ),
                 // Phase 2 camera: WebRTC mic uplink (client mic → robot speaker)
                 "NSMicrophoneUsageDescription": .string(
                     "Talk to people near your Reachy Mini through its speaker."

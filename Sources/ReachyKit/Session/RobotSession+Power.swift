@@ -16,6 +16,7 @@ public extension RobotSession {
         powerTransition = .wakingUp
         defer { powerTransition = nil }
         do {
+            try assertSupportedDaemon()
             let status = try await client.daemonStatus()
             lastStatus = status
             guard status.state == .running else {
@@ -41,6 +42,7 @@ public extension RobotSession {
         powerTransition = .goingToSleep
         defer { powerTransition = nil }
         do {
+            try assertSupportedDaemon()
             let uuid = try await client.gotoSleep()
             await waitForMoveToFinish(uuid, client: client)
             try await client.setMotorMode(.disabled)

@@ -8,6 +8,7 @@ public protocol RobotAPIClient: Sendable {
     func probeBackendReady() async throws
     func wakeUp() async throws -> String
     func gotoSleep() async throws -> String
+    func setRobotName(_ name: String) async throws -> String
     func setMotorMode(_ mode: Components.Schemas.MotorControlMode) async throws
     func startDaemon(wakeUp: Bool) async throws
     func listMoves(dataset: String) async throws -> [String]
@@ -31,6 +32,10 @@ public extension RobotAPIClient {
     /// route every double that doesn't script readiness into `.backendUnavailable`,
     /// turning an unimplemented method into a connection failure.
     func probeBackendReady() async throws {}
+
+    func setRobotName(_: String) async throws -> String {
+        throw URLError(.unsupportedURL)
+    }
 
     func setMotorMode(_: Components.Schemas.MotorControlMode) async throws {
         throw URLError(.unsupportedURL)

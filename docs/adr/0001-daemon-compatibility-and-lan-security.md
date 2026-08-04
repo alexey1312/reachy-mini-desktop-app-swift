@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-03
+- Amended: 2026-08-04 — "Decision: recovering from an unsupported daemon"
 
 ## Context
 
@@ -21,6 +22,23 @@ The daemon exposes motion commands over plaintext HTTP/WebSocket and has no auth
 - `Scripts/sim-requirements.txt` pins the simulator baseline. Updating it requires updating the policy, fixture and
   compatibility tests together after a live simulator check.
 
+## Decision: recovering from an unsupported daemon
+
+Amendment, 2026-08-04. Rejecting an unsupported version by throwing out of the handshake left the user on a "Try
+again" button that could never work — the version does not change by retrying. Rejection is kept; the dead end is not.
+
+- The handshake reports the verdict instead of throwing. The session halts on a dedicated `needsDaemonUpdate` step,
+  latched even for automatic attempts so the periodic rescan stops re-probing a robot it has already identified.
+- **No command reaches an unsupported daemon.** This is enforced in code, not by navigation: `assertSupportedDaemon()`
+  guards wake, sleep and every call routed through `withClient`. Keeping the control screens unmounted is a layout
+  decision and does not count as enforcement.
+- The routes that stay open are `GET /api/daemon/{status,hardware-id,robot-name}` and `/update/*`. These are reads and
+  version negotiation, not the command surface, and `/update/*` is the only route that can end the condition.
+- `/update/*` is mounted only under `--wireless-version`. A Lite robot cannot self-update, so it is told to use the
+  official desktop app over USB rather than offered a button that must fail.
+- Success is inferred by reconnecting and comparing versions. The update ends with `systemctl restart`, which kills
+  the daemon before it can report a terminal job status, so neither the log socket nor `/update/info` can confirm it.
+
 ## Decision: security
 
 Version 1 supports only a trusted private LAN or the robot's own access point. The UI states that transport is
@@ -35,4 +53,5 @@ Keychain and be injected centrally by ReachyKit.
 ## Consequences
 
 Anyone with network access to the daemon can command the robot. Server-side motion limits remain the safety boundary.
-The compatibility warning is informative for newer/unknown daemons; unsupported versions fail before commands.
+The compatibility warning is informative for newer/unknown daemons; unsupported versions are refused before commands
+and routed to the robot's own update flow instead.

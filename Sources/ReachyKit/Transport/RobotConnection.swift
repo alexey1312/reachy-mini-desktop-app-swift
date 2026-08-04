@@ -17,6 +17,10 @@ public actor RobotConnection {
     /// Mesh downloads run to tens of megabytes; the 3.5 s health-poll budget would
     /// abort them, so they get their own session.
     private let assetSession: URLSession
+    /// `/update/*` and `/wifi/*` are answered by the robot only after it has talked to
+    /// PyPI or driven `nmcli`, so they need a far longer budget than the health poll.
+    /// Not `private`: the routes live in `RobotConnection+Wireless`, a sibling file.
+    let wirelessSession: URLSession
 
     public init(address: RobotAddress, session: URLSession? = nil) throws {
         guard let serverURL = address.rootURL else {
@@ -44,6 +48,7 @@ public actor RobotConnection {
         )
         readinessSession = makeSession(timeout: 10)
         assetSession = makeSession(timeout: 20, resourceTimeout: 120)
+        wirelessSession = makeSession(timeout: 15)
     }
 
     /// Result of a successful handshake with the daemon.
@@ -63,26 +68,14 @@ public actor RobotConnection {
         }
     }
 
+    /// An unsupported version is reported, not thrown. The daemon's own update route
+    /// is the way out of that state, and throwing here left the user on a "Try again"
+    /// button that could never work. `RobotSession` gates the command surface on the
+    /// verdict instead — see ADR 0001.
     public func handshake() async throws -> Handshake {
         let status = try await daemonStatus()
         let compatibility = DaemonCompatibilityPolicy.evaluate(status.version)
-        if case let .unsupported(reported, minimum) = compatibility {
-            throw ReachyKitError.unsupportedDaemonVersion(reported: reported, minimum: minimum)
-        }
-
-        // hardware-id returns a string map (component serials); flatten deterministically
-        // so the same robot always yields the same identity string. The simulated daemon
-        // returns null values here, which the generated [String: String] map rejects —
-        // treat that as "no hardware id" rather than a failed handshake.
-        let hardwareMap = try? await client.getRobotHardwareIdApiDaemonHardwareIdGet()
-            .ok.body.json.additionalProperties
-        let hardwareID = hardwareMap.flatMap { map -> String? in
-            map.isEmpty ? nil : map
-                .sorted { $0.key < $1.key }
-                .map { "\($0.key)=\($0.value)" }
-                .joined(separator: ";")
-        }
-
+        let hardwareID = await hardwareID(reportedIn: status)
         let name = try? await client.getRobotDisplayNameApiDaemonRobotNameGet().ok.body.json.name
 
         return Handshake(
@@ -94,6 +87,24 @@ public actor RobotConnection {
             status: status,
             compatibility: compatibility
         )
+    }
+
+    /// The one value the daemon files under `hardware_id` — `sha256(usb serial)[:16]`.
+    ///
+    /// It must reach `RobotIdentity` unreshaped: the same string is what the robot
+    /// hands out over BLE and advertises as the mDNS `unit_id`, so a robot provisioned
+    /// over Bluetooth is recognised on the LAN by comparing it. The status payload
+    /// already carries it; the dedicated route covers daemons that leave it out. A
+    /// daemon with no robot attached answers `{"hardware_id": null}`, which the
+    /// generated `[String: String]` map rejects — that is "no hardware id", not a
+    /// failed handshake.
+    private func hardwareID(reportedIn status: Components.Schemas.DaemonStatus) async -> String? {
+        if let reported = status.hardwareId, !reported.isEmpty {
+            return reported
+        }
+        let map = try? await client.getRobotHardwareIdApiDaemonHardwareIdGet()
+            .ok.body.json.additionalProperties
+        return map?["hardware_id"].flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// One-shot full state via REST — fallback only; prefer `StateStreamClient`.
@@ -160,6 +171,21 @@ public actor RobotConnection {
         switch try await client.playGotoSleepApiMovePlayGotoSleepPost() {
         case let .ok(response):
             return try response.body.json.uuid
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
+    }
+
+    /// Returns the name the daemon actually stored. It persists it and re-advertises
+    /// mDNS without a restart, and rejects an empty or over-long name with a 422.
+    public func setRobotName(_ name: String) async throws -> String {
+        switch try await client.setRobotDisplayNameApiDaemonRobotNamePost(
+            body: .json(.init(name: name))
+        ) {
+        case let .ok(response):
+            return try response.body.json.name ?? name
+        case .unprocessableContent:
+            throw ReachyKitError.daemonRejected(statusCode: 422)
         case let .undocumented(statusCode, _):
             throw ReachyKitError.fromStatusCode(statusCode)
         }

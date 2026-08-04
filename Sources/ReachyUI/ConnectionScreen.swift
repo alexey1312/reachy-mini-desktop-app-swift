@@ -14,13 +14,21 @@ struct ConnectionScreen: View {
     @State private var attemptedCandidates: Set<RobotAddress> = []
     @State private var autoConnectTask: Task<Void, Never>?
     @State private var rescanTask: Task<Void, Never>?
+    @State private var showsOnboarding = false
+    @State private var awaitedHardwareID = KnownRobots.pendingProvisionedHardwareID
 
     /// Upstream's `INTERVALS.DISCOVERY_SCAN`.
     private let rescanInterval: Duration = .seconds(10)
 
     var body: some View {
         Group {
-            if needsDecision {
+            if case let .connecting(.needsDaemonUpdate(_, requirement)) = session.phase {
+                // Its own screen rather than a stepper row: retrying is pointless
+                // here, and everything the user can do is an update decision.
+                NavigationStack {
+                    DaemonUpdateScreen(session: session, requirement: requirement)
+                }
+            } else if needsDecision {
                 // Start / continue / cancel: the discovery list underneath would
                 // only compete with a choice the user has to make.
                 Form {
@@ -32,8 +40,16 @@ struct ConnectionScreen: View {
                     if isProbing {
                         ConnectionStepper(session: session)
                     }
+                    // Disabled section by section rather than on the whole form:
+                    // `disabled` is cumulative and a child cannot re-enable itself, which
+                    // would take the Bluetooth setup button down with everything else —
+                    // and the sweep it is waiting on runs every 10 s forever when nothing
+                    // answers, which is exactly when that button is the way out.
                     discoverySection
+                        .disabled(isProbing)
+                    setUpSection
                     manualSection
+                        .disabled(isProbing)
                     if let error = session.lastError {
                         Section {
                             Text(error)
@@ -43,13 +59,20 @@ struct ConnectionScreen: View {
                     }
                 }
                 .formStyle(.grouped)
-                .disabled(isProbing)
             }
         }
         .onAppear {
             browser.start()
             enqueueInitialCandidates()
             startPeriodicRescan()
+            // Only the very first launch, and never as a gate: a robot already on the
+            // network is found without any of this, and the button below reopens it.
+            if KnownRobots.lastAddress == nil, !KnownRobots.hasCompletedOnboarding {
+                showsOnboarding = true
+            }
+        }
+        .sheet(isPresented: $showsOnboarding) {
+            OnboardingFlow(onFinish: finishOnboarding) { showsOnboarding = false }
         }
         .onChange(of: browser.services) { _, services in
             resolveDiscoveredServices(services)
@@ -122,6 +145,37 @@ struct ConnectionScreen: View {
                 }
             }
         }
+    }
+
+    /// Its own section so the sweep cannot switch it off. Bluetooth setup has nothing to
+    /// do with an HTTP handshake being in flight, and a robot that has never been on a
+    /// network is precisely the one that keeps that handshake failing.
+    private var setUpSection: some View {
+        Section {
+            if let awaitedHardwareID {
+                Label(
+                    "Waiting for the robot you just set up (\(awaitedHardwareID)). "
+                        + "If this phone is still on reachy-mini-ap, switch it back to your home Wi-Fi.",
+                    systemImage: "clock.arrow.circlepath"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Button("Set up a new robot over Bluetooth") {
+                showsOnboarding = true
+            }
+        }
+    }
+
+    /// The robot reported where it landed over Bluetooth, which beats waiting for the
+    /// sweep to stumble across it. The hardware id is what confirms the arrival, and
+    /// `RobotSession` clears it on the handshake.
+    private func finishOnboarding(_ outcome: OnboardingOutcome) {
+        showsOnboarding = false
+        awaitedHardwareID = outcome.hardwareID
+        guard let address = outcome.address else { return }
+        attemptedCandidates.remove(address)
+        enqueue([address])
     }
 
     private var manualSection: some View {

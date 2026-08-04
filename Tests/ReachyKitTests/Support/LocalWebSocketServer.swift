@@ -31,14 +31,17 @@ final class LocalWebSocketServer: @unchecked Sendable {
         return port
     }
 
-    static func sendText(_ text: String, over connection: NWConnection) {
+    /// `then` runs once the frame is actually on the wire. A test that tears the
+    /// connection down straight after the call would otherwise race the send and
+    /// drop the very frame it is asserting on.
+    static func sendText(_ text: String, over connection: NWConnection, then onSent: (@Sendable () -> Void)? = nil) {
         let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
         let context = NWConnection.ContentContext(identifier: "text", metadata: [metadata])
         connection.send(
             content: Data(text.utf8),
             contentContext: context,
             isComplete: true,
-            completion: .idempotent
+            completion: onSent.map { sent in .contentProcessed { _ in sent() } } ?? .idempotent
         )
     }
 

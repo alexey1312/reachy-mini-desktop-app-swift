@@ -14,6 +14,11 @@ struct ViewportView: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // One backdrop for both contents, so the chrome above has a single thing to
+            // be legible against. The camera already letterboxes onto black; the 3D scene
+            // otherwise takes the system background and turns white in the light
+            // appearance, which is what left the title unreadable.
+            .background(Color.black)
             .overlay(alignment: .topLeading) { chrome }
     }
 
@@ -81,6 +86,13 @@ struct ViewportView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(maxWidth: 240)
+            // A segmented control's track is translucent, so on the camera's black
+            // backdrop the unselected segment had no contrast left and read as missing
+            // (seen in dark mode). It now carries its own backing like every other
+            // floating control here — which is the rule stated at the bottom of this
+            // file, and the reason it holds regardless of theme or what is behind it.
+            .padding(3)
+            .background(.regularMaterial, in: Capsule())
         }
     }
 }

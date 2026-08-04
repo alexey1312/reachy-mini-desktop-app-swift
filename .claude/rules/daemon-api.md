@@ -30,6 +30,64 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
     `--wireless-version` — absent on the simulator, upgrade rejected with 403)
   - `/api/apps/ws/apps-manager/{job_id}` — install/remove job stream (prefer over polling `job-status`)
 
+## Wireless-only routes
+
+- `/wifi/*` and `/update/*` mount at the app ROOT (no `/api`) and only under `--wireless-version`. The committed spec
+  is generated without that flag, so they are absent from it and the generated client cannot reach them — hand-write
+  them. A Lite robot 404s; gate on `DaemonStatus.wireless_version`.
+- `/update/ws/logs` sends each line as a text frame AND then a `JobInfo` JSON frame repeating those same lines —
+  decode JSON first and ignore its `logs`, or every line doubles. The job ends with `systemctl restart`, which kills
+  the daemon before a terminal `done`: the socket closing is completion, confirmed by reconnecting and comparing
+  versions. `available_version: "unknown"` means the ROBOT could not reach PyPI, not that the check failed.
+- The daemon's own source is installed at `.venv-sim/lib/python3.12/site-packages/reachy_mini/` — read
+  `daemon/app/routers/*.py` and `daemon/app/services/bluetooth/` there rather than guessing a shape. It is a
+  specification (project rule 1), never code to port.
+- `/wifi/*` routes, from `routers/wifi_config.py`: `GET /wifi/prov_key`, **`POST`** `/wifi/scan_and_list` (a POST
+  because it rescans first; uncapped, unlike the 180-byte BLE reply), `POST /wifi/connect_sealed`,
+  `GET /wifi/status`, `GET /wifi/error`, `POST /wifi/reset_error`, `POST /wifi/forget?ssid=`, `POST /wifi/forget_all`.
+  Plaintext `POST /wifi/connect?ssid=&password=` exists and must never be called — the PSK would go in a query string.
+- `connect_sealed` answers `400 decrypt_failed` for a wrong PIN **and** for a `kid` older than the 600 s rotation, and
+  409 while another `nmcli` operation runs. It returns immediately and joins on a background thread; on failure it
+  removes the connection and re-raises its own hotspot, so the reason ends up in `GET /wifi/error`, not in the reply.
+- `GET /wifi/status` is `{mode: hotspot|wlan|disconnected|busy, known_networks, connected_network}` — a joined station
+  is `wlan`, not `connected`, and there is **no IP address in it**. The BLE status characteristic is the mirror image:
+  live address, no network names. Neither contains the other.
+- `POST /wifi/forget` answers 404 for a network the robot never saved and 400 for `Hotspot`. Everywhere else in
+  `/wifi/*` and `/update/*` a 404 means the route was never mounted, i.e. a Lite robot.
+- `GET /api/daemon/hardware-id` answers one key, `{"hardware_id": "<16 hex>"}` = `sha256(usb serial)[:16]` — the same
+  string as mDNS TXT `unit_id` and BLE characteristic `…cdef7`. It is a join key: never reshape it.
+
+## Bluetooth service
+
+Read `services/bluetooth/bluetooth_service.py` in `.venv-sim` — the dispatch table is one `if/elif` chain and settles
+most questions in a glance.
+
+- It is **its own systemd unit** (`reachy-mini-bluetooth`, working directory `/bluetooth`), not part of the daemon.
+  Every recovery script ends with `systemctl restart reachy-mini-daemon`, so the Bluetooth link survives all of them —
+  including `SOFTWARE_RESET`, which erases `/venvs` while the service sits outside it. `PING` therefore proves the
+  robot is there, never that a reset finished.
+- The commands are exactly `PING`, `STATUS`, `JOURNAL_{START,READ,STOP}`, `PIN_*`, `UPDATE_{CHECK,START,INFO}`,
+  `WIFI_{KEYEX,STATUS,SCAN,CONNECT_ENC,FORGET}`, `CMD_*`. Anything else falls through to `ECHO:`. **There is no
+  `SET_NAME`** — renaming is `POST /api/daemon/robot-name` and needs the robot on a network.
+- The PIN is the last five characters of the Pollen audio device's USB serial (`38fb:1001`, read from
+  `/sys/bus/usb/devices/*/serial`), compared verbatim: not necessarily digits, never case-folded. Do not uppercase the
+  input field. Upstream states that serial is printed on the robot — it is **not** a separate code, and no route
+  exposes it, which is the point. With no audio board attached the daemon falls back to a fixed `46879`.
+- `CMD_*` clears the robot's own auth flag in a `finally`, so the PIN is needed again after every script — whether it
+  succeeded or not. Its handler also returns `None` on success, so the reply encoder crashes and the GATT write
+  reports an error for a script that ran perfectly.
+- `_read_journal` returns `buffer[:480]` and **deletes what it returned**. One BLE read carries ~182 bytes, so the
+  remainder of every large chunk is lost for good, and a line is regularly cut in half — `BLEJournalReader` carries the
+  tail. The LAN journal is the authoritative one; say so in any UI that shows this.
+  - The journal is a byte stream, not a message, so `BLEResponseParser` returns `.payload` **verbatim**. Trimming it
+    (as every other reply is trimmed) eats the trailing newline that says the last line is complete, and the reader
+    then glues that line onto the next chunk — one corrupted line per read boundary, which looks like nothing at all
+    when a chunk holds a single line.
+  - `journalctl` exits on its own; the GLib watch removes itself on HUP and every later read answers
+    `ERROR: Journal not running`. That is a `JOURNAL_START` away from fixed, not a terminal state.
+- `…cdef6` is `", ".join(...)` over the robot's `commands/` directory with `.sh` stripped, `"None"` when empty, in
+  `os.listdir` order. Read it; never hardcode the list, and sort it before showing it.
+
 ## MVP endpoint subset (what upstream actually calls)
 
 `daemon/status|start|stop`, `daemon/hardware-id`, `daemon/robot-name`, `state/full`, `move/set_target`,

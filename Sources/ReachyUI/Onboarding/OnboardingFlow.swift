@@ -1,0 +1,118 @@
+import ReachyKit
+import SwiftUI
+
+/// First-run setup over Bluetooth: Welcome → Scan → PIN → Network → Joining → Handoff.
+///
+/// A sheet rather than a navigation route, because it owns a radio link that has to come
+/// down however the user leaves — and because it is never something the app waits on.
+struct OnboardingFlow: View {
+    var onFinish: (OnboardingOutcome) -> Void
+    var onCancel: () -> Void
+
+    @State private var model = OnboardingModel()
+
+    var body: some View {
+        NavigationStack {
+            step
+                .navigationTitle("Set up a robot")
+                .toolbarTitleStyle()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            model.cancel()
+                            onCancel()
+                        }
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var step: some View {
+        switch model.step {
+        case .welcome:
+            OnboardingWelcomeStep(model: model)
+        case .scan:
+            OnboardingScanStep(model: model)
+        case .pin:
+            OnboardingPINStep(model: model)
+        case .network:
+            OnboardingNetworkStep(model: model)
+        case .joining:
+            OnboardingJoinStep(model: model)
+        case .handoff:
+            OnboardingHandoffStep(model: model, onFinish: onFinish)
+        }
+    }
+}
+
+/// The shape every step shares: one heading, one explanation, whatever the step needs in
+/// the middle, and its actions pinned to the bottom where a thumb is.
+struct OnboardingStepScaffold<Content: View, Actions: View>: View {
+    let title: String
+    let message: String
+    @ViewBuilder var content: () -> Content
+    @ViewBuilder var actions: () -> Actions
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(title)
+                    .font(.title2.bold())
+                Text(message)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 8) {
+                actions()
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+        }
+    }
+}
+
+/// Renders itself only where stepping back means something: once the password is on its
+/// way to the robot, there is nothing to go back to.
+struct OnboardingBackButton: View {
+    let model: OnboardingModel
+
+    var body: some View {
+        if model.canGoBack {
+            Button("Back") { model.back() }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// The error the current step ran into, if any. Steps that can also fail structurally
+/// (a refused join, a lockout) say so in their own words instead.
+struct OnboardingErrorText: View {
+    let message: String?
+
+    var body: some View {
+        if let message {
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.callout)
+                .foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private extension View {
+    func toolbarTitleStyle() -> some View {
+        #if os(iOS)
+            navigationBarTitleDisplayMode(.inline)
+        #else
+            self
+        #endif
+    }
+}

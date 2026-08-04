@@ -4,8 +4,14 @@ import "package://github.com/jdx/hk/releases/download/v1.54.0/hk@1.54.0#/Builtin
 // =============================================================================
 // hk Configuration for ReachyMini
 // =============================================================================
-// All hooks run in parallel. Keep the hk@X.Y.Z package URI above in lockstep
-// with the hk version pinned in mise.toml.
+// Hooks run in parallel except where a step declares `depends`. The Swift steps
+// are chained deliberately: swiftformat rewrites the very files swiftlint fixes,
+// and a --strict check ahead of the formatter flags wrapping the formatter was
+// about to correct. Timed runs show hk serialising them either way — both claim
+// `stage = *.swift` — so this pins the order rather than leaving it to that.
+// Note `depends` orders steps; it does not skip a step whose dependency failed.
+// Keep the hk@X.Y.Z package URI above in lockstep with the hk version pinned in
+// mise.toml.
 // =============================================================================
 
 local generated_excludes = List(".build/**", "Sources/ReachyKit/Generated/**", "CHANGELOG.md")
@@ -25,6 +31,7 @@ local swift_linters = new Mapping<String, Step> {
         fix = "swiftlint --fix {{files}}"
         batch = true
         stage = List("*.swift")
+        depends = "swiftformat"
         hide = true
     }
     // Strict check after fix to catch unfixable errors

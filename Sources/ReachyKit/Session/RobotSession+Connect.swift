@@ -105,6 +105,22 @@ extension RobotSession {
         return false
     }
 
+    /// Latched for the same reason as `haltOnUnavailableBackend`: an old daemon is a
+    /// found robot, not a failed search, and the user has something to do about it.
+    func haltOnUnsupportedDaemon(identity: RobotIdentity, requirement: DaemonUpdateRequirement) -> Bool {
+        phase = .connecting(.needsDaemonUpdate(identity, requirement))
+        return false
+    }
+
+    /// ADR 0001: an unsupported daemon is never sent a command. The connection gate
+    /// already keeps the control screens unmounted, but navigation is a layout
+    /// decision, not an enforcement mechanism — this makes the rule fail loudly.
+    func assertSupportedDaemon() throws {
+        if case let .unsupported(reported, minimum) = DaemonCompatibilityPolicy.evaluate(lastStatus?.version) {
+            throw ReachyKitError.unsupportedDaemonVersion(reported: reported, minimum: minimum)
+        }
+    }
+
     /// Automatic attempts must land back on `.idle`: the candidate sweep and the
     /// periodic rescan both gate on it, so latching a failure there would silently
     /// stop the app from ever reconnecting.

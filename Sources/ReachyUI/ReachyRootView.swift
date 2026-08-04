@@ -19,7 +19,7 @@ public struct ReachyRootView<Diagnostics: View>: View {
     @State private var session = RobotSession()
     @State private var viewport = ViewportModel()
     @State private var tab: TabID = .robot
-    @State private var showsAudioSettings = false
+    @State private var showsSettings = false
     @Environment(\.scenePhase) private var scenePhase
 
     #if os(macOS)
@@ -100,15 +100,17 @@ public struct ReachyRootView<Diagnostics: View>: View {
 
     @ViewBuilder
     private var wideViewport: some View {
-        if viewportAddress != nil {
-            ViewportView(model: viewport, offersCamera: session.hasCamera)
-        } else {
+        if viewportAddress == nil {
             ContentUnavailableView(
                 "No live view",
                 systemImage: "cube.transparent",
                 description: Text("Start the robot backend to see the model and the camera.")
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if session.isAwake {
+            ViewportView(model: viewport, offersCamera: session.hasCamera)
+        } else {
+            asleepViewport
         }
     }
 
@@ -117,31 +119,52 @@ public struct ReachyRootView<Diagnostics: View>: View {
             // No `ignoresSafeArea` here: the camera hangs its joystick off a
             // bottom safe-area inset, which would then be laid out under the tab
             // bar and clipped.
-            ViewportView(model: viewport, offersCamera: session.hasCamera)
+            liveContent
                 .navigationTitle("Live")
+                .darkTitleBar()
                 .toolbar {
                     ToolbarItem {
                         Button {
-                            showsAudioSettings = true
+                            showsSettings = true
                         } label: {
-                            Label("Audio", systemImage: "speaker.wave.2")
+                            Label("Settings", systemImage: "gearshape")
                         }
                     }
                 }
-                .sheet(isPresented: $showsAudioSettings) {
+                .sheet(isPresented: $showsSettings) {
                     NavigationStack {
-                        Form { AudioSettingsSection(session: session, header: nil) }
-                            .formStyle(.grouped)
-                            .navigationTitle("Audio")
+                        SettingsScreen(session: session)
                             .toolbar {
                                 ToolbarItem(placement: .cancellationAction) {
-                                    Button("Done") { showsAudioSettings = false }
+                                    Button("Done") { showsSettings = false }
                                 }
                             }
                     }
                     .presentationDetents([.medium, .large])
                 }
         }
+    }
+
+    /// Both streams would keep working while the robot sleeps — the camera hangs off
+    /// `get_daemon` and the state stream off a running backend — but working is not the
+    /// same as worth having. A motionless pose and a still frame cost the robot's radio
+    /// and this phone's battery to show nothing, and a switcher between two inert views
+    /// is a control that leads nowhere. So the tab keeps its place and offers the one
+    /// thing that changes the situation.
+    @ViewBuilder
+    private var liveContent: some View {
+        if session.isAwake {
+            ViewportView(model: viewport, offersCamera: session.hasCamera)
+        } else {
+            asleepViewport
+        }
+    }
+
+    private var asleepViewport: some View {
+        AsleepBanner(session: session)
+            .padding()
+            .frame(maxWidth: 420)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Placement
@@ -159,9 +182,10 @@ public struct ReachyRootView<Diagnostics: View>: View {
     }
 
     /// The single lever for battery: nothing streams unless the viewport is the
-    /// thing the user is actually looking at.
+    /// thing the user is actually looking at — and a sleeping robot is never that,
+    /// however visible the tab is.
     private var viewportIsOnScreen: Bool {
-        guard scenePhase == .active, viewportAddress != nil else { return false }
+        guard scenePhase == .active, viewportAddress != nil, session.isAwake else { return false }
         return isCompact ? tab == .live : tab == .robot
     }
 }
@@ -173,6 +197,19 @@ private extension View {
     func columnTitleStyle() -> some View {
         #if os(iOS)
             navigationBarTitleDisplayMode(.inline)
+        #else
+            self
+        #endif
+    }
+
+    /// The bar cannot take a background over the viewport — both
+    /// `toolbarBackground(.visible:)` and its replacement `toolbarBackgroundVisibility`
+    /// are ignored there — so its palette is pinned instead. Safe only because the content
+    /// under it is pinned to match: on its own this put a white title on the 3D model's
+    /// white backdrop.
+    func darkTitleBar() -> some View {
+        #if os(iOS)
+            toolbarColorScheme(.dark, for: .navigationBar)
         #else
             self
         #endif

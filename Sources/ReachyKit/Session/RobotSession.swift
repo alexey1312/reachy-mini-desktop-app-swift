@@ -20,6 +20,10 @@ public final class RobotSession {
     public enum ConnectionStep: Equatable, Sendable {
         case handshaking
         case checkingBackend(RobotIdentity)
+        /// The daemon answered but is below the supported baseline. Terminal until
+        /// the user updates the robot or backs out — ADR 0001 forbids sending it any
+        /// command, and its own `/update/*` route is the way out.
+        case needsDaemonUpdate(RobotIdentity, DaemonUpdateRequirement)
         /// The handshake succeeded but the robot backend is down. Terminal until
         /// the user picks one of start / proceed / cancel — starting it here would
         /// move the robot without being asked.
@@ -32,6 +36,7 @@ public final class RobotSession {
     /// The steps a connection walks through, in order — the stepper's row model.
     public enum ConnectionStage: Int, CaseIterable, Equatable, Sendable {
         case connect
+        case compatibility
         case backend
     }
 
@@ -163,6 +168,22 @@ public final class RobotSession {
             lastStatus = handshake.status
             compatibilityWarning = handshake.compatibility.warningMessage
             KnownRobots.lastAddress = address
+            // A robot set up over Bluetooth has arrived under its own identity. This is
+            // the only place that sees a handshake, and identity is all there is to match
+            // on — it was provisioned at one address and turns up at another (rule 4).
+            if KnownRobots.pendingProvisionedHardwareID == handshake.identity.hardwareID {
+                KnownRobots.pendingProvisionedHardwareID = nil
+            }
+            if case let .unsupported(reported, minimum) = handshake.compatibility {
+                return haltOnUnsupportedDaemon(
+                    identity: handshake.identity,
+                    requirement: DaemonUpdateRequirement(
+                        reported: reported,
+                        minimum: minimum,
+                        canSelfUpdate: handshake.status.wirelessVersion
+                    )
+                )
+            }
             phase = .connecting(.checkingBackend(handshake.identity))
             return await settleReadiness(
                 identity: handshake.identity,

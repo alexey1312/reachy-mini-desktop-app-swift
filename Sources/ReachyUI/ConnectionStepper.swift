@@ -104,6 +104,7 @@ struct ConnectionStepper: View {
     private func title(for stage: RobotSession.ConnectionStage) -> String {
         switch stage {
         case .connect: "Connect to daemon"
+        case .compatibility: "Daemon version"
         case .backend: "Robot backend"
         }
     }
@@ -113,6 +114,10 @@ struct ConnectionStepper: View {
         switch step {
         case let .failed(failedStage, message):
             return failedStage == stage ? message : nil
+        case let .needsDaemonUpdate(_, requirement):
+            return stage == .compatibility
+                ? "Robot runs \(requirement.reported); this app needs \(requirement.minimum)"
+                : nil
         case .backendUnavailable:
             return stage == .backend ? "The robot backend is not running" : nil
         case .checkingBackend:

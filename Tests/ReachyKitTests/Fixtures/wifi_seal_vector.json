@@ -1,0 +1,11 @@
+{
+  "ssid": "Reachy Test Net",
+  "password": "correct horse battery staple",
+  "pin": "4A7f9",
+  "kid": "0a1b2c3d",
+  "robotPublicKey": "j0DFrbaPJWJK5bIU6nZ6bslNgp09e14a0bpvPiE4KF8=",
+  "clientPrivateKey": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+  "nonce": "EBESExQVFhcYGRob",
+  "expectedClientPublicKey": "NYBy1jZYgNGu6jKa35EhODhR7SGijjt16WXQ0s0WYlQ=",
+  "expectedCiphertext": "GXxFmRtjs4nj6VH78IIyvo3SDB4Sp0qTHoZQGoe3DwOs/6jz65Xc/FPle74="
+}

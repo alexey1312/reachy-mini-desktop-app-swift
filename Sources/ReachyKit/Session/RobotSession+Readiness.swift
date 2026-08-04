@@ -47,4 +47,11 @@ public extension RobotSession {
     var hasCamera: Bool {
         lastStatus?.wirelessVersion == true || lastStatus?.simulationEnabled == true
     }
+
+    /// `/wifi/*` and `/update/*` are mounted only under `--wireless-version`, so a
+    /// Lite robot answers 404 to all of them. Hide those controls rather than let
+    /// the user press a button that cannot work.
+    var supportsWirelessFeatures: Bool {
+        lastStatus?.wirelessVersion == true
+    }
 }

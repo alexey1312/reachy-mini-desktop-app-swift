@@ -17,20 +17,22 @@ public extension RobotSession.ConnectionPhase {
 }
 
 private extension RobotSession.ConnectionStep {
-    func outcome(for stage: RobotSession.ConnectionStage) -> RobotSession.StageOutcome {
-        switch (self, stage) {
-        case (.handshaking, .connect): .active
-        case (.handshaking, .backend): .pending
-        case (.checkingBackend, .connect): .done
-        case (.checkingBackend, .backend): .active
-        case (.backendUnavailable, .connect): .done
-        case (.backendUnavailable, .backend): .attention
-        case let (.failed(failedStage, _), _):
-            if stage == failedStage {
-                .failed
-            } else {
-                stage.rawValue < failedStage.rawValue ? .done : .pending
-            }
+    /// Which stage the attempt is standing on, and how that one row reads. Every
+    /// earlier stage is finished by definition — the attempt could not have got
+    /// here otherwise — and every later one has not been tried.
+    var position: (stage: RobotSession.ConnectionStage, outcome: RobotSession.StageOutcome) {
+        switch self {
+        case .handshaking: (.connect, .active)
+        case .checkingBackend: (.backend, .active)
+        case .needsDaemonUpdate: (.compatibility, .attention)
+        case .backendUnavailable: (.backend, .attention)
+        case let .failed(stage, _): (stage, .failed)
         }
+    }
+
+    func outcome(for stage: RobotSession.ConnectionStage) -> RobotSession.StageOutcome {
+        let current = position
+        guard stage != current.stage else { return current.outcome }
+        return stage.rawValue < current.stage.rawValue ? .done : .pending
     }
 }
