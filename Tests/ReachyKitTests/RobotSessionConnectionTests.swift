@@ -213,7 +213,9 @@ struct RobotSessionConnectionTests {
     @Test("the running-before-ready race resolves once the probe passes")
     func readyRaceResolves() async {
         let client = ReadinessMockClient(probeResults: [.notReady, .notReady, .ok])
-        let session = makeSession(client: client)
+        // A budget big enough that the deadline can't cut the sequence short on a
+        // loaded runner — giving up in time is `neverReadyGivesUp`'s job, not this one.
+        let session = makeSession(client: client, readinessMs: 5000)
 
         await session.connect(to: RobotAddress(host: "10.0.0.9"))
 
