@@ -24,6 +24,14 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
   to tuist.dev (`alexey1312/reachy-mini-desktop-app-swift` in `Apps/Tuist.swift`). That handle names the **tuist.dev
   project**, not this repository, and deliberately keeps the pre-rename name: renaming the GitHub repo does not rename
   the server-side project, so "fixing" it to match `reachy-mini-swift` points generation at a project that does not exist.
+- Run every `tuist` command from `Apps/` — `Tuist.swift` lives there and tuist only searches _upward_, so from the repo
+  root it finds no manifest and reports the project as unconnected to the server (`run 'tuist init'`).
+- `tuist inspect bundle` takes the **iOS** `.app` only: it expects `Info.plist` at the bundle root, where a macOS
+  bundle keeps it under `Contents/`. Pass the path, not the scheme name — by name it finds both the device and the
+  simulator build and refuses. Size numbers only mean something off a Release archive: a Debug bundle carries
+  `__preview.dylib`, `*.debug.dylib` and the provisioning profile, none of which ship.
+- Do **not** set `enableCaching` — without a running cache daemon every compile task waits out a CAS socket deadline,
+  and CI has neither the daemon nor cache credentials (this repo is not connected to the tuist.dev project).
 
 ## Quick Reference
 
