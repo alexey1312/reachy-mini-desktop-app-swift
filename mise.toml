@@ -23,7 +23,7 @@ git config core.hooksPath .githooks 2>/dev/null || true
 # --- Swift Development ---
 # Swift itself is managed by swiftly via .swift-version, not by mise.
 swiftformat = "0.62.1" # Swift code formatting
-swiftlint = "0.63.3"   # Swift linting
+swiftlint = "0.65.0"   # Swift linting
 xcsift = "1.3.1"       # xcodebuild/swift output filtering
 tuist = "4.203.1"      # Xcode project generation (Apps/)
 
@@ -31,7 +31,7 @@ tuist = "4.203.1"      # Xcode project generation (Apps/)
 dprint = "0.55.2" # Markdown formatting
 
 # --- Git & CI ---
-hk = "1.53.0"         # Git hooks manager (version must match hk.pkl package URI)
+hk = "1.54.0"         # Git hooks manager (version must match hk.pkl package URI)
 actionlint = "1.7.12" # GitHub Actions linting
 git-cliff = "2.13.1"  # Changelog generation
 
