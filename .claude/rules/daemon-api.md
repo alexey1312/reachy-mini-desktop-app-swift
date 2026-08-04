@@ -63,3 +63,9 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
 - `GET /api/kinematics/info` reports only `{"info": {"engine", "collision check"}}` — no joint names, no limits. Those
   live in the URDF alone.
 - DoA angle (microphone direction of arrival) is in radians: 0 = left, π/2 = front/back, π = right.
+- Speaker and microphone levels are `GET|POST /api/volume/{current,set}` and `/api/volume/microphone/{current,set}`,
+  both `{"volume": 0…100}` in and `{volume, platform, device}` out. There is no separate "sensitivity" concept —
+  microphone sensitivity *is* its input level. Wrapped as `AudioLevel`.
+  - **`POST /api/volume/set` plays a test sound on every accepted call** (it is in the route's own description).
+    Send it once a slider gesture ends, never on each change, or the robot beeps continuously.
+  - Out-of-range values come back as 422, so both setters map `.unprocessableContent` explicitly.

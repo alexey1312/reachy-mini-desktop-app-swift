@@ -41,4 +41,10 @@ public extension RobotSession {
             .compactMap(\.self)
             .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
+
+    /// A wired unit has no camera at all, so the UI hides video rather than
+    /// offering something that can only fail.
+    var hasCamera: Bool {
+        lastStatus?.wirelessVersion == true || lastStatus?.simulationEnabled == true
+    }
 }

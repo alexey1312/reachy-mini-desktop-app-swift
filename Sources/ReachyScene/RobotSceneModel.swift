@@ -67,6 +67,23 @@ public final class RobotSceneModel {
         streamTask = nil
     }
 
+    /// Drops the state stream but keeps the downloaded geometry, the entity tree
+    /// and the camera angle. `stop()` would clear `geometryTask`, and `start()`
+    /// guards on it being nil, so the pair would re-download and re-frame — the
+    /// user would lose the angle they just dragged to every time they left the
+    /// viewer or backgrounded the app.
+    public func pauseStream() {
+        streamTask?.cancel()
+        streamTask = nil
+    }
+
+    /// No-op until the scene is built: streaming into an empty tree is pointless,
+    /// and `build(_:)` starts the stream itself once there is something to move.
+    public func resumeStream() {
+        guard phase == .ready else { return }
+        startStreaming()
+    }
+
     private func loadGeometry() async {
         let provider = RobotGeometryProvider(client: client, cache: cache)
         do {

@@ -1,0 +1,81 @@
+import ReachyKit
+import SwiftUI
+
+/// Robot speaker and microphone levels, as a `Form` section.
+struct AudioSettingsSection: View {
+    let session: RobotSession
+    /// Dropped when the host already says "Audio" — a sheet titles itself.
+    var header: String? = "Audio"
+
+    @State private var model = AudioSettingsModel()
+
+    var body: some View {
+        @Bindable var model = model
+        Section {
+            if model.isLoading, !model.isReady {
+                ProgressView()
+            } else {
+                level(
+                    "Speaker",
+                    systemImage: "speaker.wave.2",
+                    value: $model.speakerPercent,
+                    device: model.speaker
+                ) {
+                    await model.commitSpeaker(session: session)
+                }
+                level(
+                    "Microphone",
+                    systemImage: "mic",
+                    value: $model.microphonePercent,
+                    device: model.microphone
+                ) {
+                    await model.commitMicrophone(session: session)
+                }
+                Button("Test sound") {
+                    Task { await model.playTestSound(session: session) }
+                }
+                .disabled(model.isBusy || !model.isReady)
+            }
+            if let errorMessage = model.errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            if let header {
+                Text(header)
+            }
+        }
+        .task { await model.load(session: session) }
+    }
+
+    private func level(
+        _ title: String,
+        systemImage: String,
+        value: Binding<Double>,
+        device: AudioLevel?,
+        commit: @escaping () async -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Label(title, systemImage: systemImage)
+                Spacer()
+                Text("\(Int(value.wrappedValue.rounded()))%")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            // The daemon reaches the robot's audio through one named sink or
+            // source; a robot with several gives no other hint which one moved.
+            Slider(value: value, in: 0 ... 100, step: 1) { editing in
+                guard !editing else { return }
+                Task { await commit() }
+            }
+            if let device {
+                Text("\(device.device) · \(device.platform)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .disabled(device == nil)
+    }
+}

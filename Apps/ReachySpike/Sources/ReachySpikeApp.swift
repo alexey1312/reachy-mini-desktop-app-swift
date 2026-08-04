@@ -5,11 +5,10 @@ import SwiftUI
 struct ReachySpikeApp: App {
     var body: some Scene {
         WindowGroup {
-            TabView {
-                ReachyRootView()
-                    .tabItem { Label("Robot", systemImage: "figure.wave") }
+            // The tab bar is `ReachyRootView`'s: which tabs exist depends on the
+            // size class, and the robot tabs share one session.
+            ReachyRootView {
                 SpikeView()
-                    .tabItem { Label("Diagnostics", systemImage: "stethoscope") }
             }
         }
     }

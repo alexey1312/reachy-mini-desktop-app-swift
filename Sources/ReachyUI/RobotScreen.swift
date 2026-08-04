@@ -1,20 +1,20 @@
 import ReachyKit
 import SwiftUI
 
-/// Connected-robot screen: identity, live daemon status, wake/sleep.
+/// Connected-robot controls: identity, live daemon status, wake/sleep, audio.
+///
+/// The navigation container is the host's — this is a column on iPad and Mac and
+/// a tab on iPhone, and both supply their own `NavigationStack`.
 struct RobotScreen: View {
     let session: RobotSession
 
     var body: some View {
-        NavigationStack {
-            content
-        }
-    }
-
-    private var content: some View {
         Form {
             statusSection
             controlSection
+            if session.isBackendRunning {
+                AudioSettingsSection(session: session)
+            }
             if let warning = session.compatibilityWarning {
                 Section {
                     Label(warning, systemImage: "exclamationmark.triangle")
@@ -35,6 +35,7 @@ struct RobotScreen: View {
             }
         }
         .formStyle(.grouped)
+        .navigationTitle(identity?.name ?? "Robot")
     }
 
     private var identity: RobotIdentity? {
@@ -95,27 +96,9 @@ struct RobotScreen: View {
                     Label("Moves & expressions", systemImage: "music.note")
                 }
                 NavigationLink {
-                    RobotViewerScreen(address: address)
-                } label: {
-                    Label("3D model", systemImage: "cube.transparent")
-                }
-                // Read-only, so it needs no motors — but the geometry and state
-                // routes are both behind the backend.
-                .disabled(!session.isBackendRunning)
-                NavigationLink {
                     LogConsoleScreen(address: address)
                 } label: {
                     Label("Daemon logs", systemImage: "terminal")
-                }
-                if hasCamera {
-                    NavigationLink {
-                        CameraScreen(address: address)
-                    } label: {
-                        Label("Camera", systemImage: "video")
-                    }
-                    // Video needs no motors — an asleep robot still streams — but
-                    // `daemon.stop()` tears the media server down with the backend.
-                    .disabled(!session.isBackendRunning)
                 }
             }
             Button {
@@ -139,10 +122,6 @@ struct RobotScreen: View {
             }
         }
         .disabled(!isConnected)
-    }
-
-    private var hasCamera: Bool {
-        session.lastStatus?.wirelessVersion == true || session.lastStatus?.simulationEnabled == true
     }
 
     private var isConnected: Bool {

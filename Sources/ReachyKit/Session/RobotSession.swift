@@ -193,16 +193,9 @@ public final class RobotSession {
         if !refresh, let cached = moveCache[dataset] {
             return cached
         }
-        guard let client else { throw ReachyKitError.notConnected }
-        do {
-            let moves = try await client.listMoves(dataset: dataset)
-            moveCache[dataset] = moves
-            lastError = nil
-            return moves
-        } catch {
-            lastError = Self.describe(error)
-            throw error
-        }
+        let moves = try await withClient { try await $0.listMoves(dataset: dataset) }
+        moveCache[dataset] = moves
+        return moves
     }
 
     public func playMove(dataset: String, move: String) async throws {

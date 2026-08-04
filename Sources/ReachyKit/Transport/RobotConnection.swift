@@ -224,6 +224,44 @@ public actor RobotConnection {
         _ = try await client.stopSoundApiMediaStopSoundPost().ok
     }
 
+    // MARK: Audio levels
+
+    public func volume() async throws -> AudioLevel {
+        try await AudioLevel(client.getVolumeApiVolumeCurrentGet().ok.body.json)
+    }
+
+    /// Note that the daemon plays a test sound on every accepted call, so this
+    /// belongs at the end of a slider gesture, never on each change.
+    public func setVolume(_ percent: Int) async throws -> AudioLevel {
+        switch try await client.setVolumeApiVolumeSetPost(body: .json(.init(volume: percent))) {
+        case let .ok(response):
+            return try AudioLevel(response.body.json)
+        case .unprocessableContent:
+            throw ReachyKitError.daemonRejected(statusCode: 422)
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
+    }
+
+    public func microphoneVolume() async throws -> AudioLevel {
+        try await AudioLevel(client.getMicrophoneVolumeApiVolumeMicrophoneCurrentGet().ok.body.json)
+    }
+
+    public func setMicrophoneVolume(_ percent: Int) async throws -> AudioLevel {
+        switch try await client.setMicrophoneVolumeApiVolumeMicrophoneSetPost(body: .json(.init(volume: percent))) {
+        case let .ok(response):
+            return try AudioLevel(response.body.json)
+        case .unprocessableContent:
+            throw ReachyKitError.daemonRejected(statusCode: 422)
+        case let .undocumented(statusCode, _):
+            throw ReachyKitError.fromStatusCode(statusCode)
+        }
+    }
+
+    public func playTestSound() async throws {
+        _ = try await client.playTestSoundApiVolumeTestSoundPost().ok
+    }
+
     /// The robot's own URDF, about 250 KB of XML wrapped in a one-key JSON object.
     /// Geometry comes from the robot rather than the app bundle, so the model
     /// always matches the machine in front of the user.

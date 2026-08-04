@@ -18,6 +18,11 @@ public protocol RobotAPIClient: Sendable {
     func urdf() async throws -> String
     func stlAsset(named filename: String) async throws -> Data
     func kinematicsInfo() async throws -> KinematicsInfo
+    func volume() async throws -> AudioLevel
+    func setVolume(_ percent: Int) async throws -> AudioLevel
+    func microphoneVolume() async throws -> AudioLevel
+    func setMicrophoneVolume(_ percent: Int) async throws -> AudioLevel
+    func playTestSound() async throws
 }
 
 /// Defaults keep lightweight session test doubles focused on the behavior they exercise.
@@ -64,6 +69,26 @@ public extension RobotAPIClient {
     }
 
     func kinematicsInfo() async throws -> KinematicsInfo {
+        throw URLError(.unsupportedURL)
+    }
+
+    func volume() async throws -> AudioLevel {
+        throw URLError(.unsupportedURL)
+    }
+
+    func setVolume(_: Int) async throws -> AudioLevel {
+        throw URLError(.unsupportedURL)
+    }
+
+    func microphoneVolume() async throws -> AudioLevel {
+        throw URLError(.unsupportedURL)
+    }
+
+    func setMicrophoneVolume(_: Int) async throws -> AudioLevel {
+        throw URLError(.unsupportedURL)
+    }
+
+    func playTestSound() async throws {
         throw URLError(.unsupportedURL)
     }
 }
