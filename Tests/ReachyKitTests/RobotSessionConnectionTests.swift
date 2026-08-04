@@ -180,6 +180,21 @@ struct RobotSessionConnectionTests {
         session.disconnect()
     }
 
+    @Test("a completed handshake records the robot under its identity")
+    func remembersRobot() async {
+        let client = ReadinessMockClient(states: [.running])
+        let session = makeSession(client: client)
+        KnownRobots.forget(client.identity.deduplicationKey)
+
+        await session.connect(to: RobotAddress(host: "10.0.0.9"))
+
+        let remembered = KnownRobots.all.first { $0.key == client.identity.deduplicationKey }
+        #expect(remembered?.name == "testbot")
+        #expect(remembered?.address.host == "10.0.0.9")
+        session.disconnect()
+        KnownRobots.forget(client.identity.deduplicationKey)
+    }
+
     @Test("stopped backend halts on the readiness step without probing")
     func stoppedBackendHalts() async {
         let client = ReadinessMockClient(states: [.stopped])

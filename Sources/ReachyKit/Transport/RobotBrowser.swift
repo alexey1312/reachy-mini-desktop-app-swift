@@ -19,6 +19,9 @@ public final class RobotBrowser {
         public let name: String
         public let type: String
         public let endpoint: NWEndpoint
+        /// From the advert's TXT `unit_id`, the same string as `GET /api/daemon/hardware-id`.
+        /// `nil` for the legacy `_http._tcp` type, which carries no TXT record.
+        public var hardwareID: String?
     }
 
     public private(set) var servicesByType: [String: [DiscoveredService]] = [:]
@@ -45,10 +48,21 @@ public final class RobotBrowser {
         !type.hasPrefix("_http") || name.localizedCaseInsensitiveContains("reachy")
     }
 
+    /// The daemon publishes its hardware id as TXT `unit_id`, which is what lets a discovery
+    /// result be matched against a stored robot without resolving its address first (rule 4).
+    nonisolated static func hardwareID(from metadata: NWBrowser.Result.Metadata) -> String? {
+        guard case let .bonjour(txt) = metadata, case let .string(value) = txt.getEntry(for: "unit_id") else {
+            return nil
+        }
+        return value
+    }
+
     public func start() {
         stop()
         for type in Self.serviceTypes {
-            let browser = NWBrowser(for: .bonjour(type: type, domain: nil), using: .tcp)
+            // `bonjourWithTXTRecord` rather than `bonjour`: without it every result arrives
+            // with `.none` metadata and a robot can only be matched by name.
+            let browser = NWBrowser(for: .bonjourWithTXTRecord(type: type, domain: nil), using: .tcp)
             browser.stateUpdateHandler = { [weak self] state in
                 Task { @MainActor in
                     self?.browserStates[type] = "\(state)"
@@ -59,7 +73,12 @@ public final class RobotBrowser {
                     guard case let .service(name, serviceType, _, _) = result.endpoint,
                           Self.acceptsService(name: name, type: serviceType)
                     else { return nil }
-                    return DiscoveredService(name: name, type: serviceType, endpoint: result.endpoint)
+                    return DiscoveredService(
+                        name: name,
+                        type: serviceType,
+                        endpoint: result.endpoint,
+                        hardwareID: Self.hardwareID(from: result.metadata)
+                    )
                 }
                 Task { @MainActor in
                     self?.servicesByType[type] = found

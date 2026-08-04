@@ -169,6 +169,7 @@ public final class RobotSession {
             lastStatus = handshake.status
             compatibilityWarning = handshake.compatibility.warningMessage
             KnownRobots.lastAddress = address
+            KnownRobots.remember(identity: handshake.identity, address: address)
             // A robot set up over Bluetooth has arrived under its own identity. This is
             // the only place that sees a handshake, and identity is all there is to match
             // on — it was provisioned at one address and turns up at another (rule 4).

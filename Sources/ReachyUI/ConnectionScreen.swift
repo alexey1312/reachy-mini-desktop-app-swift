@@ -17,14 +17,23 @@ struct ConnectionScreen: View {
     @State private var rescanTask: Task<Void, Never>?
     @State private var showsOnboarding = false
     @State private var awaitedHardwareID = KnownRobots.pendingProvisionedHardwareID
+    /// Resolved in `onAppear` rather than defaulted here: a default argument is evaluated in a
+    /// nonisolated context, and this model is main-actor isolated.
+    @State private var knownRobots: KnownRobotsModel?
 
     /// Upstream's `INTERVALS.DISCOVERY_SCAN`.
     private let rescanInterval: Duration = .seconds(10)
 
-    init(session: RobotSession, browser: RobotBrowser = RobotBrowser(), manualInput: String? = nil) {
+    init(
+        session: RobotSession,
+        browser: RobotBrowser = RobotBrowser(),
+        manualInput: String? = nil,
+        knownRobots: KnownRobotsModel? = nil
+    ) {
         self.session = session
         _browser = State(initialValue: browser)
         _manualInput = State(initialValue: manualInput ?? KnownRobots.lastAddress.map(\.displayString) ?? "")
+        _knownRobots = State(initialValue: knownRobots)
     }
 
     var body: some View {
@@ -70,6 +79,9 @@ struct ConnectionScreen: View {
         }
         .onAppear {
             guard !previewMode else { return }
+            let model = knownRobots ?? KnownRobotsModel()
+            knownRobots = model
+            model.start()
             browser.start()
             enqueueInitialCandidates()
             startPeriodicRescan()
@@ -83,6 +95,7 @@ struct ConnectionScreen: View {
             OnboardingFlow(onFinish: finishOnboarding) { showsOnboarding = false }
         }
         .onChange(of: browser.services) { _, services in
+            knownRobots?.updateDiscovered(Set(services.compactMap(\.hardwareID)))
             resolveDiscoveredServices(services)
         }
         .onDisappear {
@@ -91,6 +104,7 @@ struct ConnectionScreen: View {
             rescanTask?.cancel()
             rescanTask = nil
             browser.stop()
+            knownRobots?.stop()
         }
     }
 
@@ -128,7 +142,7 @@ struct ConnectionScreen: View {
                     }
                 #endif
             }
-            if browser.services.isEmpty {
+            if knownEntries.isEmpty, undiscoveredServices.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Searching…")
                     Text(
@@ -139,7 +153,24 @@ struct ConnectionScreen: View {
                 }
                 .foregroundStyle(.secondary)
             }
-            ForEach(browser.services) { service in
+            // Robots that answered a handshake before are listed whether or not Bonjour finds
+            // them: mDNS does not reach every network, and an absent robot is worth showing as
+            // absent rather than not at all.
+            ForEach(knownEntries) { entry in
+                Button {
+                    connectManually(to: entry.robot.address)
+                } label: {
+                    LabeledContent(entry.robot.name ?? entry.robot.address.displayString) {
+                        statusLabel(for: entry.status)
+                    }
+                }
+                .swipeActions {
+                    Button("Forget", role: .destructive) {
+                        knownRobots?.forget(entry.id)
+                    }
+                }
+            }
+            ForEach(undiscoveredServices) { service in
                 Button {
                     connect(to: service)
                 } label: {
@@ -152,6 +183,36 @@ struct ConnectionScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    private var knownEntries: [KnownRobotsModel.Entry] {
+        knownRobots?.entries ?? []
+    }
+
+    /// A robot already listed from storage must not appear twice. The advert's TXT `unit_id` is
+    /// the same string the handshake stored, so the two are matched on identity, not address
+    /// (rule 4). An advert without one — the legacy `_http._tcp` type — is always shown.
+    private var undiscoveredServices: [RobotBrowser.DiscoveredService] {
+        let known = Set(knownEntries.map(\.id))
+        return browser.services.filter { service in
+            service.hardwareID.map { !known.contains($0) } ?? true
+        }
+    }
+
+    @ViewBuilder
+    private func statusLabel(for status: KnownRobotsModel.Status) -> some View {
+        switch status {
+        case .checking:
+            ProgressView()
+        case .reachable:
+            Text("On the network")
+                .font(.caption)
+                .foregroundStyle(.green)
+        case .unreachable:
+            Text("Not responding")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -205,12 +266,6 @@ struct ConnectionScreen: View {
                 connectManually(to: address)
             }
             .disabled(RobotAddress(parsing: manualInput) == nil)
-            if KnownRobots.lastAddress != nil {
-                Button("Forget last robot", role: .destructive) {
-                    KnownRobots.lastAddress = nil
-                    manualInput = ""
-                }
-            }
         }
     }
 

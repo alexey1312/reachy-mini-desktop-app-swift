@@ -23,6 +23,22 @@ struct RobotBrowserTests {
         #expect(!RobotBrowser.stateLooksPolicyDenied("ready"))
     }
 
+    @Test("the hardware id comes off the TXT record the daemon publishes")
+    func hardwareIDFromTXT() {
+        let advert = NWBrowser.Result.Metadata.bonjour(NWTXTRecord([
+            "version": "1.9.0",
+            "unit_id": "b68ff6bbe47f0608",
+            "robot_name": "reachy_mini",
+        ]))
+        #expect(RobotBrowser.hardwareID(from: advert) == "b68ff6bbe47f0608")
+    }
+
+    @Test("an advert without a unit id matches no stored robot")
+    func hardwareIDMissing() {
+        #expect(RobotBrowser.hardwareID(from: .bonjour(NWTXTRecord(["version": "1.9.0"]))) == nil)
+        #expect(RobotBrowser.hardwareID(from: .none) == nil)
+    }
+
     @Test("global IPv6 is accepted but zone-less link-local IPv6 is dropped")
     func ipv6Candidates() throws {
         let global = try #require(IPv6Address("fd00::1234"))
