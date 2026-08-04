@@ -20,7 +20,14 @@ link-local IPv6). Our rules:
 - Static fallback host: `reachy-mini.local`. Upstream also probes `reachy-mini.home`; do NOT add it back. ATS waives
   its HTTPS requirement only for `.local` names, link-local addresses and single-label hosts, so a qualified `.home`
   name is always refused with `NSURLErrorDomain -1022` — confirmed on a running build. Loopback is probed as well on
-  macOS and in the simulator, where a locally run `sim-daemon` advertises nothing the client can discover.
+  macOS and in the simulator, which is the path that does not depend on discovery working.
+- `sim-daemon` **does** advertise `_reachy-mini._tcp`, and a simulator on the same Mac lists it — verified by
+  connecting to one from the simulator. A stand-in advert for discovery work is one command:
+  `dns-sd -R reachy_mini _reachy-mini._tcp local 8000 unit_id=<hex>`, and a second registration of the same instance
+  name comes back as `reachy_mini (2)`.
+- An empty discovery list says nothing about the app. Check the robot is actually up first (`ping`, `arp -n <ip>`,
+  `dns-sd -B _reachy-mini._tcp`) — a robot that dropped off the network stops advertising, and every layer above
+  correctly reports nothing.
 - Network change: `NWPathMonitor` + exponential backoff reconnect.
 
 ## iOS/iPadOS requirements (app targets)
