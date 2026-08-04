@@ -39,7 +39,7 @@ final class SpikeModel {
             daemon: \(handshake.identity.daemonVersion ?? "—")
             hardware: \(handshake.identity.hardwareID ?? "— (sim)")
             state: \(handshake.status.state)
-            sim: \(handshake.status.simulationEnabled)
+            sim: \(handshake.status.simulationEnabled?.description ?? "—")
             """
         } catch {
             lastError = "\(error)"
