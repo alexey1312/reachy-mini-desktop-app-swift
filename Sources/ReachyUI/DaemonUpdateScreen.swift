@@ -12,6 +12,15 @@ struct DaemonUpdateScreen: View {
     @AppStorage("update.preRelease") private var preRelease = false
     @State private var showsLog = false
 
+    /// An injected model is also what keeps the `.task` below inert — it only builds and
+    /// checks when there is none, so a preview never reaches the network.
+    @MainActor
+    init(session: RobotSession, requirement: DaemonUpdateRequirement, model: SystemUpdateModel? = nil) {
+        self.session = session
+        self.requirement = requirement
+        _model = State(initialValue: model)
+    }
+
     private var state: SystemUpdateModel.State {
         model?.state ?? .idle
     }

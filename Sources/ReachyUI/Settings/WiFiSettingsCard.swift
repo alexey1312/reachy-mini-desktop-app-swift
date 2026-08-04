@@ -12,6 +12,14 @@ struct WiFiSettingsCard: View {
     @State private var joinError: String?
     @State private var loadFailure: String?
     @State private var busy = false
+    @Environment(\.reachyPreviewMode) private var previewMode
+
+    init(session: RobotSession, status: WiFiStatus? = nil, joinError: String? = nil, loadFailure: String? = nil) {
+        self.session = session
+        _status = State(initialValue: status)
+        _joinError = State(initialValue: joinError)
+        _loadFailure = State(initialValue: loadFailure)
+    }
 
     var body: some View {
         Section {
@@ -50,7 +58,10 @@ struct WiFiSettingsCard: View {
             Text("Forgetting the network the robot is on takes it off this network at the next restart. "
                 + "The robot's own hotspot cannot be forgotten.")
         }
-        .task { await load() }
+        .task {
+            guard !previewMode else { return }
+            await load()
+        }
     }
 
     private var modeText: String {

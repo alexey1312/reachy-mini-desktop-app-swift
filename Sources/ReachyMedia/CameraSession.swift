@@ -289,3 +289,19 @@ private final class PeerConnectionDelegateAdapter: NSObject, RTCPeerConnectionDe
     func peerConnection(_: RTCPeerConnection, didRemove _: [RTCIceCandidate]) {}
     func peerConnection(_: RTCPeerConnection, didOpen _: RTCDataChannel) {}
 }
+
+#if DEBUG
+    public extension CameraSession {
+        /// A session parked in one phase. Constructing one is inert — `start()` is what opens the
+        /// signaling socket and builds the peer connection, and it is never called here.
+        ///
+        /// `phase` is `private(set)`, so this has to live in the same file.
+        static func preview(_ phase: Phase) -> CameraSession {
+            // A well-formed host cannot fail to produce a signaling client, and nothing dials it.
+            // swiftlint:disable:next force_try
+            let session = try! CameraSession(address: RobotAddress(host: "192.168.1.42"))
+            session.phase = phase
+            return session
+        }
+    }
+#endif

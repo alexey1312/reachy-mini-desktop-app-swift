@@ -133,3 +133,25 @@ final class ViewportModel {
         cameraSession = nil
     }
 }
+
+#if DEBUG
+    extension ViewportModel {
+        /// Assembled rather than attached: `attach(to:)` would build a real `RobotConnection` and
+        /// a real `CameraSession`. Lives here because every field below is `private(set)`.
+        static func preview(
+            content: Content = .scene,
+            sceneModel: RobotSceneModel? = nil,
+            cameraSession: CameraSession? = nil,
+            setupError: String? = nil,
+            address: RobotAddress? = RobotAddress(host: "192.168.1.42")
+        ) -> ViewportModel {
+            let model = ViewportModel()
+            model.content = content
+            model.sceneModel = sceneModel
+            model.cameraSession = cameraSession
+            model.setupError = setupError
+            model.address = address
+            return model
+        }
+    }
+#endif

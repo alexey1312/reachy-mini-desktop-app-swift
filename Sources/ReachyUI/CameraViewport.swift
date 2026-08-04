@@ -12,6 +12,7 @@ struct CameraViewport: View {
 
     @State private var teleop: SetTargetClient?
     @State private var target = SetTargetClient.Target()
+    @Environment(\.reachyPreviewMode) private var previewMode
 
     /// Same comfortable head range as `ControllerScreen`; the daemon clamps anyway.
     private let headAngle = 40.0 * .pi / 180
@@ -68,6 +69,7 @@ struct CameraViewport: View {
     }
 
     private func connectTeleop() {
+        guard !previewMode else { return }
         guard teleop == nil, let client = try? SetTargetClient(address: address) else { return }
         teleop = client
         Task { await client.connect() }

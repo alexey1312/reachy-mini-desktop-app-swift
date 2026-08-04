@@ -34,6 +34,12 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
   `*.debug.dylib` and the provisioning profile, none of which ship.
 - Do **not** set `enableCaching` — without a running cache daemon every compile task waits out a CAS socket deadline,
   and CI has neither the daemon nor cache credentials (this repo is not connected to the tuist.dev project).
+- `Package.resolved` **oscillates between the two build systems, and neither is wrong.** `xcodebuild` resolves the
+  whole Tuist workspace and writes back to the root package's file, adding five pins (Prefire, swift-snapshot-testing,
+  swift-syntax, swift-custom-dump, xctest-dynamic-overlay); `swift build` / `swift test` see only the root package and
+  strip them again. Merging a branch that predates them drops them silently too — git sees a clean delete on one side.
+  Commit the 16-pin version (run `mise run project` or any snapshot task last), never hand-edit it, and expect the
+  file to show as modified after a plain `mise run test`.
 
 ## Quick Reference
 
@@ -50,6 +56,9 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 ./bin/mise run sim-daemon     # Simulated robot daemon (MuJoCo, LAN-reachable)
 ./bin/mise run test:sim       # Integration tests against a running sim-daemon
 ./bin/mise run update-spec    # Refresh + normalize daemon OpenAPI spec
+./bin/mise run test:snapshots # Snapshot-test every ReachyUI preview (iOS Simulator)
+./bin/mise run test:snapshots:record  # Re-record the reference images
+./bin/mise run storybook      # Browsable catalogue of every preview, on a simulator
 ```
 
 `build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Use `build:app` for that; CI runs it as a
@@ -73,6 +82,40 @@ is Linux/BlueZ, so nothing simulates it.
 `.venv-sim` does hold the daemon's own source (`lib/python3.12/site-packages/reachy_mini/`) — read
 `daemon/app/routers/*.py` and `daemon/app/services/` there rather than inferring a route's shape. Still a
 specification (rule 1), never code to port.
+
+Snapshots live in `Apps/` as an Xcode target because they need an iOS simulator, so `swift test` never sees them.
+
+**Four device/runtime identifiers are in play, and they deliberately do not match.** Changing one without the others
+either re-records everything or fails the run outright:
+
+| Identifier                     | Set in                               | What it is                                                                                           |
+| ------------------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `iPhone 17 Pro`                | `mise.toml`, `REACHY_SNAPSHOT_SIM`   | The simulator the tests execute on. Renders every image.                                             |
+| `iPhone18,1`                   | `.prefire.yml`, `simulator_device`   | The same machine as a model id. Prefire aborts on a mismatch.                                        |
+| `iPhone 16 Pro`, `iPad Pro 11` | `.prefire.yml`, `snapshot_devices`   | `ViewImageConfig`s — frame size and traits, and the filename suffixes. Not devices anything runs on. |
+| `26.4.1` / `26`                | `REACHY_SNAPSHOT_OS` / `required_os` | Full runtime for the destination; major only for Prefire's check.                                    |
+
+So a reference named `…-iPhone-16-Pro.png` was rendered on an iPhone 17 Pro, at iPhone 16 Pro dimensions. A
+different iOS runtime renders text differently and every reference would have to be re-recorded. **Light appearance is
+pinned too**, by `simctl ui … appearance light` in `snapshots:_run`: the simulator's appearance is not part of the
+destination and outlives a reboot, so without it whoever last switched that device to dark re-records the whole set.
+Run `test:snapshots` before `test:snapshots:record` — it names every reference that moved, which `record` then
+overwrites blind. If _every_ reference moved, suspect the environment rather than the code: check one nothing could
+have affected (`JoystickPad`) against HEAD with `git show HEAD:<png> | git lfs smudge > /tmp/old.png`. Reference images are
+**Git LFS**; `bootstrap.sh` enables the filter, and without it they check out as text stubs. LFS uploads objects from
+a `pre-push` hook, and `core.hooksPath` makes git ignore `.git/hooks` — so its four hooks are tracked in `.githooks/`
+alongside the hand-written ones. Drop them and `git push` sends pointers with no data behind them.
+Adding a reference image still needs an explicit `git add`: the LFS filter decides how a staged file is _stored_, and
+the pre-commit hook only re-stages what it reformatted (`*.swift`, `*.md`) — neither one stages a PNG for you.
+There is no CI job yet: local Xcode and the CI pin differ, so references recorded on one fail on the other.
+`test:snapshots` compares the images either side of the run and fails if any had to be written — Prefire generates
+`record: .missing`, so a reference that does not exist yet is created rather than compared.
+`Apps/.prefire.yml` carries no comments on purpose: Prefire's hand-rolled YAML parser reads a comment line ending in
+`:` as a config key, warns, and moves on — a helpful comment silently becomes an unknown setting.
+**Macros that ship with Xcode rather than with the toolchain break `swift build`.** The pinned swift.org toolchain has
+no `SwiftUIMacros`/`PreviewsMacros` plugin, so `#Preview` and `@Entry` fail with "plugin for module … not found".
+Previews therefore live only in `Sources/ReachyUI/Previews`, which `Package.swift` excludes from the target, and
+environment keys are written out by hand — swiftformat's `environmentEntry` rule is disabled for that reason.
 
 ## Project Context
 
@@ -99,7 +142,12 @@ specification (rule 1), never code to port.
    and hook scripts need an explicit `git add`, and a commit with nothing staged fails before the hook runs.
 7. **Tests wait on conditions, not durations.** A fixed `Task.sleep` before an assertion is a CI flake waiting to
    happen: the suites are `@MainActor` and a loaded runner starves them. Poll the condition, and give an injected
-   timeout headroom its deadline cannot cut short. `--parallel` also runs _suites_ concurrently, and `.serialized`
+   timeout headroom its deadline cannot cut short.
+8. **A new screen ships with its previews.** Every screen, and every state a user can land in, gets a `#Preview`
+   under `Sources/ReachyUI/Previews` and a recorded reference — `mise run test:snapshots:record`, then `git add` the
+   PNGs, which no hook stages for you. A state that needs a live robot to reach is the one most worth capturing: add
+   the injection seam (`Sources/ReachyUI/AGENTS.md`) rather than leave the state uncovered. Say so explicitly when
+   something is deliberately not covered, as `SceneViewport.ready` is. `--parallel` also runs _suites_ concurrently, and `.serialized`
    orders only within one — a harness holding shared global state passes until a second suite uses it
    (`StubURLProtocol` binds stubs to their session for exactly this reason). Give async transport tests
    `.timeLimit(.minutes(1))`, or one hang stalls the whole run.

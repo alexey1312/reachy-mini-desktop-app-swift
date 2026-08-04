@@ -23,6 +23,11 @@ echo "==> Wiring git hooks (.githooks via core.hooksPath)"
 git config core.hooksPath .githooks
 chmod +x .githooks/*
 
+# Snapshot reference images are LFS pointers; without the filter they check out as text stubs
+# and every snapshot test fails with an unreadable-image error.
+echo "==> Enabling Git LFS for this clone"
+./bin/mise x -- git lfs install --local
+
 echo "==> Done"
 ./bin/mise run setup
 echo ""

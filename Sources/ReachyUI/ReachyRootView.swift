@@ -16,11 +16,12 @@ public struct ReachyRootView<Diagnostics: View>: View {
         case diagnostics
     }
 
-    @State private var session = RobotSession()
-    @State private var viewport = ViewportModel()
+    @State private var session: RobotSession
+    @State private var viewport: ViewportModel
     @State private var tab: TabID = .robot
     @State private var showsSettings = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.reachyPreviewMode) private var previewMode
 
     #if os(macOS)
         /// `horizontalSizeClass` does not exist on macOS, where a window is always
@@ -37,7 +38,20 @@ public struct ReachyRootView<Diagnostics: View>: View {
 
     private let diagnostics: Diagnostics
 
+    @MainActor
     public init(@ViewBuilder diagnostics: () -> Diagnostics) {
+        self.init(session: RobotSession(), diagnostics: diagnostics)
+    }
+
+    /// Internal so previews can park the root in a phase a real connection would have to reach.
+    @MainActor
+    init(
+        session: RobotSession,
+        viewport: ViewportModel = ViewportModel(),
+        @ViewBuilder diagnostics: () -> Diagnostics
+    ) {
+        _session = State(initialValue: session)
+        _viewport = State(initialValue: viewport)
         self.diagnostics = diagnostics()
     }
 
@@ -56,6 +70,7 @@ public struct ReachyRootView<Diagnostics: View>: View {
             }
         }
         .task(id: viewportAddress) {
+            guard !previewMode else { return }
             if let viewportAddress {
                 viewport.attach(to: viewportAddress)
             } else {
@@ -63,6 +78,7 @@ public struct ReachyRootView<Diagnostics: View>: View {
             }
         }
         .onChange(of: viewportIsOnScreen, initial: true) { _, onScreen in
+            guard !previewMode else { return }
             viewport.setActive(onScreen)
         }
         .onChange(of: offersLiveTab) { _, offered in

@@ -30,6 +30,12 @@ tuist = "4.203.1"      # Xcode project generation (Apps/)
 # --- Documentation & Formatting ---
 dprint = "0.55.2" # Markdown formatting
 
+# --- Snapshots & Storybook ---
+# The release ships a single lowercase `prefire` binary, which the backend cannot guess from the
+# repository name — hence the explicit exe option.
+"github:BarredEwe/Prefire[exe=prefire]" = "5.7.0"
+git-lfs = "3.7.1" # Snapshot reference images
+
 # --- Git & CI ---
 hk = "1.54.0"         # Git hooks manager (version must match hk.pkl package URI)
 actionlint = "1.7.12" # GitHub Actions linting
@@ -91,6 +97,87 @@ set -o pipefail
 REACHY_SIM_HOST=127.0.0.1 swift test --parallel --filter SimulatorIntegrationTests 2>&1 | xcsift
 """
 
+# Snapshots run on an iOS simulator, so they live in Apps/ as an Xcode target and never reach
+# `swift test`. Both the device and the OS are pinned: a different runtime renders text
+# differently and every reference would have to be re-recorded.
+[tasks."snapshots:_run"]
+hide = true
+depends = ["project"]
+run = '''
+set -o pipefail
+SIM="${REACHY_SNAPSHOT_SIM:-iPhone 17 Pro}"
+# The simulator's appearance survives reboots and is not part of the destination, so whoever last
+# switched this device to dark decides what every reference looks like. Left alone it rewrites all
+# of them and `test:snapshots` fails on a tree nobody touched.
+xcrun simctl boot "$SIM" 2>/dev/null || true
+xcrun simctl ui "$SIM" appearance light >/dev/null 2>&1 || true
+xcodebuild test -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachyUISnapshotTests \
+  -destination "platform=iOS Simulator,name=${SIM},OS=${REACHY_SNAPSHOT_OS:-26.4.1}" \
+  -derivedDataPath Apps/DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  -skipPackagePluginValidation -skipMacroValidation \
+  2>&1 | xcsift
+'''
+
+[tasks."test:snapshots"]
+description = "Snapshot-test every ReachyUI preview (fails if a reference had to be recorded)"
+run = '''
+#!/bin/bash
+set -euo pipefail
+DIR=Apps/ReachyUISnapshotTests/__Snapshots__
+# Prefire generates `record: .missing`, so an absent reference is written rather than compared.
+# Comparing the images either side of the run reports that as a failure even if the suite itself
+# is happy — a reference that had to be written verified nothing. Checksums rather than
+# `git status`, so an uncommitted tree does not read as a failure.
+fingerprint() { find "$DIR" -name '*.png' -exec shasum -a 256 {} + 2>/dev/null | sort; }
+BEFORE="$(fingerprint)"
+./bin/mise run snapshots:_run
+AFTER="$(fingerprint)"
+if [ "$BEFORE" != "$AFTER" ]; then
+  echo "Snapshot references were written during the run, so they verified nothing:" >&2
+  diff <(echo "$BEFORE") <(echo "$AFTER") >&2 || true
+  echo "Review the images, or re-record them all with: mise run test:snapshots:record" >&2
+  exit 1
+fi
+'''
+
+[tasks."test:snapshots:record"]
+description = "Delete and re-record every snapshot reference, leaving the diff for review"
+run = '''
+#!/bin/bash
+set -euo pipefail
+DIR=Apps/ReachyUISnapshotTests/__Snapshots__
+# `record: .missing` only writes absent references, so re-recording means removing them first.
+[ -d "$DIR" ] && find "$DIR" -name '*.png' -delete
+# swift-snapshot-testing reports a freshly recorded reference as a test failure, which is the
+# expected outcome here — the point of this task is to write them.
+./bin/mise run snapshots:_run || true
+git status --short -- "$DIR"
+'''
+
+[tasks.storybook]
+description = "Regenerate the preview catalogue and run the storybook app on a simulator"
+run = '''
+#!/bin/bash
+set -euo pipefail
+SIM="${REACHY_SNAPSHOT_SIM:-iPhone 17 Pro}"
+# The playbook plugin only ever scans its own target's sources, so the CLI is driven directly.
+prefire playbook Sources/ReachyUI/Previews Apps/ReachySpike/Previews \
+  --output Apps/ReachyStorybook/Generated \
+  --config Apps
+./bin/mise run project
+set -o pipefail
+xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachyStorybook \
+  -destination "platform=iOS Simulator,name=$SIM,OS=${REACHY_SNAPSHOT_OS:-26.4.1}" \
+  -configuration Debug -derivedDataPath Apps/DerivedData \
+  CODE_SIGNING_ALLOWED=NO -skipPackagePluginValidation -skipMacroValidation \
+  build 2>&1 | xcsift
+xcrun simctl boot "$SIM" 2>/dev/null || true
+open -a Simulator
+xcrun simctl install "$SIM" Apps/DerivedData/Build/Products/Debug-iphonesimulator/ReachyStorybook.app
+xcrun simctl launch "$SIM" com.alexey1312.ReachyMiniStorybook
+'''
+
 [tasks.lint]
 description = "Run SwiftLint, actionlint, and the hk version lockstep check"
 run = '''
@@ -101,7 +188,7 @@ if [ -n "$DRIFT" ]; then
   echo "hk.pkl references $DRIFT but mise.toml pins $PINNED — bump both together." >&2
   exit 1
 fi
-swiftlint lint --strict Sources Tests Apps/ReachySpike 2>&1 | xcsift
+swiftlint lint --strict Sources Tests Apps/ReachySpike Apps/ReachyStorybook Apps/ReachyUISnapshotTests 2>&1 | xcsift
 actionlint
 '''
 

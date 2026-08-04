@@ -77,6 +77,38 @@ final class SpikeModel {
         }
     }
 
+    #if DEBUG
+        /// Frozen spike state for previews. Here rather than beside the previews because every
+        /// field below is `private(set)`.
+        static func preview(
+            host: String = "192.168.1.42",
+            handshakeSummary: String? = nil,
+            lastError: String? = nil,
+            isStreaming: Bool = false,
+            frameCount: Int = 0,
+            hertz: Double = 0,
+            diagnostics: StateStreamDiagnostics = .init()
+        ) -> SpikeModel {
+            let model = SpikeModel()
+            model.host = host
+            model.handshakeSummary = handshakeSummary
+            model.lastError = lastError
+            model.isStreaming = isStreaming
+            model.frameCount = frameCount
+            model.hertz = hertz
+            model.streamDiagnostics = diagnostics
+            return model
+        }
+
+        static let previewHandshake = """
+        name: Reachy Mini
+        daemon: 1.9.0
+        hardware: — (sim)
+        state: running
+        sim: true
+        """
+    #endif
+
     private func recordFrame() {
         frameCount += 1
         let now = ContinuousClock.now

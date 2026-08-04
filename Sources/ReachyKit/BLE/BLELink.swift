@@ -251,3 +251,40 @@ extension BLELink {
         (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }
+
+#if DEBUG
+    public extension BLELink {
+        /// A link already in the state a preview wants to draw.
+        ///
+        /// Here rather than in `Preview/PreviewFixtures.swift` because every field below is
+        /// `private(set)`, which only this file can write. Nothing is connected and no
+        /// command is ever sent — a preview renders one frame and must not wait on a radio.
+        static func preview(
+            availability: BLEAvailability = .ready,
+            discovered: [BLEPeripheralSnapshot] = [],
+            phase: Phase = .connected,
+            hardwareID: String? = "a1b2c3d4e5f60718",
+            networkStatus: WiFiStatus? = nil,
+            robotAddress: String? = nil,
+            networks: [String] = [],
+            lastError: String? = nil,
+            failedPINAttempts: Int = 0
+        ) -> BLELink {
+            let link = BLELink(
+                transport: PreviewBLETransport(availability: availability, discovered: discovered)
+            )
+            link.availability = availability
+            link.discovered = discovered
+            link.phase = phase
+            link.hardwareID = hardwareID
+            link.networkStatus = networkStatus
+            link.robotAddress = robotAddress
+            link.networks = networks
+            link.lastError = lastError
+            for _ in 0 ..< failedPINAttempts {
+                link.pin.failed()
+            }
+            return link
+        }
+    }
+#endif

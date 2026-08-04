@@ -285,3 +285,36 @@ final class OnboardingModel {
         (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }
+
+#if DEBUG
+    extension OnboardingModel {
+        /// A flow parked on one step. The link is handed over already built, because `session`
+        /// is otherwise only assigned by `beginScan()` — which is exactly the Bluetooth call a
+        /// preview must not make.
+        static func preview(
+            step: Step,
+            link: BLELink? = .preview(),
+            isBusy: Bool = false,
+            errorMessage: String? = nil,
+            joinState: JoinState = .working,
+            lockoutSeconds: Int? = nil,
+            pinInput: String = "",
+            selectedSSID: String? = nil,
+            manualSSID: String = "",
+            password: String = ""
+        ) -> OnboardingModel {
+            let model = OnboardingModel()
+            model.session = link
+            model.step = step
+            model.isBusy = isBusy
+            model.errorMessage = errorMessage
+            model.joinState = joinState
+            model.lockoutSeconds = lockoutSeconds
+            model.pinInput = pinInput
+            model.selectedSSID = selectedSSID
+            model.manualSSID = manualSSID
+            model.password = password
+            return model
+        }
+    }
+#endif

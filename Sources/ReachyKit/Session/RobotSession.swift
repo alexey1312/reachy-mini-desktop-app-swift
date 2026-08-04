@@ -81,17 +81,18 @@ public final class RobotSession {
     }
 
     // `internal(set)` rather than `private(set)`: the connect and power protocols
-    // live in sibling files, and a `private` setter is scoped to this one.
+    // live in sibling files, and a `private` setter is scoped to this one. The preview
+    // fixtures do the same, parking a session in a state no real connection would reach.
     public internal(set) var phase: ConnectionPhase = .idle
     public internal(set) var address: RobotAddress?
     public internal(set) var lastStatus: Components.Schemas.DaemonStatus?
     public internal(set) var lastError: String?
-    public private(set) var compatibilityWarning: String?
-    public private(set) var currentMove: MovePlayback?
-    public private(set) var isStoppingMove = false
+    public internal(set) var compatibilityWarning: String?
+    public internal(set) var currentMove: MovePlayback?
+    public internal(set) var isStoppingMove = false
     public internal(set) var powerTransition: PowerTransition?
     /// Explicit Disconnect suppresses discovery-driven reconnect until the user connects again.
-    public private(set) var automaticConnectionAllowed = true
+    public internal(set) var automaticConnectionAllowed = true
 
     let configuration: Configuration
     var client: (any RobotAPIClient)?

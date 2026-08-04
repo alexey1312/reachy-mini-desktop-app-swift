@@ -124,6 +124,84 @@ checksum = "sha256:3ae3a5549e85c7ad5b20192ebcfee4371269deca51255f6f2f2e051c6541f
 url = "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/orhun/git-cliff/releases/assets/405851866"
 
+[[tools.git-lfs]]
+version = "3.7.1"
+backend = "aqua:git-lfs/git-lfs"
+
+[tools.git-lfs."platforms.linux-arm64"]
+checksum = "sha256:73a9c90eeb4312133a63c3eaee0c38c019ea7bfa0953d174809d25b18588dd8d"
+url = "https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-arm64-v3.7.1.tar.gz"
+url_api = "https://api.github.com/repos/git-lfs/git-lfs/releases/assets/305262644"
+
+[tools.git-lfs."platforms.linux-arm64-musl"]
+checksum = "sha256:73a9c90eeb4312133a63c3eaee0c38c019ea7bfa0953d174809d25b18588dd8d"
+url = "https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-arm64-v3.7.1.tar.gz"
+url_api = "https://api.github.com/repos/git-lfs/git-lfs/releases/assets/305262644"
+
+[tools.git-lfs."platforms.linux-x64"]
+checksum = "sha256:1c0b6ee5200ca708c5cebebb18fdeb0e1c98f1af5c1a9cba205a4c0ab5a5ec08"
+url = "https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-amd64-v3.7.1.tar.gz"
+url_api = "https://api.github.com/repos/git-lfs/git-lfs/releases/assets/305262626"
+
+[tools.git-lfs."platforms.linux-x64-musl"]
+checksum = "sha256:1c0b6ee5200ca708c5cebebb18fdeb0e1c98f1af5c1a9cba205a4c0ab5a5ec08"
+url = "https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-amd64-v3.7.1.tar.gz"
+url_api = "https://api.github.com/repos/git-lfs/git-lfs/releases/assets/305262626"
+
+[tools.git-lfs."platforms.macos-arm64"]
+checksum = "sha256:76260fb34f4ee622ff0a66b857e5954aa49c7e343a92e57a1ec4a760618c94b2"
+url = "https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-darwin-arm64-v3.7.1.zip"
+url_api = "https://api.github.com/repos/git-lfs/git-lfs/releases/assets/305262593"
+
+[tools.git-lfs."platforms.macos-x64"]
+checksum = "sha256:b5b1b641c0648c83661fa9eda991cd3eff945264dabc2cdf411a80dfe7ec0970"
+url = "https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-darwin-amd64-v3.7.1.zip"
+url_api = "https://api.github.com/repos/git-lfs/git-lfs/releases/assets/305262587"
+
+[tools.git-lfs."platforms.windows-x64"]
+checksum = "sha256:8683cdc3d6c029b49393dcebbaa6265bd6efd9abdcf837be855b4cd42e5e80b6"
+url = "https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-windows-amd64-v3.7.1.zip"
+url_api = "https://api.github.com/repos/git-lfs/git-lfs/releases/assets/305262684"
+
+[[tools."github:BarredEwe/Prefire"]]
+version = "5.7.0"
+backend = "github:BarredEwe/Prefire"
+
+[tools."github:BarredEwe/Prefire"."platforms.linux-arm64"]
+checksum = "sha256:8f8a1d95cadc705fdbd950a72aee95e5a59f90a41dcd17e300f95c8becc6121b"
+url = "https://github.com/BarredEwe/Prefire/releases/download/5.7.0/prefire.tar.gz"
+url_api = "https://api.github.com/repos/BarredEwe/Prefire/releases/assets/471183079"
+
+[tools."github:BarredEwe/Prefire"."platforms.linux-arm64-musl"]
+checksum = "sha256:8f8a1d95cadc705fdbd950a72aee95e5a59f90a41dcd17e300f95c8becc6121b"
+url = "https://github.com/BarredEwe/Prefire/releases/download/5.7.0/prefire.tar.gz"
+url_api = "https://api.github.com/repos/BarredEwe/Prefire/releases/assets/471183079"
+
+[tools."github:BarredEwe/Prefire"."platforms.linux-x64"]
+checksum = "sha256:8f8a1d95cadc705fdbd950a72aee95e5a59f90a41dcd17e300f95c8becc6121b"
+url = "https://github.com/BarredEwe/Prefire/releases/download/5.7.0/prefire.tar.gz"
+url_api = "https://api.github.com/repos/BarredEwe/Prefire/releases/assets/471183079"
+
+[tools."github:BarredEwe/Prefire"."platforms.linux-x64-musl"]
+checksum = "sha256:8f8a1d95cadc705fdbd950a72aee95e5a59f90a41dcd17e300f95c8becc6121b"
+url = "https://github.com/BarredEwe/Prefire/releases/download/5.7.0/prefire.tar.gz"
+url_api = "https://api.github.com/repos/BarredEwe/Prefire/releases/assets/471183079"
+
+[tools."github:BarredEwe/Prefire"."platforms.macos-arm64"]
+checksum = "sha256:8f8a1d95cadc705fdbd950a72aee95e5a59f90a41dcd17e300f95c8becc6121b"
+url = "https://github.com/BarredEwe/Prefire/releases/download/5.7.0/prefire.tar.gz"
+url_api = "https://api.github.com/repos/BarredEwe/Prefire/releases/assets/471183079"
+
+[tools."github:BarredEwe/Prefire"."platforms.macos-x64"]
+checksum = "sha256:8f8a1d95cadc705fdbd950a72aee95e5a59f90a41dcd17e300f95c8becc6121b"
+url = "https://github.com/BarredEwe/Prefire/releases/download/5.7.0/prefire.tar.gz"
+url_api = "https://api.github.com/repos/BarredEwe/Prefire/releases/assets/471183079"
+
+[tools."github:BarredEwe/Prefire"."platforms.windows-x64"]
+checksum = "sha256:8f8a1d95cadc705fdbd950a72aee95e5a59f90a41dcd17e300f95c8becc6121b"
+url = "https://github.com/BarredEwe/Prefire/releases/download/5.7.0/prefire.tar.gz"
+url_api = "https://api.github.com/repos/BarredEwe/Prefire/releases/assets/471183079"
+
 [[tools.hk]]
 version = "1.54.0"
 backend = "aqua:jdx/hk"

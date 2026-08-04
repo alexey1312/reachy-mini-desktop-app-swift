@@ -160,3 +160,33 @@ private final class Atomic: @unchecked Sendable {
         return old
     }
 }
+
+#if DEBUG
+    public extension RobotBrowser {
+        /// A browser with results already in hand and no `NWBrowser` running.
+        ///
+        /// `servicesByType` and `browserStates` are `private(set)`, so this has to live in the
+        /// same file. Denied Local Network permission is otherwise indistinguishable from an
+        /// empty network, which is exactly the state the connection screen has to explain.
+        static func preview(
+            names: [String] = ["reachy-mini-4f2a", "reachy-mini-9c81"],
+            permissionDenied: Bool = false
+        ) -> RobotBrowser {
+            let browser = RobotBrowser()
+            let type = serviceTypes[0]
+            browser.servicesByType = [
+                type: names.map { name in
+                    DiscoveredService(
+                        name: name,
+                        type: type,
+                        endpoint: .service(name: name, type: type, domain: "local.", interface: nil)
+                    )
+                },
+            ]
+            if permissionDenied {
+                browser.browserStates = [type: "waiting(-65570: PolicyDenied)"]
+            }
+            return browser
+        }
+    }
+#endif

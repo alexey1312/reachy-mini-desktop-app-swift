@@ -6,8 +6,9 @@ import SwiftUI
 struct ConnectionScreen: View {
     let session: RobotSession
 
-    @State private var browser = RobotBrowser()
-    @State private var manualInput = KnownRobots.lastAddress.map(\.displayString) ?? ""
+    @State private var browser: RobotBrowser
+    @State private var manualInput: String
+    @Environment(\.reachyPreviewMode) private var previewMode
     @State private var resolving: String?
     @State private var resolvedServiceIDs: Set<String> = []
     @State private var pendingCandidates: [RobotAddress] = []
@@ -19,6 +20,12 @@ struct ConnectionScreen: View {
 
     /// Upstream's `INTERVALS.DISCOVERY_SCAN`.
     private let rescanInterval: Duration = .seconds(10)
+
+    init(session: RobotSession, browser: RobotBrowser = RobotBrowser(), manualInput: String? = nil) {
+        self.session = session
+        _browser = State(initialValue: browser)
+        _manualInput = State(initialValue: manualInput ?? KnownRobots.lastAddress.map(\.displayString) ?? "")
+    }
 
     var body: some View {
         Group {
@@ -62,6 +69,7 @@ struct ConnectionScreen: View {
             }
         }
         .onAppear {
+            guard !previewMode else { return }
             browser.start()
             enqueueInitialCandidates()
             startPeriodicRescan()

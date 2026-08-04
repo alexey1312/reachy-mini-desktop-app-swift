@@ -8,8 +8,21 @@ struct ControllerScreen: View {
     let address: RobotAddress
 
     @State private var client: SetTargetClient?
-    @State private var target = SetTargetClient.Target()
+    @State private var target: SetTargetClient.Target
     @State private var setupError: String?
+    @Environment(\.reachyPreviewMode) private var previewMode
+
+    init(
+        session: RobotSession,
+        address: RobotAddress,
+        target: SetTargetClient.Target = SetTargetClient.Target(),
+        setupError: String? = nil
+    ) {
+        self.session = session
+        self.address = address
+        _target = State(initialValue: target)
+        _setupError = State(initialValue: setupError)
+    }
 
     // Comfortable UI ranges; hardware limits (clamped by the daemon anyway):
     // head pitch/roll ±40°, yaw ±180°, body yaw ±180°
@@ -113,6 +126,7 @@ struct ControllerScreen: View {
     }
 
     private func start() {
+        guard !previewMode else { return }
         do {
             let client = try SetTargetClient(address: address)
             self.client = client

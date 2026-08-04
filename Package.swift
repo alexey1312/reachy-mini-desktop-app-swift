@@ -47,7 +47,11 @@ let package = Package(
         .target(
             name: "ReachyUI",
             dependencies: ["ReachyKit", "ReachyMedia", "ReachyScene"],
-            exclude: ["AGENTS.md", "CLAUDE.md"]
+            // `Previews` sits beside the views it documents but is compiled by the Xcode targets
+            // in `Apps/`, not by this one: `#Preview` is an external macro whose implementation
+            // ships inside Xcode's platform SDKs, so SwiftPM builds on the pinned swift.org
+            // toolchain fail with "plugin for module 'PreviewsMacros' not found".
+            exclude: ["AGENTS.md", "CLAUDE.md", "Previews"]
         ),
         .testTarget(
             name: "ReachyKitTests",

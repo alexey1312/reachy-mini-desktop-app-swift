@@ -6,4 +6,9 @@
 --maxwidth 120
 --wraparguments before-first
 --wrapcollections before-first
---exclude .build,Apps/Derived,Sources/ReachyKit/Generated
+--exclude .build,Apps/Derived,Apps/DerivedData,Apps/ReachyStorybook/Generated,Sources/ReachyKit/Generated
+
+# `@Entry` is an external macro shipped in Xcode's SDKs, not in the pinned swift.org toolchain,
+# so rewriting an EnvironmentKey into it breaks `swift build` with "plugin for module
+# 'SwiftUIMacros' not found" — the same trap as `#Preview`.
+--disable environmentEntry

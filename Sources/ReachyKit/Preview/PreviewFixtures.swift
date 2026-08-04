@@ -1,0 +1,251 @@
+#if DEBUG
+    import Foundation
+
+    /// Daemon double for previews and snapshots. Answers the reads a frozen screen performs and
+    /// leaves everything that would move a robot on the protocol's throwing defaults.
+    public struct PreviewRobotClient: RobotAPIClient {
+        public var identity: RobotIdentity
+        public var status: Components.Schemas.DaemonStatus
+        public var moves: [String]
+        public var speaker: AudioLevel
+        public var microphone: AudioLevel
+        public var wifi: WiFiStatus
+        public var wifiError: String?
+
+        public init(
+            identity: RobotIdentity = .preview,
+            status: Components.Schemas.DaemonStatus = .preview(),
+            moves: [String] = [],
+            speaker: AudioLevel = .previewSpeaker,
+            microphone: AudioLevel = .previewMicrophone,
+            wifi: WiFiStatus = .preview,
+            wifiError: String? = nil
+        ) {
+            self.identity = identity
+            self.status = status
+            self.moves = moves
+            self.speaker = speaker
+            self.microphone = microphone
+            self.wifi = wifi
+            self.wifiError = wifiError
+        }
+
+        public func handshake() async throws -> RobotConnection.Handshake {
+            .init(identity: identity, status: status)
+        }
+
+        public func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
+            status
+        }
+
+        public func wakeUp() async throws -> String {
+            "preview-wake"
+        }
+
+        public func gotoSleep() async throws -> String {
+            "preview-sleep"
+        }
+
+        public func listMoves(dataset _: String) async throws -> [String] {
+            moves
+        }
+
+        public func runningMoveUUIDs() async throws -> Set<String> {
+            []
+        }
+
+        public func volume() async throws -> AudioLevel {
+            speaker
+        }
+
+        public func microphoneVolume() async throws -> AudioLevel {
+            microphone
+        }
+    }
+
+    /// `SettingsScreen` decides whether to draw its network section by testing the client for
+    /// this protocol, so a preview of that section needs a client that conforms — the read
+    /// side answers from the fixture, and everything that would change the robot throws.
+    extension PreviewRobotClient: WiFiConfigClient {
+        public func wifiStatus() async throws -> WiFiStatus {
+            wifi
+        }
+
+        public func lastWiFiError() async throws -> String? {
+            wifiError
+        }
+
+        public func provisioningKey() async throws -> WiFiProvisioningKey {
+            throw ReachyKitError.wirelessFeaturesUnavailable
+        }
+
+        public func scanNetworks() async throws -> [String] {
+            throw ReachyKitError.wirelessFeaturesUnavailable
+        }
+
+        public func connectSealed(_: SealedWiFiCredentials) async throws {
+            throw ReachyKitError.wirelessFeaturesUnavailable
+        }
+
+        public func forget(ssid _: String) async throws {
+            throw ReachyKitError.wirelessFeaturesUnavailable
+        }
+
+        public func forgetAll() async throws {
+            throw ReachyKitError.wirelessFeaturesUnavailable
+        }
+
+        public func resetWiFiError() async throws {
+            throw ReachyKitError.wirelessFeaturesUnavailable
+        }
+    }
+
+    public extension RobotIdentity {
+        static let preview = RobotIdentity(hardwareID: "hw-preview", name: "Reachy Mini", daemonVersion: "1.9.0")
+    }
+
+    public extension AudioLevel {
+        static let previewSpeaker = AudioLevel(percent: 65, platform: "pulseaudio", device: "Built-in Speaker")
+        static let previewMicrophone = AudioLevel(percent: 40, platform: "pulseaudio", device: "Built-in Microphone")
+    }
+
+    public extension WiFiStatus {
+        static let preview = WiFiStatus(mode: .wlan, connected: "Home", known: ["Home", "Cafe", "Hotspot"])
+    }
+
+    public extension BLEPeripheralSnapshot {
+        /// Fixed ids, not `UUID()`: they key the `ForEach` in the scan list, and a fresh one per
+        /// render is a diff in the snapshot for no reason.
+        static let previewNear = BLEPeripheralSnapshot(id: previewID(1), name: "Reachy Mini", rssi: -41)
+        static let previewFar = BLEPeripheralSnapshot(id: previewID(2), name: "Reachy Mini", rssi: -78)
+
+        private static func previewID(_ n: Int) -> UUID {
+            UUID(uuidString: "00000000-0000-0000-0000-00000000000\(n)") ?? UUID()
+        }
+    }
+
+    public extension Components.Schemas.DaemonStatus {
+        /// Built by decoding JSON rather than through the generated memberwise initialiser: the
+        /// `backend_status` payload is a `oneOf` whose Swift shape changes whenever the spec is
+        /// refreshed, while the daemon's own wire format is the stable thing to pin a fixture to.
+        static func preview(
+            state: Components.Schemas.DaemonState = .running,
+            motorMode: Components.Schemas.MotorControlMode = .enabled,
+            error: String? = nil,
+            wirelessVersion: Bool = true,
+            simulationEnabled: Bool = false
+        ) -> Components.Schemas.DaemonStatus {
+            let backend = state == .running
+                ? """
+                {"ready": true, "motor_control_mode": "\(motorMode.rawValue)",
+                 "last_alive": null, "control_loop_stats": {}}
+                """
+                : "null"
+            let errorField = error.map { "\"error\": \"\($0)\"," } ?? ""
+            let json = """
+            {"robot_name": "Reachy Mini", "state": "\(state.rawValue)",
+             "wireless_version": \(wirelessVersion), "desktop_app_daemon": false,
+             "simulation_enabled": \(simulationEnabled), "mockup_sim_enabled": false,
+             \(errorField)
+             "backend_status": \(backend)}
+            """
+            // swiftlint:disable:next force_try
+            return try! JSONDecoder().decode(Components.Schemas.DaemonStatus.self, from: Data(json.utf8))
+        }
+    }
+
+    public extension RobotSession.MovePlayback {
+        static func preview(
+            move: String,
+            dataset: String = "pollen-robotics/reachy-mini-dances-library",
+            uuid: String = "preview-playback"
+        ) -> RobotSession.MovePlayback {
+            .init(dataset: dataset, move: move, uuid: uuid)
+        }
+    }
+
+    public extension RobotSession {
+        /// A session parked in one state, with no polling task and no path monitor.
+        ///
+        /// Previews must be final on their first frame — Prefire captures synchronously, and the
+        /// delay it offers comes from a module ReachyUI cannot import without breaking the macOS
+        /// build. So nothing here connects; the phase is simply assigned.
+        static func preview(
+            phase: ConnectionPhase = .connected(.preview),
+            status: Components.Schemas.DaemonStatus? = .preview(),
+            address: RobotAddress? = RobotAddress(host: "192.168.1.42"),
+            error: String? = nil,
+            powerTransition: PowerTransition? = nil,
+            compatibilityWarning: String? = nil,
+            currentMove: MovePlayback? = nil,
+            isStoppingMove: Bool = false,
+            automaticConnectionAllowed: Bool = true,
+            client: PreviewRobotClient = PreviewRobotClient()
+        ) -> RobotSession {
+            let session = RobotSession { _ in client }
+            session.phase = phase
+            session.lastStatus = status
+            session.address = address
+            session.lastError = error
+            session.powerTransition = powerTransition
+            session.compatibilityWarning = compatibilityWarning
+            session.currentMove = currentMove
+            session.isStoppingMove = isStoppingMove
+            session.automaticConnectionAllowed = automaticConnectionAllowed
+            return session
+        }
+    }
+
+    /// A radio that is switched on and never hears anything. `FakeBLETransport` replays the
+    /// GATT exchange to drive a protocol test; this one exists so a `BLELink` can be built
+    /// at all, and every state a screen renders is set on the link directly.
+    ///
+    /// The two write lengths are the pair `OnboardingJoinStep` prints, at the values a
+    /// current iPhone reports.
+    public final class PreviewBLETransport: BLETransport {
+        public let availability: BLEAvailability
+        public let discovered: [BLEPeripheralSnapshot]
+        public let maximumWriteLength: Int
+        public let attributeWriteLength: Int
+
+        public init(
+            availability: BLEAvailability = .ready,
+            discovered: [BLEPeripheralSnapshot] = [],
+            maximumWriteLength: Int = 182,
+            attributeWriteLength: Int = 512
+        ) {
+            self.availability = availability
+            self.discovered = discovered
+            self.maximumWriteLength = maximumWriteLength
+            self.attributeWriteLength = attributeWriteLength
+        }
+
+        public func startScan() throws {}
+
+        public func stopScan() {}
+
+        public func connect(_: UUID) async throws {}
+
+        public func disconnect() {}
+
+        public func setNotify(_: Bool, for _: BLECharacteristicID) async throws {}
+
+        public func write(_: Data, to _: BLECharacteristicID) async throws {
+            throw BLETransportError.notConnected
+        }
+
+        public func read(_ characteristic: BLECharacteristicID) async throws -> Data {
+            throw BLETransportError.characteristicMissing(characteristic)
+        }
+
+        /// Finished rather than open: `BLELink.observe()` iterates this on `init`, and a
+        /// stream that never ends would leave a task alive behind every preview card.
+        public func notifications() -> AsyncStream<Data> {
+            AsyncStream { $0.finish() }
+        }
+
+        public func events() -> AsyncStream<BLETransportEvent> {
+            AsyncStream { $0.finish() }
+        }
+    }
+#endif

@@ -199,3 +199,30 @@ final class BLEConsoleModel {
         }
     }
 }
+
+#if DEBUG
+    extension BLEConsoleModel {
+        /// A console already linked to a robot. No journal is polled: `startJournal` is
+        /// private and only reached through `connect`, which a preview never calls.
+        static func preview(
+            stage: Stage,
+            link: BLELink = .preview(),
+            scripts: [BLERecoveryScript] = BLERecoveryScript.parse(
+                "RESTART_DAEMON, HOTSPOT, WIFI_RESET, SOFTWARE_RESET"
+            ),
+            errorMessage: String? = nil,
+            journalFailure: String? = nil,
+            log lines: [String] = []
+        ) -> BLEConsoleModel {
+            let model = BLEConsoleModel(link: { link })
+            model.stage = stage
+            model.scripts = scripts
+            model.errorMessage = errorMessage
+            model.journalFailure = journalFailure
+            for line in lines {
+                model.log.ingest(line)
+            }
+            return model
+        }
+    }
+#endif

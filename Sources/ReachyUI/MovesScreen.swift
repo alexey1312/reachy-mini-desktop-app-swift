@@ -5,7 +5,13 @@ import SwiftUI
 struct MovesScreen: View {
     let session: RobotSession
 
-    @State private var model = MovesModel()
+    @State private var model: MovesModel
+    @Environment(\.reachyPreviewMode) private var previewMode
+
+    init(session: RobotSession, model: MovesModel = MovesModel()) {
+        self.session = session
+        _model = State(initialValue: model)
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -91,9 +97,11 @@ struct MovesScreen: View {
             .disabled(model.loading)
         }
         .task(id: model.selection) {
+            guard !previewMode else { return }
             await model.load(session: session)
         }
         .onDisappear {
+            guard !previewMode else { return }
             Task { await session.stopMove() }
         }
     }

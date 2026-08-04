@@ -56,3 +56,27 @@ final class MovesModel {
         move.replacingOccurrences(of: "_", with: " ")
     }
 }
+
+#if DEBUG
+    extension MovesModel {
+        /// Lives here rather than in `Previews/`: `moves` and `loading` are `private(set)`, which
+        /// `@testable` does not reach from another module.
+        static func preview(
+            moves: [String] = MovesModel.previewMoves,
+            selection: Int = 0,
+            loading: Bool = false,
+            startingMove: Bool = false
+        ) -> MovesModel {
+            let model = MovesModel()
+            model.moves = moves
+            model.selection = selection
+            model.loading = loading
+            model.startingMove = startingMove
+            return model
+        }
+
+        static let previewMoves = [
+            "happy_dance", "head_shake", "look_around", "nod_yes", "sad_slump", "wave_hello",
+        ]
+    }
+#endif

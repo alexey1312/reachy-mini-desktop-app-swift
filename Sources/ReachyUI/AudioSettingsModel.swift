@@ -88,3 +88,29 @@ final class AudioSettingsModel {
         (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
 }
+
+#if DEBUG
+    extension AudioSettingsModel {
+        /// Already loaded, so the view's `.task` returns immediately and the first rendered frame
+        /// is the final one. Lives here rather than in `Previews/` because it writes members that
+        /// are private to this file.
+        static func preview(
+            speaker: AudioLevel? = .previewSpeaker,
+            microphone: AudioLevel? = .previewMicrophone,
+            isLoading: Bool = false,
+            isBusy: Bool = false,
+            errorMessage: String? = nil
+        ) -> AudioSettingsModel {
+            let model = AudioSettingsModel()
+            model.speaker = speaker
+            model.microphone = microphone
+            model.speakerPercent = Double(speaker?.percent ?? 0)
+            model.microphonePercent = Double(microphone?.percent ?? 0)
+            model.isLoading = isLoading
+            model.isBusy = isBusy
+            model.errorMessage = errorMessage
+            model.hasLoaded = true
+            return model
+        }
+    }
+#endif

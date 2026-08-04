@@ -10,6 +10,14 @@ struct SystemUpdateCard: View {
     @AppStorage("update.preRelease") private var preRelease = false
     @State private var showsLog = false
 
+    /// An injected model is also what keeps the `.task` below inert — it only builds one
+    /// when there is none, so a preview never reaches the network.
+    @MainActor
+    init(session: RobotSession, model: SystemUpdateModel? = nil) {
+        self.session = session
+        _model = State(initialValue: model)
+    }
+
     var body: some View {
         Section {
             statusRow

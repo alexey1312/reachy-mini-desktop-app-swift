@@ -4,8 +4,14 @@ import SwiftUI
 /// The way back in when the network is not an option: a Bluetooth link to the robot, its
 /// journal, and the scripts that undo whatever took it off the air.
 struct BLEConsoleScreen: View {
-    @State private var model = BLEConsoleModel()
+    @State private var model: BLEConsoleModel
     @State private var showsCommands = false
+    @Environment(\.reachyPreviewMode) private var previewMode
+
+    @MainActor
+    init(model: BLEConsoleModel? = nil) {
+        _model = State(initialValue: model ?? BLEConsoleModel())
+    }
 
     var body: some View {
         Group {
@@ -17,8 +23,14 @@ struct BLEConsoleScreen: View {
             }
         }
         .navigationTitle("Recovery")
-        .onAppear { model.startScan() }
-        .onDisappear { model.stop() }
+        .onAppear {
+            guard !previewMode else { return }
+            model.startScan()
+        }
+        .onDisappear {
+            guard !previewMode else { return }
+            model.stop()
+        }
     }
 
     // MARK: - Getting a link

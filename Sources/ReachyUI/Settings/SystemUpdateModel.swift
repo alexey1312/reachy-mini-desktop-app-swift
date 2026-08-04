@@ -122,3 +122,26 @@ final class SystemUpdateModel {
         (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }
+
+#if DEBUG
+    extension SystemUpdateModel {
+        /// One update parked mid-flight. `events` and `reconnect` are stubbed out rather than
+        /// left at their defaults: the real ones open a WebSocket and wait out a reboot.
+        static func preview(
+            state: State,
+            session: RobotSession? = nil,
+            log lines: [String] = []
+        ) -> SystemUpdateModel {
+            let model = SystemUpdateModel(
+                session: session ?? .preview(),
+                events: { _ in AsyncStream { $0.finish() } },
+                reconnect: { nil }
+            )
+            model.state = state
+            for line in lines {
+                model.log.ingest(line)
+            }
+            return model
+        }
+    }
+#endif

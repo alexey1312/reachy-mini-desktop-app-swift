@@ -17,9 +17,30 @@ struct BLESoftwareResetScreen: View {
     @State private var confirming = false
     @State private var dispatched = false
     @State private var stillAnswering: Bool?
+    @Environment(\.reachyPreviewMode) private var previewMode
 
     /// Long enough to interrupt a run of taps, short enough not to become its own ritual.
     private static let arming = 5
+
+    /// The gates are `@State` rather than model state, so a preview of a half-filled or
+    /// already-dispatched screen has to be handed them.
+    init(
+        model: BLEConsoleModel,
+        script: BLERecoveryScript,
+        acknowledged: Bool = false,
+        typedID: String = "",
+        code: String = "",
+        dispatched: Bool = false,
+        stillAnswering: Bool? = nil
+    ) {
+        self.model = model
+        self.script = script
+        _acknowledged = State(initialValue: acknowledged)
+        _typedID = State(initialValue: typedID)
+        _code = State(initialValue: code)
+        _dispatched = State(initialValue: dispatched)
+        _stillAnswering = State(initialValue: stillAnswering)
+    }
 
     var body: some View {
         Form {
@@ -130,6 +151,7 @@ struct BLESoftwareResetScreen: View {
                 .foregroundStyle(.secondary)
         }
         .task {
+            guard !previewMode else { return }
             while !Task.isCancelled {
                 stillAnswering = await model.isAnswering()
                 try? await Task.sleep(for: .seconds(5))

@@ -9,7 +9,18 @@ struct OnboardingFlow: View {
     var onFinish: (OnboardingOutcome) -> Void
     var onCancel: () -> Void
 
-    @State private var model = OnboardingModel()
+    @State private var model: OnboardingModel
+
+    @MainActor
+    init(
+        model: OnboardingModel? = nil,
+        onFinish: @escaping (OnboardingOutcome) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.onFinish = onFinish
+        self.onCancel = onCancel
+        _model = State(initialValue: model ?? OnboardingModel())
+    }
 
     var body: some View {
         NavigationStack {

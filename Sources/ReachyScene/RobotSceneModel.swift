@@ -157,3 +157,21 @@ public final class RobotSceneModel {
         (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
 }
+
+#if DEBUG
+    public extension RobotSceneModel {
+        /// A model parked in one phase, with no geometry download and no state stream.
+        ///
+        /// `phase` and `lastFrameAt` are `private(set)`, so this has to live in the same file.
+        /// Constructing the model is inert on its own — `start()` is what reaches the robot.
+        static func preview(_ phase: Phase, lastFrameAt: Date? = nil) -> RobotSceneModel {
+            let model = RobotSceneModel(
+                address: RobotAddress(host: "192.168.1.42"),
+                client: PreviewRobotClient()
+            )
+            model.phase = phase
+            model.lastFrameAt = lastFrameAt
+            return model
+        }
+    }
+#endif

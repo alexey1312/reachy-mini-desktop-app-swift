@@ -5,9 +5,16 @@ import SwiftUI
 struct AudioSettingsSection: View {
     let session: RobotSession
     /// Dropped when the host already says "Audio" — a sheet titles itself.
-    var header: String? = "Audio"
+    let header: String?
 
-    @State private var model = AudioSettingsModel()
+    @State private var model: AudioSettingsModel
+    @Environment(\.reachyPreviewMode) private var previewMode
+
+    init(session: RobotSession, header: String? = "Audio", model: AudioSettingsModel = AudioSettingsModel()) {
+        self.session = session
+        self.header = header
+        _model = State(initialValue: model)
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -46,7 +53,10 @@ struct AudioSettingsSection: View {
                 Text(header)
             }
         }
-        .task { await model.load(session: session) }
+        .task {
+            guard !previewMode else { return }
+            await model.load(session: session)
+        }
     }
 
     private func level(

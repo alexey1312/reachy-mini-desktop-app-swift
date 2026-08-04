@@ -115,3 +115,39 @@ final class LogConsoleModel {
         visible = entries.filter(matches)
     }
 }
+
+#if DEBUG
+    extension LogConsoleModel {
+        /// Pre-filled console. Lives here rather than in `Previews/` because `ingest` is the only
+        /// public way in and `nextID` is private to this file.
+        static func preview(
+            lines: [String] = LogConsoleModel.previewLines,
+            paused: Bool = false,
+            pendingLines: [String] = [],
+            query: String = "",
+            minimumLevel: LogLevel = .debug
+        ) -> LogConsoleModel {
+            let model = LogConsoleModel()
+            model.ingest(lines.joined(separator: "\n"))
+            model.minimumLevel = minimumLevel
+            model.query = query
+            if paused {
+                model.paused = true
+                if !pendingLines.isEmpty {
+                    model.ingest(pendingLines.joined(separator: "\n"))
+                }
+            }
+            return model
+        }
+
+        static let previewLines = [
+            "2026-08-04T09:12:01 DEBUG reachy_mini.daemon: state stream client connected",
+            "2026-08-04T09:12:01 INFO reachy_mini.daemon: backend ready in 2.41 s",
+            "2026-08-04T09:12:03 INFO reachy_mini.motors: motor mode set to enabled",
+            "2026-08-04T09:12:04 INFO reachy_mini.moves: playing dance 'hello'",
+            "2026-08-04T09:12:07 WARNING reachy_mini.audio: speaker level clamped to 100",
+            "2026-08-04T09:12:09 ERROR reachy_mini.camera: webrtcsink lost its producer",
+            "2026-08-04T09:12:10 INFO reachy_mini.camera: renegotiating",
+        ]
+    }
+#endif
