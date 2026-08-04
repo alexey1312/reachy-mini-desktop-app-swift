@@ -29,9 +29,10 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 
 ```bash
 ./bin/mise run build          # Debug build (piped through xcsift)
+./bin/mise run build:app      # Build the ReachySpike app target (generates first)
 ./bin/mise run test           # All tests, parallel
 ./bin/mise run test:filter T  # Filter tests
-./bin/mise run lint           # SwiftLint --strict + actionlint
+./bin/mise run lint           # SwiftLint --strict + actionlint + hk lockstep
 ./bin/mise run format         # Format all (hk fix --all)
 ./bin/mise run format-check   # CI formatting check
 ./bin/mise run project        # tuist generate (Apps/)
@@ -39,8 +40,8 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 ./bin/mise run update-spec    # Refresh + normalize daemon OpenAPI spec
 ```
 
-`build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Check app-target code with
-`xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike -destination '...' -skipPackagePluginValidation build`.
+`build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Use `build:app` for that; CI runs it as a
+separate job, so app-target breakage no longer reaches `main` unnoticed.
 `test:filter` matches type names (`RobotSessionAudioTests`), not `@Suite` display names.
 `mise run lint` pipes through xcsift, which can truncate and report `status: incomplete` while hiding violations —
 rerun `./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike` to see them.

@@ -46,6 +46,22 @@ run = "swift build 2>&1 | xcsift"
 description = "Build the Swift package (release)"
 run = "swift build --configuration release 2>&1 | xcsift"
 
+# `build` and `test` are SwiftPM only — Apps/ReachySpike is an Xcode target and
+# nothing else compiles it. Signing is off: the runner has no team, and the
+# personal one lives in CLAUDE.local.md.
+[tasks."build:app"]
+description = "Build the ReachySpike app target (macOS)"
+depends = ["project"]
+run = '''
+set -o pipefail
+xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike \
+  -destination 'platform=macOS' -configuration Debug \
+  -derivedDataPath Apps/DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  -skipPackagePluginValidation -skipMacroValidation \
+  build 2>&1 | xcsift
+'''
+
 [tasks.test]
 description = "Run all tests (parallel)"
 run = """
@@ -63,12 +79,18 @@ description = "Integration tests against a running sim daemon (start with: mise 
 run = "REACHY_SIM_HOST=127.0.0.1 swift test --parallel --filter SimulatorIntegrationTests 2>&1 | xcsift"
 
 [tasks.lint]
-description = "Run SwiftLint and actionlint"
-run = """
+description = "Run SwiftLint, actionlint, and the hk version lockstep check"
+run = '''
 set -o pipefail
+PINNED="$(sed -nE 's/^hk = "([0-9.]+)".*/\1/p' mise.toml)"
+DRIFT="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' hk.pkl | sort -u | grep -vFx "$PINNED" || true)"
+if [ -n "$DRIFT" ]; then
+  echo "hk.pkl references $DRIFT but mise.toml pins $PINNED — bump both together." >&2
+  exit 1
+fi
 swiftlint lint --strict Sources Tests Apps/ReachySpike 2>&1 | xcsift
 actionlint
-"""
+'''
 
 [tasks.format]
 description = "Format all files (Swift + Markdown)"

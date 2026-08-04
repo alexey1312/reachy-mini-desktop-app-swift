@@ -71,3 +71,35 @@ jobs:
       - name: Test
         # Build tests separately to avoid hangs from concurrent build + test execution
         run: swift test --skip-build --parallel 2>&1 | xcsift
+
+  # `swift build` never reaches Apps/ReachySpike — it is an Xcode target, not an SPM
+  # one, so nothing but SwiftLint ever looked at it. This job is the only thing that
+  # compiles the app shell and the Tuist manifest that generates it.
+  app-build:
+    name: App Build (ReachySpike, macOS)
+    runs-on: macos-15
+    needs: lint
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: "/Applications/Xcode_26.2.app/Contents/Developer"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Swift 6.3 toolchain
+        run: |
+          curl -fLo swift-6.3.pkg "https://download.swift.org/swift-6.3-release/xcode/swift-6.3-RELEASE/swift-6.3-RELEASE-osx.pkg"
+          sudo installer -pkg swift-6.3.pkg -target /
+          TOOLCHAINS=$(plutil -extract CFBundleIdentifier raw /Library/Developer/Toolchains/swift-6.3-RELEASE.xctoolchain/Info.plist)
+          echo "TOOLCHAINS=$TOOLCHAINS" >> "$GITHUB_ENV"
+
+      - uses: jdx/mise-action@v4
+        with:
+          experimental: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # `build:app` generates the project first (depends = ["project"]). No
+      # `tuist auth login`: Apps/Tuist.swift sets optionalAuthentication, so
+      # generation works without a tuist.dev session. This repo is not connected to
+      # the server project, so there is no binary cache to pull either.
+      - name: Build ReachySpike
+        run: mise run build:app
