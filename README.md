@@ -25,9 +25,22 @@ Haptics, Siri and App Intents, Live Activities, an Apple Watch remote, and a pat
 | Layer         | What                                                                                                                               |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `ReachyKit`   | SPM package: generated OpenAPI client, WebSocket state stream, discovery, URDF and kinematics. Swift 6, strict concurrency, no UI. |
+| `ReachyMedia` | WebRTC camera and two-way audio session, plus its video view.                                                                      |
 | `ReachyScene` | RealityKit scene built from the robot's own URDF and meshes.                                                                       |
 | `ReachyUI`    | Shared SwiftUI views.                                                                                                              |
 | `Apps/`       | Thin per-platform shells, generated with Tuist.                                                                                    |
+
+## Using the packages
+
+All four layers are public SPM products (`ReachyKit`, `ReachyMedia`, `ReachyScene`, `ReachyUI`), so another app can
+depend on them directly. `ReachyKit` is the only one that pulls in no UI framework.
+
+```swift
+.package(url: "https://github.com/alexey1312/reachy-mini-swift.git", branch: "main"),
+```
+
+There are no tagged releases yet, so pin a revision if you need a stable API. Minimum platforms are macOS 15 and
+iOS 18 — `RealityView` in the 3D viewer sets that floor.
 
 ## Getting started
 
@@ -71,5 +84,6 @@ only reports them under the Placo kinematics engine), and BLE Wi-Fi provisioning
 
 ## License
 
-[Apache 2.0](LICENSE). See [NOTICE](NOTICE) for attribution. "Reachy Mini" is a product name of Pollen Robotics, used
-here solely to describe compatibility.
+[Apache 2.0](LICENSE). [NOTICE](NOTICE) carries the attribution, the non-affiliation statement and the third-party
+notices for the bundled dependencies (Apple's swift-openapi packages, Apache 2.0; Google WebRTC, BSD 3-Clause).
+"Reachy Mini" is a product name of Pollen Robotics, used here solely to describe compatibility.

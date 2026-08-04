@@ -12,3 +12,58 @@ Apache-2.0 licensed repositories pollen-robotics/reachy-mini-desktop-app
 and pollen-robotics/reachy_mini, which serve as the behavioral
 specification for this client. No source code from those repositories is
 included in this project.
+
+
+-------------------------------------------------------------------------
+THIRD-PARTY COMPONENTS
+-------------------------------------------------------------------------
+
+This product depends on the components below. Builds of the app
+redistribute them in binary form.
+
+swift-openapi-generator, swift-openapi-runtime, swift-openapi-urlsession
+https://github.com/apple/swift-openapi-generator
+https://github.com/apple/swift-openapi-runtime
+https://github.com/apple/swift-openapi-urlsession
+
+    The SwiftOpenAPIGenerator Project
+    Copyright 2023 The SwiftOpenAPIGenerator Project
+
+    Licensed under the Apache License, Version 2.0. A copy of the License
+    is in this project's LICENSE file and at
+    https://www.apache.org/licenses/LICENSE-2.0
+
+
+WebRTC (binary distribution by https://github.com/stasel/WebRTC)
+
+    Google WebRTC
+    Copyright (c) 2011, The WebRTC project authors. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in
+       the documentation and/or other materials provided with the
+       distribution.
+
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+    INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+    BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+    OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+    AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
+    WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
