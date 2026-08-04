@@ -40,11 +40,17 @@ python = "3.12" # for sim-daemon venv: mujoco ships no wheels for newer pythons
 
 [tasks.build]
 description = "Build the Swift package (debug)"
-run = "swift build 2>&1 | xcsift"
+run = """
+set -o pipefail
+swift build 2>&1 | xcsift
+"""
 
 [tasks."build:release"]
 description = "Build the Swift package (release)"
-run = "swift build --configuration release 2>&1 | xcsift"
+run = """
+set -o pipefail
+swift build --configuration release 2>&1 | xcsift
+"""
 
 # `build` and `test` are SwiftPM only — Apps/ReachySpike is an Xcode target and
 # nothing else compiles it. Signing is off: the runner has no team, and the
@@ -64,6 +70,7 @@ xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike \
 
 [tasks.test]
 description = "Run all tests (parallel)"
+# --skip-build against a separate build step: building and testing at once hangs.
 run = """
 set -o pipefail
 swift build --build-tests 2>&1 | xcsift
@@ -72,11 +79,17 @@ swift test --skip-build --parallel 2>&1 | xcsift
 
 [tasks."test:filter"]
 description = "Run tests with filter (usage: mise run test:filter ReachyKitTests)"
-run = "swift test --parallel --filter {{arg(name='filter')}} 2>&1 | xcsift"
+run = """
+set -o pipefail
+swift test --parallel --filter {{arg(name='filter')}} 2>&1 | xcsift
+"""
 
 [tasks."test:sim"]
 description = "Integration tests against a running sim daemon (start with: mise run sim-daemon)"
-run = "REACHY_SIM_HOST=127.0.0.1 swift test --parallel --filter SimulatorIntegrationTests 2>&1 | xcsift"
+run = """
+set -o pipefail
+REACHY_SIM_HOST=127.0.0.1 swift test --parallel --filter SimulatorIntegrationTests 2>&1 | xcsift
+"""
 
 [tasks.lint]
 description = "Run SwiftLint, actionlint, and the hk version lockstep check"
@@ -109,12 +122,15 @@ run = "echo 'Git hooks:' && git config core.hooksPath && ls .githooks/"
 
 [tasks.project]
 description = "Generate Xcode project for app targets (Apps/)"
-# Explicit path: /usr/local/bin/tuist (tuistenv) can shadow mise's pinned tuist
+# Explicit path: /usr/local/bin/tuist (tuistenv) can shadow mise's pinned tuist.
+# TOOLCHAINS is cleared because tuist 4.203.1 reads only Xcode's version banner
+# ("swift-driver version: … Apple Swift version …") and aborts on a swift.org
+# toolchain's ("Apple Swift version 6.3 (swift-6.3-RELEASE)").
 run = """
 #!/bin/bash
 set -euo pipefail
 TUIST="$(./bin/mise where tuist)/tuist"
-cd Apps && exec "$TUIST" generate --no-open
+cd Apps && exec env -u TOOLCHAINS "$TUIST" generate --no-open
 """
 
 [tasks."inspect:bundle"]
