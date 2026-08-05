@@ -35,6 +35,17 @@ final class ViewportModel {
         }
     }
 
+    /// Where the live views come from — and, for the camera, who owns them.
+    enum Source {
+        /// The daemon on this network: a 3D scene built from its URDF, and a
+        /// camera session of our own.
+        case lan(RobotAddress)
+        /// A relay session. The camera is the peer connection that is *already up*
+        /// and carrying the robot's commands, so this model borrows it and must
+        /// never stop it. There is no HTTP API here, so there is no scene.
+        case remote(CameraSession)
+    }
+
     private(set) var content: Content = .scene
     private(set) var sceneModel: RobotSceneModel?
     private(set) var cameraSession: CameraSession?
@@ -42,30 +53,65 @@ final class ViewportModel {
     /// failure to reach the robot.
     private(set) var setupError: String?
 
-    private(set) var address: RobotAddress?
+    private(set) var source: Source?
+    /// Whether `cameraSession` is ours to stop. A borrowed one is the same peer
+    /// connection the remote control channel rides on: ending it here would take
+    /// the robot's commands down with the video, and the viewport scrolling off
+    /// screen is not a reason to end a session.
+    private var ownsCamera = false
     private var isActive = false
 
-    /// Re-attaching to the same address is a no-op, so a SwiftUI redraw cannot
-    /// restart the download. A different address tears everything down first —
-    /// one robot can appear at several addresses, but the geometry is per robot.
-    func attach(to address: RobotAddress) {
-        guard self.address != address else { return }
+    var address: RobotAddress? {
+        if case let .lan(address) = source {
+            address
+        } else {
+            nil
+        }
+    }
+
+    /// Only the LAN path has a 3D model at all, so the switcher is not what
+    /// decides whether to offer one — the source is.
+    var offersScene: Bool {
+        if case .lan = source {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Why there is no 3D model, where there is a reason rather than a wait.
+    var sceneUnavailableReason: String? {
+        guard case .remote = source else { return nil }
+        return "The robot's 3D description is served over its own network, "
+            + "which a relay session cannot reach."
+    }
+
+    /// Re-attaching to the same source is a no-op, so a SwiftUI redraw cannot
+    /// restart the download. A different one tears everything down first — one
+    /// robot can appear at several addresses, but the geometry is per robot.
+    func attach(to source: Source) {
+        guard self.source != source else { return }
         detach()
-        self.address = address
+        self.source = source
+        // Nothing to switch to over the relay, and landing on an empty 3D tab
+        // would be a worse first frame than the video that is already arriving.
+        if case .remote = source {
+            content = .camera
+        }
         activate()
     }
 
     func detach() {
         sceneModel?.stop()
         sceneModel = nil
-        cameraSession?.stop()
-        cameraSession = nil
-        address = nil
+        stopCamera()
+        source = nil
         setupError = nil
     }
 
     func setContent(_ next: Content) {
         guard content != next else { return }
+        guard next != .scene || offersScene else { return }
         content = next
         activate()
     }
@@ -84,17 +130,26 @@ final class ViewportModel {
 
     /// Starts whichever engine `content` names and shuts the other one down.
     private func activate() {
-        guard isActive, let address else { return }
+        guard isActive, let source else { return }
         setupError = nil
-        switch content {
-        case .scene:
+        switch (content, source) {
+        case let (.scene, .lan(address)):
             stopCamera()
             startScene(at: address)
-        case .camera:
+        case (.scene, .remote):
+            // Nothing to start. `sceneUnavailableReason` is what the view renders,
+            // rather than a spinner that would never resolve.
+            break
+        case let (.camera, .lan(address)):
             // Paused rather than stopped: the meshes stay in memory, so coming
             // back to 3D does not re-download the robot's description.
             sceneModel?.pauseStream()
             startCamera(at: address)
+        case let (.camera, .remote(session)):
+            // Already running — `RemoteRobotLink` started it, and it is the same
+            // connection the commands are on. Adopted, never started or stopped.
+            cameraSession = session
+            ownsCamera = false
         }
     }
 
@@ -123,14 +178,33 @@ final class ViewportModel {
             return
         }
         cameraSession = session
+        ownsCamera = true
         session.start()
     }
 
-    /// WebRTC has no cheap pause — a session that is not on screen is dropped and
-    /// renegotiated from scratch next time.
+    /// WebRTC has no cheap pause — a session we built is dropped and renegotiated
+    /// from scratch next time. A borrowed one is only let go of: over the relay it
+    /// is the connection the robot is being controlled through, so stopping it to
+    /// save battery would disconnect the robot.
     private func stopCamera() {
-        cameraSession?.stop()
+        if ownsCamera {
+            cameraSession?.stop()
+        }
         cameraSession = nil
+        ownsCamera = false
+    }
+}
+
+extension ViewportModel.Source: Equatable {
+    /// Two borrowed cameras are the same source only when they are the same
+    /// object — `CameraSession` is a reference type with no value identity, and
+    /// `.task(id:)` in the root view compares these to decide whether to re-attach.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case let (.lan(lhs), .lan(rhs)): lhs == rhs
+        case let (.remote(lhs), .remote(rhs)): lhs === rhs
+        default: false
+        }
     }
 }
 
@@ -143,14 +217,17 @@ final class ViewportModel {
             sceneModel: RobotSceneModel? = nil,
             cameraSession: CameraSession? = nil,
             setupError: String? = nil,
-            address: RobotAddress? = RobotAddress(host: "192.168.1.42")
+            address: RobotAddress? = RobotAddress(host: "192.168.1.42"),
+            // Overrides `address` where the transport is the point. Defaulted from
+            // it so every preview written before the relay existed is unchanged.
+            source: Source? = nil
         ) -> ViewportModel {
             let model = ViewportModel()
             model.content = content
             model.sceneModel = sceneModel
             model.cameraSession = cameraSession
             model.setupError = setupError
-            model.address = address
+            model.source = source ?? address.map(Source.lan)
             return model
         }
     }

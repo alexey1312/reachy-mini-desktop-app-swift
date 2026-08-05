@@ -63,6 +63,80 @@
         }
     }
 
+    /// `RobotScreen` decides whether to offer the joystick and the log console by testing the
+    /// client for these, exactly as it decides everything else — so a preview of a LAN robot
+    /// needs a client that speaks them. Both are inert: a preview must never open a socket.
+    extension PreviewRobotClient: TeleopClient, DaemonLogClient {
+        public func makeTeleop() throws -> any TeleopChannel {
+            PreviewTeleopChannel()
+        }
+
+        public func daemonLogLines() throws -> AsyncStream<String> {
+            AsyncStream { $0.finish() }
+        }
+    }
+
+    /// Accepts targets and does nothing with them.
+    public struct PreviewTeleopChannel: TeleopChannel {
+        public init() {}
+
+        public func connect() async {}
+
+        public func send(_: TeleopTarget) async {}
+
+        public func disconnect() async {}
+    }
+
+    /// What a relay session actually is, as a preview fixture: the commands and the camera, and
+    /// none of the HTTP surface. Its conformances are `RemoteRobotConnection`'s — no apps, no
+    /// Wi-Fi, no update, no robot Hugging Face account — so a preview of a remote robot closes
+    /// the same screens the real one does.
+    public struct PreviewRemoteRobotClient: RobotAPIClient, TeleopClient, DaemonLogClient {
+        public var identity: RobotIdentity
+        public var status: Components.Schemas.DaemonStatus
+        public var logLines: [String]
+
+        public init(
+            identity: RobotIdentity = .preview,
+            status: Components.Schemas.DaemonStatus = .preview(wirelessVersion: false),
+            logLines: [String] = []
+        ) {
+            self.identity = identity
+            self.status = status
+            self.logLines = logLines
+        }
+
+        public func handshake() async throws -> RobotConnection.Handshake {
+            .init(identity: identity, status: status, supportsRename: false)
+        }
+
+        public func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
+            status
+        }
+
+        public func wakeUp() async throws -> String {
+            ""
+        }
+
+        public func gotoSleep() async throws -> String {
+            ""
+        }
+
+        public func makeTeleop() throws -> any TeleopChannel {
+            PreviewTeleopChannel()
+        }
+
+        public func daemonLogLines() throws -> AsyncStream<String> {
+            let lines = logLines
+            return AsyncStream { continuation in
+                for line in lines {
+                    continuation.yield(line)
+                }
+                continuation.finish()
+            }
+        }
+    }
+
     /// `SettingsScreen` decides whether to draw its network section by testing the client for
     /// this protocol, so a preview of that section needs a client that conforms — the read
     /// side answers from the fixture, and everything that would change the robot throws.
@@ -196,6 +270,10 @@
             phase: ConnectionPhase = .connected(.preview),
             status: Components.Schemas.DaemonStatus? = .preview(),
             address: RobotAddress? = RobotAddress(host: "192.168.1.42"),
+            // Overrides `address` where the transport is the point. Defaulted from
+            // `address` so every preview written before the relay existed still
+            // parks the session exactly where it did.
+            link: Link? = nil,
             error: String? = nil,
             powerTransition: PowerTransition? = nil,
             compatibilityWarning: String? = nil,
@@ -214,7 +292,7 @@
             session.client = client
             session.phase = phase
             session.lastStatus = status
-            session.address = address
+            session.link = link ?? address.map(RobotSession.Link.lan) ?? .none
             session.lastError = error
             session.powerTransition = powerTransition
             session.compatibilityWarning = compatibilityWarning

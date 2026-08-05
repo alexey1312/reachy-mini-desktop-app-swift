@@ -7,12 +7,27 @@ import Foundation
 /// not link a media framework.
 public protocol RemoteDataChannel: Sendable {
     func send(_ text: String) async throws
+    /// Sends only when a channel is attached right now. Unlike ``send(_:)``, this
+    /// must never wait through a peer replacement: live-control frames are stale
+    /// by the time the next peer arrives.
+    func sendIfOpen(_ text: String) async throws -> Bool
     func messages() -> AsyncStream<String>
     /// Whether a command sent now would go out, rather than wait for a channel the
     /// robot has not opened yet. Deliberately the same question `send` asks itself
     /// before deciding to wait — a caller bounding that wait has to bound the same
     /// thing, or it is timing something other than what is happening.
     var isOpen: Bool { get }
+}
+
+public extension RemoteDataChannel {
+    /// Conservative default for test doubles and transports whose `send` does not
+    /// wait. The WebRTC implementation overrides this so the check and choice not
+    /// to wait are made against the same attached channel.
+    func sendIfOpen(_ text: String) async throws -> Bool {
+        guard isOpen else { return false }
+        try await send(text)
+        return true
+    }
 }
 
 /// A JSON value, for command payloads whose shape the caller decides.
@@ -85,6 +100,10 @@ public actor RemoteControlChannel {
     private var waiting: [String: CheckedContinuation<Data, any Error>] = [:]
     /// Commands already in flight under the same token. Awaited in turn.
     private var queued: [String: [CheckedContinuation<Void, Never>]] = [:]
+    /// Subscribers to unsolicited broadcasts, by the `type` they asked for. Keyed
+    /// within a type so two consumers of the same stream can come and go
+    /// independently.
+    private var listeners: [String: [UUID: AsyncStream<Data>.Continuation]] = [:]
 
     public init(
         channel: any RemoteDataChannel,
@@ -123,15 +142,7 @@ public actor RemoteControlChannel {
         await takeTurn(for: token)
         defer { yieldTurn(for: token) }
 
-        var body = payload
-        body["type"] = .string(command)
-        let encoded = try JSONEncoder().encode(body)
-        guard let text = String(bytes: encoded, encoding: .utf8) else {
-            throw EncodingError.invalidValue(body, .init(
-                codingPath: [],
-                debugDescription: "command payload is not UTF-8"
-            ))
-        }
+        let text = try Self.encode(command, payload: payload)
 
         // A timer that fails the waiter, rather than a task group racing the
         // waiter against a sleep. The group would have to await both children
@@ -152,6 +163,80 @@ public actor RemoteControlChannel {
 
     private func expire(_ token: String) {
         waiting.removeValue(forKey: token)?.resume(throwing: Failure.timedOut)
+    }
+
+    /// Sends a command and does not wait for an answer.
+    ///
+    /// Not an optimisation — for two commands it is the only correct shape.
+    /// `subscribe_logs` is answered with *nothing*: `_start_log_subscription`
+    /// replies only when the transport has no peer id, and otherwise just starts
+    /// the journal task, so `perform` would sit out its whole budget and then
+    /// report a robot that had in fact obeyed. Teleop is the other: at gesture
+    /// rate a reply budget would serialise every frame behind the previous
+    /// answer, because commands of one name take turns here by design.
+    ///
+    /// Anything the robot does send back arrives with no waiter registered and is
+    /// dropped, which is what should happen to an answer nobody asked for.
+    public func send(_ command: String, payload: [String: RemoteValue] = [:]) async throws {
+        startReading()
+        try await channel.send(Self.encode(command, payload: payload))
+    }
+
+    /// Sends a live frame only if the current peer can take it immediately.
+    ///
+    /// A control command may reasonably wait for a replacement peer; a teleop
+    /// target may not. Queuing those at gesture rate makes the robot replay old
+    /// motion after a reconnect, possibly after the controller has disappeared.
+    @discardableResult
+    public func sendIfOpen(
+        _ command: String,
+        payload: [String: RemoteValue] = [:]
+    ) async throws -> Bool {
+        startReading()
+        return try await channel.sendIfOpen(Self.encode(command, payload: payload))
+    }
+
+    /// The unsolicited messages of one `type`.
+    ///
+    /// The robot broadcasts things nobody asked for — joint positions at 50 Hz,
+    /// journal lines, update progress — and every one of them names a `type`
+    /// where no reply ever does. Until now that discriminator was only ever used
+    /// to *drop* them; this is the other half of it.
+    ///
+    /// The stream ends when the channel does, so a console reading it learns that
+    /// the session is over rather than sitting frozen with no explanation.
+    public func broadcasts(ofType type: String) -> AsyncStream<Data> {
+        startReading()
+        let (stream, continuation) = AsyncStream.makeStream(
+            of: Data.self,
+            bufferingPolicy: .bufferingNewest(500)
+        )
+        let id = UUID()
+        listeners[type, default: [:]][id] = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeListener(id, ofType: type) }
+        }
+        return stream
+    }
+
+    private func removeListener(_ id: UUID, ofType type: String) {
+        listeners[type]?.removeValue(forKey: id)
+        if listeners[type]?.isEmpty == true {
+            listeners[type] = nil
+        }
+    }
+
+    private static func encode(_ command: String, payload: [String: RemoteValue]) throws -> String {
+        var body = payload
+        body["type"] = .string(command)
+        let encoded = try JSONEncoder().encode(body)
+        guard let text = String(bytes: encoded, encoding: .utf8) else {
+            throw EncodingError.invalidValue(body, .init(
+                codingPath: [],
+                debugDescription: "command payload is not UTF-8"
+            ))
+        }
+        return text
     }
 
     /// The same, with the answer decoded.
@@ -200,18 +285,29 @@ public actor RemoteControlChannel {
     private func endReading() {
         reader = nil
         failAll(with: .closed)
+        let open = listeners.values.flatMap(\.values)
+        listeners = [:]
+        for continuation in open {
+            continuation.finish()
+        }
     }
 
     /// The robot also broadcasts messages nobody asked for — joint positions at
     /// 50 Hz, move progress, update log lines — so a message has to be routed
-    /// before it can be delivered, and most of them are dropped here.
+    /// before it can be delivered, and the ones nobody subscribed to are dropped
+    /// here.
     private func deliver(_ text: String) {
         let data = Data(text.utf8)
         guard let envelope = try? JSONDecoder().decode(Envelope.self, from: data) else { return }
         // Every unsolicited broadcast names a `type` and no reply ever does, which
         // is the only thing separating `{"state": …}`, an answer, from
         // `{"type": "daemon_status", …, "state": …}`, which is not.
-        guard envelope.type == nil else { return }
+        if let type = envelope.type {
+            for continuation in listeners[type]?.values ?? [:].values {
+                continuation.yield(data)
+            }
+            return
+        }
         if let command = envelope.command {
             resume(command, with: .success(data))
         } else if let token = waiting.keys.first(where: envelope.keys.contains) {

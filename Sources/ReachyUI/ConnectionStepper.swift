@@ -134,7 +134,7 @@ struct ConnectionStepper: View {
     }
 
     private var headerText: String {
-        let target = session.address?.displayString ?? "robot"
+        let target = session.link == .none ? "robot" : session.link.displayString
         return isFailed ? "Couldn't connect to \(target)" : "Connecting to \(target)"
     }
 

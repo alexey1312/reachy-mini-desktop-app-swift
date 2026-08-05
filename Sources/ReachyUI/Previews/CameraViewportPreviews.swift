@@ -7,21 +7,18 @@ import SwiftUI
 
 #Preview("Camera — connecting") {
     PreviewScene.pane {
-        CameraViewport(session: .preview(.connecting), address: PreviewScene.address)
+        CameraViewport(session: .preview(.connecting))
     }
 }
 
 #Preview("Camera — waiting for producer") {
     PreviewScene.pane {
-        CameraViewport(session: .preview(.waitingForProducer), address: PreviewScene.address)
+        CameraViewport(session: .preview(.waitingForProducer))
     }
 }
 
 #Preview("Camera — unavailable") {
     PreviewScene.pane {
-        CameraViewport(
-            session: .preview(.failed("The robot closed the signaling socket.")),
-            address: PreviewScene.address
-        )
+        CameraViewport(session: .preview(.failed("The robot closed the signaling socket.")))
     }
 }

@@ -1,5 +1,6 @@
 import HuggingFaceAuth
 import ReachyKit
+import ReachyMedia
 @testable import ReachyUI
 import SwiftUI
 
@@ -16,10 +17,29 @@ import SwiftUI
 enum PreviewScene {
     static let address = RobotAddress(host: "192.168.1.42")
 
+    /// An account parked in one state, for the toolbar button and the sheet behind
+    /// it. Goes through `HFSignInModel.preview`, which is where the token fixtures
+    /// that make each state coherent already live.
+    static func account(in state: HFAccount.State) -> HFAccount {
+        HFSignInModel.preview(state: state).account
+    }
+
     static func robotScreen(_ session: RobotSession) -> some View {
         NavigationHost {
             RobotScreen(session: session)
         }
+        .preview()
+    }
+
+    /// The account button in a bar of its own. A whole root would capture the button at two
+    /// pixels' worth of a full screen; this is what makes each state legible.
+    static func accountToolbar(_ state: HFAccount.State) -> some View {
+        NavigationHost {
+            Text("Robot")
+                .navigationTitle("Reachy Mini")
+                .hfAccountToolbar(isPresented: .constant(false))
+        }
+        .environment(account(in: state))
         .preview()
     }
 
@@ -78,9 +98,17 @@ enum PreviewScene {
         .preview()
     }
 
-    static func logConsole(_ model: LogConsoleModel? = nil, setupError: String? = nil) -> some View {
+    static func logConsole(
+        _ model: LogConsoleModel? = nil,
+        setupError: String? = nil,
+        session: RobotSession? = nil
+    ) -> some View {
         NavigationHost {
-            LogConsoleScreen(address: address, model: model ?? .preview(), setupError: setupError)
+            LogConsoleScreen(
+                session: session ?? .preview(),
+                model: model ?? .preview(),
+                setupError: setupError
+            )
         }
         .preview()
     }
@@ -101,7 +129,6 @@ enum PreviewScene {
         NavigationHost {
             ControllerScreen(
                 session: session,
-                address: address,
                 driver: driver ?? TeleopDriver(),
                 setupError: setupError
             )
@@ -109,8 +136,14 @@ enum PreviewScene {
         .preview()
     }
 
-    static func viewport(_ model: ViewportModel, offersCamera: Bool = true) -> some View {
-        ViewportView(model: model, offersCamera: offersCamera)
+    /// `makeTeleop` decides whether the joystick is offered at all, so it is a
+    /// preview knob rather than something derived here.
+    static func viewport(
+        _ model: ViewportModel,
+        offersCamera: Bool = true,
+        makeTeleop: TeleopFactory? = nil
+    ) -> some View {
+        ViewportView(model: model, offersCamera: offersCamera, makeTeleop: makeTeleop)
             .preview()
     }
 
@@ -138,12 +171,23 @@ enum PreviewScene {
         .preview()
     }
 
+    /// `hfAccount` is injectable because the account button now sits in every
+    /// tab's bar: without one every root capture would show only the signed-out
+    /// state.
     static func root(
         _ session: RobotSession,
         viewport: ViewportModel? = nil,
-        tab: ReachyRootView<Text>.TabID = .robot
+        tab: ReachyRootView<Text>.TabID = .robot,
+        hfAccount: HFAccount? = nil,
+        remoteLink: RemoteRobotLink? = nil
     ) -> some View {
-        ReachyRootView(session: session, viewport: viewport ?? .preview(), tab: tab) {
+        ReachyRootView(
+            session: session,
+            viewport: viewport ?? .preview(),
+            hfAccount: hfAccount,
+            tab: tab,
+            remoteLink: remoteLink
+        ) {
             Text("Developer tools")
         }
         .preview()

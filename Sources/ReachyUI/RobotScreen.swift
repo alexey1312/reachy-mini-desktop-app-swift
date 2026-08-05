@@ -55,7 +55,7 @@ struct RobotScreen: View {
         Section("Robot") {
             LabeledContent("Name", value: identity?.name ?? "—")
             LabeledContent("Daemon", value: identity?.daemonVersion ?? "—")
-            LabeledContent("Address", value: session.address?.displayString ?? "—")
+            LabeledContent("Connection", value: session.link.displayString)
             if let status = session.lastStatus {
                 LabeledContent("Daemon state", value: String(describing: status.state))
                 // A `disabled` robot answers every motion command and stays limp,
@@ -90,19 +90,25 @@ struct RobotScreen: View {
 
     private var controlSection: some View {
         Section("Control") {
-            if let address = session.address {
+            // Three separate questions, where one `if let address` used to stand
+            // for all of them. Only the middle one is genuinely LAN-only.
+            if session.canTeleoperate {
                 NavigationLink {
-                    ControllerScreen(session: session, address: address)
+                    ControllerScreen(session: session)
                 } label: {
                     Label("Controller", systemImage: "gamecontroller")
                 }
+            }
+            if session.canPlayMoves {
                 NavigationLink {
                     MovesScreen(session: session)
                 } label: {
                     Label("Moves & expressions", systemImage: "music.note")
                 }
+            }
+            if session.canReadDaemonLogs {
                 NavigationLink {
-                    LogConsoleScreen(address: address)
+                    LogConsoleScreen(session: session)
                 } label: {
                     Label("Daemon logs", systemImage: "terminal")
                 }

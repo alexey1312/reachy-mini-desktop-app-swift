@@ -6,7 +6,6 @@ import SwiftUI
 /// Targets stream over `ws/set_target`; the daemon clamps safety limits.
 struct ControllerScreen: View {
     let session: RobotSession
-    let address: RobotAddress
 
     @State private var driver: TeleopDriver
     @State private var setupError: String?
@@ -14,12 +13,10 @@ struct ControllerScreen: View {
 
     init(
         session: RobotSession,
-        address: RobotAddress,
         driver: TeleopDriver = TeleopDriver(),
         setupError: String? = nil
     ) {
         self.session = session
-        self.address = address
         _driver = State(initialValue: driver)
         _setupError = State(initialValue: setupError)
     }
@@ -130,9 +127,9 @@ struct ControllerScreen: View {
     private func start() {
         guard !previewMode else { return }
         do {
-            try driver.start(address: address)
+            try driver.start { try session.makeTeleop() }
         } catch {
-            setupError = "\(error)"
+            setupError = RobotSession.describe(error)
         }
     }
 }

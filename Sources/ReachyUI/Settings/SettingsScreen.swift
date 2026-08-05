@@ -1,4 +1,3 @@
-import HuggingFaceAuth
 import ReachyKit
 import SwiftUI
 
@@ -6,6 +5,13 @@ import SwiftUI
 ///
 /// Audio used to be a section of `RobotScreen` and a sheet of its own on the Live
 /// tab; both now open this, so there is one place to look.
+///
+/// The Hugging Face account is deliberately *not* here any more. It outlives every
+/// connection and is needed before one — signing in is what makes the remote robot
+/// list exist — so it sits in the navigation bar instead, robot or no robot.
+/// Linking a robot to that account went with it: both halves of the custody story
+/// belong on one screen, and splitting them was how "signing out does not unlink"
+/// stopped being visible.
 struct SettingsScreen: View {
     let session: RobotSession
 
@@ -16,9 +22,6 @@ struct SettingsScreen: View {
     /// The app target's own screen, if it has one. Nothing in this package knows
     /// what it contains.
     @Environment(\.reachyDeveloperScreen) private var developerScreen
-    /// Optional so a preview or a host that has no Hugging Face session at all
-    /// simply renders without the card, rather than trapping.
-    @Environment(HFAccount.self) private var hfAccount: HFAccount?
 
     private var identity: RobotIdentity? {
         switch session.phase {
@@ -30,9 +33,6 @@ struct SettingsScreen: View {
     var body: some View {
         Form {
             robotSection
-            if let hfAccount {
-                HFAccountSection(session: session, model: HFSignInModel(account: hfAccount))
-            }
             if session.isBackendRunning {
                 AudioSettingsSection(session: session)
             }
@@ -100,7 +100,7 @@ struct SettingsScreen: View {
                     .foregroundStyle(.red)
             }
             LabeledContent("Daemon", value: identity?.daemonVersion ?? "—")
-            LabeledContent("Address", value: session.address?.displayString ?? "—")
+            LabeledContent("Connection", value: session.link.displayString)
             if let hardwareID = identity?.hardwareID {
                 LabeledContent("Hardware ID", value: hardwareID)
                     .font(.body.monospaced())

@@ -122,6 +122,105 @@ struct RemoteRobotConnectionTests {
         #expect(status.state == .running)
     }
 
+    /// `motor_mode` is what `RobotSession.isAwake` gates on, and `get_state` is the
+    /// only place this channel reports it. While the assembled status left it out,
+    /// a remote robot read as permanently asleep however awake it was — which
+    /// disabled teleop, moves and the viewport for the whole session.
+    @Test("the motor mode is read off get_state")
+    func reportsTheMotorMode() async throws {
+        let (connection, _) = connection([
+            "get_state": #"""
+            {"state":{"body_yaw":0.0,"motor_mode":"enabled","is_recording":false,"is_move_running":false}}
+            """#,
+        ])
+
+        let status = try await connection.daemonStatus()
+
+        #expect(status.backendStatus?.value1?.motorControlMode == .enabled)
+    }
+
+    /// A robot parked in `disabled` answers every motion command and stays limp,
+    /// so the mode has to come through as it is rather than be assumed awake.
+    @Test("a sleeping robot is reported asleep")
+    func reportsASleepingRobot() async throws {
+        let (connection, _) = connection([
+            "get_state": #"{"state":{"motor_mode":"disabled","is_move_running":false}}"#,
+        ])
+
+        let status = try await connection.daemonStatus()
+
+        #expect(status.backendStatus?.value1?.motorControlMode == .disabled)
+    }
+
+    /// One quiet reply must not drop a working session to `.unreachable`: the
+    /// status still says the backend is running, and only the mode is unknown.
+    @Test("a get_state that never answers still yields a status")
+    func survivesAQuietGetState() async throws {
+        let (connection, _) = connection()
+
+        let status = try await connection.daemonStatus()
+
+        #expect(status.state == .running)
+        #expect(status.backendStatus == nil)
+    }
+
+    /// A timeout can mean an older daemon that does not answer `get_state`; an
+    /// ended stream cannot. Once identity is cached, this command is the status
+    /// poll's only proof that the remote transport still exists.
+    @Test("a closed data channel fails status polling")
+    func surfacesAClosedChannel() async throws {
+        let channel = FakeDataChannel(replies: Self.identity.merging([
+            "get_state": #"{"state":{"motor_mode":"enabled"}}"#,
+        ]) { _, new in new })
+        let connection = RemoteRobotConnection(channel: channel, timeout: .seconds(5))
+
+        _ = try await connection.daemonStatus()
+        channel.removeReply(for: "get_state")
+        let sentBeforePolling = channel.sent.count
+        let status = Task {
+            try await connection.daemonStatus()
+        }
+
+        while !channel.isListening
+            || channel.sent.count == sentBeforePolling
+        {
+            await Task.yield()
+        }
+        channel.close()
+
+        await #expect(throws: RemoteControlChannel.Failure.closed) {
+            _ = try await status.value
+        }
+    }
+
+    /// Neither answer changes for the life of a session and the status poll runs
+    /// every three seconds, so asking again would be three commands a tick where
+    /// one will do.
+    @Test("version and hardware id are asked once and held")
+    func cachesIdentityAcrossPolls() async throws {
+        let (connection, channel) = connection([
+            "get_state": #"{"state":{"motor_mode":"enabled"}}"#,
+        ])
+
+        _ = try await connection.daemonStatus()
+        _ = try await connection.daemonStatus()
+
+        #expect(channel.sent.count(where: { $0.contains("get_version") }) == 1)
+        #expect(channel.sent.count(where: { $0.contains("get_hardware_id") }) == 1)
+        #expect(channel.sent.count(where: { $0.contains("get_state") }) == 2)
+    }
+
+    /// A name is whatever its owner typed into the Hub, and it reaches the
+    /// assembled status through JSON — so a quote in it must not end the string.
+    @Test("a robot name carrying a quote survives the assembled status")
+    func escapesTheRobotName() async throws {
+        let (connection, _) = connection(robotName: #"the "kitchen" bot"#)
+
+        let status = try await connection.daemonStatus()
+
+        #expect(status.robotName == #"the "kitchen" bot"#)
+    }
+
     @Test("waking up sends the command and waits for the move to finish")
     func wakesUp() async throws {
         let (connection, channel) = connection([

@@ -62,6 +62,14 @@ public enum RigidTransform {
         ])
     }
 
+    /// Inverse of ``matrix(rowMajor:)``: back to the flat row-by-row array the
+    /// daemon reads, which is what `set_full_target` takes for the head pose.
+    public static func rowMajorValues(_ matrix: simd_double4x4) -> [Double] {
+        (0 ..< 4).flatMap { row in
+            (0 ..< 4).map { column in matrix[column][row] }
+        }
+    }
+
     /// Rotation about `axis` by `angle`, for URDF revolute joints.
     public static func rotation(axis: SIMD3<Double>, angle: Double) -> simd_double3x3 {
         simd_double3x3(simd_quatd(angle: angle, axis: simd_normalize(axis)))

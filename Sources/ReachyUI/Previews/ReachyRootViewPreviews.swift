@@ -1,4 +1,5 @@
 import ReachyKit
+import ReachyMedia
 import ReachyScene
 @testable import ReachyUI
 import SwiftUI
@@ -57,5 +58,58 @@ import SwiftUI
     PreviewScene.root(
         .preview(status: .preview(wirelessVersion: false)),
         viewport: .preview(sceneModel: .preview(.buildingScene))
+    )
+}
+
+// The relay session, which the root used to treat as no session at all. The wide layout shows the
+// camera it was handed instead of "No live view", and the account sits in the leading slot.
+#Preview("Root — over the relay") {
+    let link = RemoteRobotLink.preview()
+    return PreviewScene.root(
+        .preview(address: nil, link: .remote, client: PreviewRemoteRobotClient()),
+        viewport: .preview(content: .camera, cameraSession: link.camera, source: .remote(link.camera)),
+        hfAccount: PreviewScene.account(in: .signedIn(username: "alexey1312")),
+        remoteLink: link
+    )
+}
+
+// The iPhone capture is the one that matters here: the Live tab exists over the relay at all,
+// which is the fix. Its iPad twin is the regular-width layout, where the tab is absent.
+#Preview("Root — relay live tab") {
+    let link = RemoteRobotLink.preview()
+    return PreviewScene.root(
+        .preview(address: nil, link: .remote, client: PreviewRemoteRobotClient()),
+        viewport: .preview(content: .camera, cameraSession: link.camera, source: .remote(link.camera)),
+        tab: .live,
+        hfAccount: PreviewScene.account(in: .signedIn(username: "alexey1312")),
+        remoteLink: link
+    )
+}
+
+// The store is not merely unreached over the relay — the data channel carries no app command at
+// all — so the screen names that instead of claiming no robot is connected.
+#Preview("Root — apps need the local network") {
+    PreviewScene.root(
+        .preview(address: nil, link: .remote, client: PreviewRemoteRobotClient()),
+        tab: .apps,
+        hfAccount: PreviewScene.account(in: .signedIn(username: "alexey1312"))
+    )
+}
+
+// Where signing in matters most: no robot yet, so no Settings to reach it through, and the remote
+// list below stays empty until it happens.
+#Preview("Root — idle, signed in") {
+    PreviewScene.root(
+        .preview(phase: .idle, status: nil, address: nil),
+        hfAccount: PreviewScene.account(in: .signedIn(username: "alexey1312"))
+    )
+}
+
+// The session lapsed and cannot be renewed silently — worth seeing before the next thing that
+// needs it fails.
+#Preview("Root — session expired") {
+    PreviewScene.root(
+        .preview(phase: .idle, status: nil, address: nil),
+        hfAccount: PreviewScene.account(in: .needsReauth(username: "alexey1312"))
     )
 }

@@ -354,10 +354,3 @@ struct ConnectionScreen: View {
         }
     }
 }
-
-extension RobotAddress {
-    var displayString: String {
-        let hostPart = host.contains(":") ? "[\(host)]" : host
-        return port == Self.defaultPort ? hostPart : "\(hostPart):\(port)"
-    }
-}

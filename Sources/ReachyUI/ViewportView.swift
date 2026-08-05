@@ -1,4 +1,12 @@
+import ReachyKit
 import SwiftUI
+
+/// Opens a teleop stream on demand — a WebSocket on the LAN, the session's own
+/// data channel over the relay.
+///
+/// `@Sendable` because a `View` is, and this is stored on two of them; `@MainActor`
+/// because the session it closes over is.
+typealias TeleopFactory = @MainActor @Sendable () throws -> any TeleopChannel
 
 /// The one place a live view of the robot is mounted.
 ///
@@ -10,6 +18,9 @@ struct ViewportView: View {
     /// The robot reports no camera at all on a wired unit — then there is nothing
     /// to switch between and the control is hidden rather than disabled.
     let offersCamera: Bool
+    /// `nil` where this connection carries no teleop at all, and then the joystick
+    /// is absent rather than inert.
+    var makeTeleop: TeleopFactory?
 
     var body: some View {
         content
@@ -52,14 +63,22 @@ struct ViewportView: View {
         } else {
             switch model.content {
             case .scene:
-                if let sceneModel = model.sceneModel {
+                if let reason = model.sceneUnavailableReason {
+                    // A reason, not a wait: nothing is coming, so a spinner here
+                    // would never resolve.
+                    ContentUnavailableView(
+                        "No 3D model",
+                        systemImage: "cube.transparent",
+                        description: Text(reason)
+                    )
+                } else if let sceneModel = model.sceneModel {
                     SceneViewport(model: sceneModel)
                 } else {
                     ViewportStatus.loading("Connecting…", progress: nil)
                 }
             case .camera:
-                if let session = model.cameraSession, let address = model.address {
-                    CameraViewport(session: session, address: address)
+                if let session = model.cameraSession {
+                    CameraViewport(session: session, makeTeleop: makeTeleop)
                 } else {
                     ViewportStatus.loading("Connecting…", progress: nil)
                 }
@@ -67,14 +86,21 @@ struct ViewportView: View {
         }
     }
 
+    /// What there is to switch between. Over the relay the 3D model does not
+    /// exist, so there is one option and the control disappears rather than
+    /// offering a dead segment.
+    private var options: [ViewportModel.Content] {
+        (model.offersScene ? [.scene] : []) + (offersCamera ? [.camera] : [])
+    }
+
     @ViewBuilder
     private var switcher: some View {
-        if offersCamera {
+        if options.count > 1 {
             Picker("Viewport", selection: Binding(
                 get: { model.content },
                 set: { model.setContent($0) }
             )) {
-                ForEach(ViewportModel.Content.allCases) { content in
+                ForEach(options) { content in
                     Label(content.title, systemImage: content.systemImage).tag(content)
                 }
             }

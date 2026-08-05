@@ -4,7 +4,7 @@ import ReachyKit
 /// Owns the live teleop target for a screen: the joystick's head pose, the sliders,
 /// and the body yaw it integrates while the knob sits in a rotation zone.
 ///
-/// The integration lives here rather than in `SetTargetClient` because
+/// The integration lives here rather than in the channel because
 /// `ControllerScreen`'s body-yaw slider is bound to this same target — an angle
 /// drifting inside the actor would leave the slider disagreeing with the robot.
 @MainActor
@@ -12,7 +12,7 @@ import ReachyKit
 final class TeleopDriver {
     /// Every write reaches the robot as a goal, so a slider jump is as smooth as a
     /// joystick release.
-    var target: SetTargetClient.Target {
+    var target: TeleopTarget {
         didSet { push() }
     }
 
@@ -20,20 +20,24 @@ final class TeleopDriver {
     private(set) var bodyYawRate: Double = 0
 
     private static let tick = Duration.milliseconds(20)
-    private var client: SetTargetClient?
+    private var client: (any TeleopChannel)?
     private var rotationTask: Task<Void, Never>?
 
     init(
-        target: SetTargetClient.Target = SetTargetClient.Target(),
+        target: TeleopTarget = TeleopTarget(),
         mapping: JoystickMapping = JoystickMapping()
     ) {
         self.target = target
         self.mapping = mapping
     }
 
-    func start(address: RobotAddress) throws {
+    /// Takes a factory rather than an address: over the relay there is no address
+    /// to dial, and the channel that carries the targets is the peer connection the
+    /// session is already on. Smoothing, the rotation ticker and the slider bindings
+    /// are the same either way — they are about the gesture, not the transport.
+    func start(_ makeChannel: () throws -> any TeleopChannel) throws {
         guard client == nil else { return }
-        let client = try SetTargetClient(address: address)
+        let client = try makeChannel()
         self.client = client
         Task { await client.connect() }
     }

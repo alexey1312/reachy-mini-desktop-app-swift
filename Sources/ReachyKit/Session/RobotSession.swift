@@ -14,6 +14,30 @@ public final class RobotSession {
         case unreachable(RobotIdentity)
     }
 
+    /// How the robot is being reached, named rather than inferred.
+    ///
+    /// `address == nil` used to carry this meaning implicitly in four places, and
+    /// it was read as "not connected" in three of them — which is what hid the
+    /// camera, the log console and the joystick from a perfectly live relay
+    /// session. A remote session has no address to dial: by the time its client
+    /// arrives it is already talking to the robot.
+    public enum Link: Equatable, Sendable {
+        case none
+        case lan(RobotAddress)
+        case remote
+
+        /// What to call this connection in front of a user. Every screen that used
+        /// to print `address?.displayString ?? "robot"` was naming the transport
+        /// badly for one of the two cases; this names both.
+        public var displayString: String {
+            switch self {
+            case .none: "—"
+            case let .lan(address): address.displayString
+            case .remote: "Hugging Face relay"
+            }
+        }
+    }
+
     /// Where a connection attempt currently stands. Split out of `.connecting`
     /// so a failure names the step it happened on instead of collapsing into one
     /// opaque spinner.
@@ -84,7 +108,7 @@ public final class RobotSession {
     // live in sibling files, and a `private` setter is scoped to this one. The preview
     // fixtures do the same, parking a session in a state no real connection would reach.
     public internal(set) var phase: ConnectionPhase = .idle
-    public internal(set) var address: RobotAddress?
+    public internal(set) var link: Link = .none
     public internal(set) var lastStatus: Components.Schemas.DaemonStatus?
     public internal(set) var lastError: String?
     public internal(set) var compatibilityWarning: String?
@@ -96,6 +120,23 @@ public final class RobotSession {
     public internal(set) var powerTransition: PowerTransition?
     /// Explicit Disconnect suppresses discovery-driven reconnect until the user connects again.
     public internal(set) var automaticConnectionAllowed = true
+
+    /// The address to dial, and nothing more. Every caller that reads this is
+    /// asking for the HTTP transport — the daemon's own API, a WebSocket on port
+    /// 8000, a job log — so a remote session correctly answers `nil` and the
+    /// features behind it stay closed. What must *not* be inferred from `nil` is
+    /// "no robot": ask `phase` for that, or `isRemote` for the reason.
+    public var address: RobotAddress? {
+        if case let .lan(address) = link {
+            address
+        } else {
+            nil
+        }
+    }
+
+    public var isRemote: Bool {
+        link == .remote
+    }
 
     let configuration: Configuration
     var client: (any RobotAPIClient)?
@@ -247,7 +288,7 @@ public final class RobotSession {
         pathMonitor?.cancel()
         pathMonitor = nil
         client = nil
-        address = nil
+        link = .none
         lastStatus = nil
         compatibilityWarning = nil
         supportsRename = true

@@ -16,7 +16,8 @@ struct SetTargetClientTests {
         #expect(head?["yaw"] == -0.3)
         #expect(head?["z"] == 0.01)
         #expect(json?["target_body_yaw"] as? Double == 0.5)
-        #expect(json?["target_antennas"] as? [Double] == [0.1, -0.1])
+        // Swift names the physical sides; the daemon's tuple is `[right, left]`.
+        #expect(json?["target_antennas"] as? [Double] == [-0.1, 0.1])
     }
 
     @Test("a step goal arrives as a run of frames, not one", .timeLimit(.minutes(1)))

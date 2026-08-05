@@ -8,14 +8,20 @@ import SwiftUI
 /// around without leaving the video, and held sideways it turns the body.
 struct CameraViewport: View {
     let session: CameraSession
-    let address: RobotAddress
+    /// `nil` hides the joystick outright rather than showing one that cannot move
+    /// anything.
+    var makeTeleop: TeleopFactory?
 
     @State private var driver: TeleopDriver
     @Environment(\.reachyPreviewMode) private var previewMode
 
-    init(session: CameraSession, address: RobotAddress, driver: TeleopDriver = TeleopDriver()) {
+    init(
+        session: CameraSession,
+        makeTeleop: TeleopFactory? = nil,
+        driver: TeleopDriver = TeleopDriver()
+    ) {
         self.session = session
-        self.address = address
+        self.makeTeleop = makeTeleop
         _driver = State(initialValue: driver)
     }
 
@@ -51,7 +57,9 @@ struct CameraViewport: View {
 
     @ViewBuilder
     private var joystick: some View {
-        if session.phase == .streaming {
+        // No factory means this connection carries no teleop at all, so the
+        // joystick is absent rather than offered inert.
+        if session.phase == .streaming, makeTeleop != nil {
             JoystickPad(mapping: driver.mapping) { driver.apply($0) }
                 .frame(width: 140, height: 140)
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -60,8 +68,8 @@ struct CameraViewport: View {
     }
 
     private func connectTeleop() {
-        guard !previewMode else { return }
-        try? driver.start(address: address)
+        guard !previewMode, let makeTeleop else { return }
+        try? driver.start(makeTeleop)
     }
 }
 

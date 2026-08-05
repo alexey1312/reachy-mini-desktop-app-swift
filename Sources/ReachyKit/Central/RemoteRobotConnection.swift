@@ -12,10 +12,13 @@ import Foundation
 /// The command names and their fields are `reachy_mini/io/protocol.py`; the reply
 /// shapes are `process_command` in `daemon/backend/abstract.py`.
 public actor RemoteRobotConnection: RobotAPIClient {
-    private let control: RemoteControlChannel
+    let control: RemoteControlChannel
     /// No command answers the robot's name, so it comes from the central listing
     /// that got us to this robot — the same place the user picked it from.
     private let robotName: String?
+    /// Asked once and held: neither changes for the life of a session, and the
+    /// status poll runs every three seconds.
+    private var identityCache: (version: String, hardwareID: String)?
 
     public init(control: RemoteControlChannel, robotName: String? = nil) {
         self.control = control
@@ -66,9 +69,47 @@ public actor RemoteRobotConnection: RobotAPIClient {
     ///   the backend (`setup_media_server`); a reply proves the backend is up.
     /// - `wirelessVersion` is `false` because it gates `/wifi/*` and `/update/*`,
     ///   HTTP routes on the robot's own network that this session genuinely
-    ///   cannot reach.
-    /// - `backendStatus` stays `nil`: unknown, and said so.
+    ///   cannot reach. The camera is *not* gated on it any more — a relay session
+    ///   carries video on the same peer connection, which `RobotSession.hasCamera`
+    ///   now answers from the link instead.
+    /// - `backendStatus` carries the motor mode, and only that. `get_state` is
+    ///   the one place this channel reports it, and it is what `isAwake` gates on
+    ///   — while this returned `nil` a remote robot read as permanently asleep
+    ///   however awake it was, which disabled teleop, moves and the viewport.
+    ///
+    /// A quiet or unrecognised `get_state` leaves the mode unknown rather than
+    /// failing the whole status. Transport failures still escape: once identity
+    /// is cached this is the poll's only proof that the relay remains alive.
     public func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
+        let identity = try await identity()
+        let motorMode: String?
+        do {
+            motorMode = try await control.perform(
+                "get_state",
+                correlation: .replyKey("state"),
+                expecting: StateReply.self
+            ).state.motorMode
+        } catch RemoteControlChannel.Failure.timedOut {
+            motorMode = nil
+        } catch RemoteControlChannel.Failure.robot {
+            motorMode = nil
+        } catch is DecodingError {
+            motorMode = nil
+        } catch {
+            throw error
+        }
+        return try Self.status(
+            robotName: robotName ?? "",
+            version: identity.version,
+            hardwareID: identity.hardwareID,
+            motorMode: motorMode
+        )
+    }
+
+    private func identity() async throws -> (version: String, hardwareID: String) {
+        if let identityCache {
+            return identityCache
+        }
         let version = try await control.perform(
             "get_version",
             correlation: .replyKey("version"),
@@ -79,14 +120,43 @@ public actor RemoteRobotConnection: RobotAPIClient {
             correlation: .replyKey("hardware_id"),
             expecting: HardwareIDReply.self
         )
-        return Components.Schemas.DaemonStatus(
-            robotName: robotName ?? "",
-            state: .running,
-            wirelessVersion: false,
-            desktopAppDaemon: false,
-            version: version.version,
-            hardwareId: hardware.hardwareID
+        let identity = (version: version.version, hardwareID: hardware.hardwareID)
+        identityCache = identity
+        return identity
+    }
+
+    /// Built by decoding the daemon's own wire format rather than through the
+    /// generated memberwise initialiser: `backend_status` is a `oneOf` whose Swift
+    /// shape changes whenever the spec is refreshed, while the JSON is the stable
+    /// thing to build against — the same reasoning as `DaemonStatus.preview`.
+    static func status(
+        robotName: String,
+        version: String,
+        hardwareID: String,
+        motorMode: String?
+    ) throws -> Components.Schemas.DaemonStatus {
+        let backend = motorMode.map {
+            #"{"ready": true, "motor_control_mode": "\#($0)", "last_alive": null, "control_loop_stats": {}}"#
+        } ?? "null"
+        let json = """
+        {"robot_name": \(Self.quoted(robotName)), "state": "running",
+         "wireless_version": false, "desktop_app_daemon": false,
+         "version": \(Self.quoted(version)), "hardware_id": \(Self.quoted(hardwareID)),
+         "backend_status": \(backend)}
+        """
+        return try JSONDecoder().decode(
+            Components.Schemas.DaemonStatus.self,
+            from: Data(json.utf8)
         )
+    }
+
+    /// The robot's name comes from a central listing and is whatever its owner
+    /// typed, so it reaches this JSON escaped rather than interpolated raw.
+    private static func quoted(_ value: String) -> String {
+        guard let encoded = try? JSONEncoder().encode(value),
+              let text = String(bytes: encoded, encoding: .utf8)
+        else { return "\"\"" }
+        return text
     }
 
     /// The channel answers `wake_up` only once the animation has finished, so
@@ -163,5 +233,20 @@ public actor RemoteRobotConnection: RobotAPIClient {
 
     private struct VolumeReply: Decodable {
         let volume: Int
+    }
+
+    /// `get_state` answers `{"state": {…}}` with no command echoed. Only the motor
+    /// mode is read: the rest of that payload is the live pose, which arrives far
+    /// more cheaply on the `subscribe_pose` broadcast.
+    private struct StateReply: Decodable {
+        let state: State
+
+        struct State: Decodable {
+            let motorMode: String
+
+            enum CodingKeys: String, CodingKey {
+                case motorMode = "motor_mode"
+            }
+        }
     }
 }
