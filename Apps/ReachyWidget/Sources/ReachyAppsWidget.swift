@@ -66,7 +66,7 @@ struct ReachyAppsProvider: AppIntentTimelineProvider {
 
     private func entry(at date: Date, apps: [RobotAppEntity]?, limit: Int) -> ReachyAppsEntry {
         let robot = RobotIntentTarget.knownRobot
-        ReachyAppsEntry(
+        return ReachyAppsEntry(
             date: date,
             content: RobotAppsWidgetContent(
                 configured: (apps ?? []).map(\.summary),

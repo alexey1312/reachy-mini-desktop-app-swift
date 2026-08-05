@@ -1,0 +1,12 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+[scripts]
+run_mode = "nonconcurrent"
+
+# One phone, one Xcode build directory: two workspaces installing at once would fight over
+# both. The team id is read from ~/.config/reachy-mini/device.env, never from the repo.
+[scripts.run.device]
+available_in = ["local"]
+command = "./bin/mise run device"
+icon = "smartphone"
+default = true

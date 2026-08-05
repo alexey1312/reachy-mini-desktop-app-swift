@@ -43,6 +43,7 @@ git-cliff = "2.13.1"  # Changelog generation
 
 # --- Simulator ---
 python = "3.12" # for sim-daemon venv: mujoco ships no wheels for newer pythons
+uv = "0.12.1"   # installs into that venv as APFS clones — see sim-daemon
 
 [tasks.build]
 description = "Build the Swift package (debug)"
@@ -73,6 +74,28 @@ xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike \
   -skipPackagePluginValidation -skipMacroValidation \
   build 2>&1 | xcsift
 '''
+
+# The macOS build above cannot see ReachyWidget: the extension is iOS-only and
+# Project.swift embeds it with `condition: .when([.ios])`, so under `platform=macOS`
+# it is not built at all. `generic/platform=iOS` compiles it without needing a
+# device, a simulator or a signing identity.
+[tasks."build:app:ios"]
+description = "Build the ReachySpike app and its widget extension (iOS, unsigned)"
+depends = ["project"]
+run = '''
+set -o pipefail
+xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike \
+  -destination 'generic/platform=iOS' -configuration Debug \
+  -derivedDataPath Apps/DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  -skipPackagePluginValidation -skipMacroValidation \
+  build 2>&1 | xcsift
+'''
+
+[tasks.device]
+description = "Build, install and launch on a connected iPhone (see Scripts/device-run.sh)"
+depends = ["project"]
+run = "./Scripts/device-run.sh"
 
 [tasks.test]
 description = "Run all tests (parallel)"
@@ -268,7 +291,11 @@ description = "Run simulated Reachy Mini daemon (MuJoCo) reachable from LAN devi
 run = """
 #!/bin/bash
 set -euo pipefail
-# macOS: MuJoCo GUI requires mjpython, and uv has known MuJoCo issues — plain pip venv.
+# The venv is created by `python -m venv` (MuJoCo's GUI needs mjpython, which wants a
+# real framework build) and only *filled* by uv. uv writes each file as an APFS clone
+# instead of copying it out of its cache, so a second worktree costs ~6 MiB and under a
+# second rather than 1.3 GB and ten minutes. Measured with the daemon then serving
+# /api/daemon/status — `uv venv` itself is what was never tried against mujoco.
 VENV=.venv-sim
 REQUIREMENTS=Scripts/sim-requirements.txt
 STAMP="$VENV/.requirements.sha256"
@@ -279,7 +306,7 @@ INSTALLED="$(test -f "$STAMP" && cat "$STAMP" || true)"
 if [ ! -x "$VENV/bin/mjpython" ] || [ "$INSTALLED" != "$EXPECTED" ]; then
   rm -rf "$VENV"
   "$PYTHON" -m venv "$VENV"
-  "$VENV/bin/python" -m pip install --quiet --requirement "$REQUIREMENTS"
+  uv pip install --quiet --python "$VENV/bin/python" --requirement "$REQUIREMENTS"
   printf '%s' "$EXPECTED" > "$STAMP"
 fi
 "$VENV/bin/python" -c 'import importlib.metadata as m; assert m.version("reachy-mini") == "1.9.0"'
