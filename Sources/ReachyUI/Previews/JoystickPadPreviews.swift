@@ -6,11 +6,11 @@ import SwiftUI
 // `.sizeThatFitsLayout`.
 
 #Preview("Joystick — screen") {
-    JoystickPad { _, _ in }
+    JoystickPad { _ in }
         .padding()
 }
 
 #Preview("Joystick — component", traits: .sizeThatFitsLayout) {
-    JoystickPad { _, _ in }
+    JoystickPad { _ in }
         .padding()
 }

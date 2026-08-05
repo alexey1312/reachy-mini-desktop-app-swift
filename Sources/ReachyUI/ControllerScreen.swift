@@ -39,9 +39,9 @@ struct ControllerScreen: View {
             }
             Group {
                 Section("Head — drag: yaw / pitch") {
-                    JoystickPad { x, y in
-                        target.yaw = -x * headAngle
-                        target.pitch = y * headAngle
+                    JoystickPad { deflection in
+                        target.yaw = -deflection.x * headAngle
+                        target.pitch = deflection.y * headAngle
                         push()
                     }
                     .frame(maxWidth: 280)

@@ -54,9 +54,9 @@ struct CameraViewport: View {
     @ViewBuilder
     private var joystick: some View {
         if session.phase == .streaming {
-            JoystickPad { x, y in
-                target.yaw = -x * headAngle
-                target.pitch = y * headAngle
+            JoystickPad { deflection in
+                target.yaw = -deflection.x * headAngle
+                target.pitch = deflection.y * headAngle
                 push()
             }
             .frame(width: 140, height: 140)
