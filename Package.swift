@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "ReachyMedia", targets: ["ReachyMedia"]),
         .library(name: "ReachyScene", targets: ["ReachyScene"]),
         .library(name: "ReachyUI", targets: ["ReachyUI"]),
+        .library(name: "ReachyWidgetUI", targets: ["ReachyWidgetUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.7.0"),
@@ -61,6 +62,15 @@ let package = Package(
             // toolchain fail with "plugin for module 'PreviewsMacros' not found".
             exclude: ["AGENTS.md", "CLAUDE.md", "Previews"]
         ),
+        // The widget's views, deliberately not in ReachyUI: that target links
+        // ReachyMedia (WebRTC) and ReachyScene (RealityKit), and a widget
+        // extension — woken for a moment, on a hard memory budget — has no
+        // business loading a media stack to draw two lines of text.
+        .target(
+            name: "ReachyWidgetUI",
+            dependencies: ["ReachyKit"],
+            exclude: ["Previews"]
+        ),
         // Not a product: stubs for the test targets only, in a plain target because
         // one test target cannot import another's sources.
         .target(name: "ReachyTestSupport"),
@@ -82,6 +92,10 @@ let package = Package(
         .testTarget(
             name: "ReachyUITests",
             dependencies: ["ReachyUI", "ReachyKit", "HuggingFaceAuth"]
+        ),
+        .testTarget(
+            name: "ReachyWidgetUITests",
+            dependencies: ["ReachyWidgetUI", "ReachyKit"]
         ),
     ]
 )

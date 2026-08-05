@@ -25,10 +25,7 @@ public extension RobotSession {
                 _ = await runBackendStart(wakeUp: true, client: client)
                 return
             }
-            try await client.setMotorMode(.enabled)
-            try await Task.sleep(for: configuration.motorSettleDelay)
-            let uuid = try await client.wakeUp()
-            await waitForMoveToFinish(uuid, client: client)
+            try await RobotPower(client: client, configuration: configuration).wake()
         } catch {
             lastError = Self.describe(error)
         }
@@ -43,9 +40,7 @@ public extension RobotSession {
         defer { powerTransition = nil }
         do {
             try assertSupportedDaemon()
-            let uuid = try await client.gotoSleep()
-            await waitForMoveToFinish(uuid, client: client)
-            try await client.setMotorMode(.disabled)
+            try await RobotPower(client: client, configuration: configuration).sleep()
         } catch {
             lastError = Self.describe(error)
         }

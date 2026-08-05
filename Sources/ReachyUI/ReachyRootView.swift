@@ -2,6 +2,14 @@ import HuggingFaceAuth
 import ReachyKit
 import ReachyMedia
 import SwiftUI
+import WidgetKit
+
+/// The subset of the session a widget actually renders, so `onChange` fires when
+/// that changes and not on every unrelated field of the daemon's status.
+private struct RobotWidgetFacts: Equatable {
+    let phase: RobotSession.ConnectionPhase
+    let isAwake: Bool
+}
 
 /// Entry point for the shared UI: connection flow → robot control, with one live
 /// viewport placed according to how much room there is.
@@ -134,6 +142,30 @@ public struct ReachyRootView<Developer: View>: View {
                 tab = .robot
             }
         }
+        .onOpenURL { url in
+            // Only a destination this app owns. The OAuth callback shares this
+            // scheme and belongs to the sign-in session, so `ReachyDeepLink`
+            // refuses it rather than landing the user on a tab mid-authorisation.
+            guard let link = ReachyDeepLink(url: url) else { return }
+            switch link {
+            case .robot: tab = .robot
+            case .apps: tab = .apps
+            }
+        }
+        .onChange(of: widgetFacts) { _, _ in
+            guard !previewMode else { return }
+            // The widget cannot ask the robot anything, so the app tells it that
+            // the reading it holds has moved on. `RobotSession` has already
+            // written the snapshot by this point.
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    /// What a widget would show, as one comparable value: `onChange` needs a
+    /// single `Equatable`, and reloading on every unrelated status field would
+    /// wake the extension for nothing.
+    private var widgetFacts: RobotWidgetFacts {
+        RobotWidgetFacts(phase: session.phase, isAwake: session.isAwake)
     }
 
     /// Opens the relay session first, then hands the session a client that speaks

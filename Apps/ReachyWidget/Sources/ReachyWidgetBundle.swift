@@ -1,0 +1,11 @@
+import SwiftUI
+import WidgetKit
+
+@main
+struct ReachyWidgetBundle: WidgetBundle {
+    var body: some Widget {
+        RobotStatusWidget()
+        WakeRobotControl()
+        SleepRobotControl()
+    }
+}

@@ -3,9 +3,11 @@ test_configuration:
   test_target_path: ${PROJECT_DIR}/ReachyUISnapshotTests
   sources:
     - ${PROJECT_DIR}/../Sources/ReachyUI/Previews
+    - ${PROJECT_DIR}/../Sources/ReachyWidgetUI/Previews
     - ${PROJECT_DIR}/ReachySpike/Previews
   testable_imports:
     - ReachyKit
+    - ReachyWidgetUI
   snapshot_devices:
     - iPhone 16 Pro
     - iPad Pro 11
@@ -20,3 +22,4 @@ playbook_configuration:
   testable_imports:
     - ReachyUI
     - ReachyKit
+    - ReachyWidgetUI

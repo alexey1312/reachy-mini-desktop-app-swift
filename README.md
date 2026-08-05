@@ -74,13 +74,23 @@ different-major versions are rejected before commands are sent. See
 The daemon provides **no authentication or encryption**. Use this client only on a trusted private LAN or the robot's
 own access point. Never expose daemon port 8000 through port forwarding or a public address.
 
+Reaching a robot from outside its network does **not** change that. It goes through the Hugging Face relay, which
+brokers a WebRTC session between two peers that have both authenticated with the same account; the daemon's HTTP port
+is never exposed, and commands travel on the session's data channel instead. See
+[ADR 0003](docs/adr/0003-remote-access-over-the-hugging-face-relay.md).
+
 ## Status
 
 Phase 2. Connection, discovery and network resilience are in place, along with live teleop, recorded moves, the daemon
 log console, the WebRTC camera with two-way audio, and a 3D viewer that mirrors the robot from its own URDF.
 
+The robot's app store installs and removes apps from Hugging Face Spaces, following each job over the daemon's job
+socket. Signing in to Hugging Face — a public OAuth client with PKCE, the token in the Keychain — reaches private
+Spaces, links a robot to the account, and lists the robots that account can reach from anywhere.
+
 Still open in this phase: the Stewart platform's passive joints are computed client-side for the 3D view (the daemon
-only reports them under the Placo kinematics engine), and BLE Wi-Fi provisioning.
+only reports them under the Placo kinematics engine), and BLE Wi-Fi provisioning. A remote session carries commands
+and the camera but not the 3D scene, whose URDF and STL are HTTP-only.
 
 ## License
 

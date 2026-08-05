@@ -118,6 +118,10 @@ public extension RobotSession {
         connectionAttemptID = UUID()
         resetConnectionState()
         lastError = nil
+        // Here rather than in `resetConnectionState`, which also runs on a failed
+        // attempt: a robot that could not be reached this time is not a robot the
+        // user let go of, and blanking the widget over it loses a good reading.
+        snapshots.clear()
     }
 }
 
@@ -212,6 +216,7 @@ extension RobotSession {
 
     func finishConnected(identity: RobotIdentity) -> Bool {
         phase = .connected(identity)
+        recordSnapshot(identity: identity)
         startPolling(identity: identity)
         startPathMonitor(identity: identity)
         return true

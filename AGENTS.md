@@ -95,6 +95,12 @@ is Linux/BlueZ, so nothing simulates it.
 `daemon/app/routers/*.py` and `daemon/app/services/` there rather than inferring a route's shape. Still a
 specification (rule 1), never code to port.
 
+**An App Group is not a wildcard capability.** `iOS Team Provisioning Profile: *` cannot carry one, so every target
+that declares it — the app and each extension separately, each with its own App ID — needs it added once through
+Xcode's Signing & Capabilities. `xcodebuild -allowProvisioningUpdates` reports `No Accounts` and cannot create it.
+`Project.swift` already declares the entitlement and Tuist writes the `.entitlements`; what the Xcode step registers
+lives in the Apple developer account, not in this repository, so it survives regeneration and cannot be scripted here.
+
 Snapshots live in `Apps/` as an Xcode target because they need an iOS simulator, so `swift test` never sees them.
 `mise run project` writes the storybook playbook before calling tuist: `Apps/ReachyStorybook/Generated` is gitignored
 and `Project.swift` globs it unconditionally, so generation — and with it `build:app` and every snapshot task — failed
@@ -103,6 +109,10 @@ outright on a fresh clone and in CI until the generator ran. Do not drop that st
 body into a generated file, where a leading-dot call resolves against the type expected _there_. A `static func`
 helper for an element type therefore belongs on that element (`KnownRobotsModel.Entry.preview`), not on its owner:
 the latter compiles under SwiftPM and fails the snapshot target 17 minutes later.
+A new _directory_ of previews needs three edits, not one: `sources` in `Apps/.prefire.yml` (Prefire reads its own
+list, not the target's), the `sources` of **both** preview-hosting targets in `Project.swift`, and `testable_imports`
+for any module those previews name — the generated file imports that list and nothing else. Miss the first and the
+previews compile while generating no tests at all, which reads as everything passing.
 
 **Four device/runtime identifiers are in play, and they deliberately do not match.** Changing one without the others
 either re-records everything or fails the run outright:
@@ -144,13 +154,13 @@ environment keys are written out by hand — swiftformat's `environmentEntry` ru
 
 ## Project Context
 
-|                 |                                                                                                                                                                                                                                                                                                                  |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Robot API       | `http://<robot>:8000/api`, OpenAPI 3.1 spec committed at `Sources/ReachyKit/openapi.json`                                                                                                                                                                                                                        |
-| State stream    | WebSocket `/api/state/ws/full`, 10 Hz by default (not in the OpenAPI spec — hand-written client)                                                                                                                                                                                                                 |
-| Upstream        | `pollen-robotics/reachy-mini-desktop-app` + `pollen-robotics/reachy_mini` — **specification only, never copy code**                                                                                                                                                                                              |
-| Packages        | `ReachyKit` (transport + domain) → `ReachyMedia` (WebRTC) / `ReachyScene` (RealityKit) → `ReachyUI` → `Apps/`                                                                                                                                                                                                    |
-| Off to the side | `HuggingFaceAuth` — this app's own HF session (sign-in, Keychain, renewal). Nothing in it knows what a robot is, and `ReachyKit` does **not** depend on it: a token reaches the robot as a value the UI passes in. `ReachyTestSupport` holds stubs shared by the test targets and is deliberately not a product. |
+|                 |                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Robot API       | `http://<robot>:8000/api`, OpenAPI 3.1 spec committed at `Sources/ReachyKit/openapi.json`                                                                                                                                                                                                                                                                                |
+| State stream    | WebSocket `/api/state/ws/full`, 10 Hz by default (not in the OpenAPI spec — hand-written client)                                                                                                                                                                                                                                                                         |
+| Upstream        | `pollen-robotics/reachy-mini-desktop-app` + `pollen-robotics/reachy_mini` — **specification only, never copy code**                                                                                                                                                                                                                                                      |
+| Packages        | `ReachyKit` (transport + domain) → `ReachyMedia` (WebRTC) / `ReachyScene` (RealityKit) → `ReachyUI` → `Apps/`. `ReachyWidgetUI` sits beside `ReachyUI` on `ReachyKit` alone — the widget's views and the App Intents the app and the extension share. It must **not** gain a `ReachyMedia` dependency: a widget process woken for a moment cannot afford to link WebRTC. |
+| Off to the side | `HuggingFaceAuth` — this app's own HF session (sign-in, Keychain, renewal). Nothing in it knows what a robot is, and `ReachyKit` does **not** depend on it: a token reaches the robot as a value the UI passes in. `ReachyTestSupport` holds stubs shared by the test targets and is deliberately not a product.                                                         |
 
 ## Project Rules
 

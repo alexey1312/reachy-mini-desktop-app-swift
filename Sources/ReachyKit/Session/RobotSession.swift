@@ -104,6 +104,9 @@ public final class RobotSession {
     /// Not `private`: `connect(to:)` lives in `RobotSession+Connect.swift`, like
     /// the rest of the connection protocol.
     let makeClient: @Sendable (RobotAddress) throws -> any RobotAPIClient
+    /// Where the widget reads what this session last saw. The widget's process
+    /// cannot connect to anything, so this is the only thing it has.
+    let snapshots: RobotSnapshotStore
     private var pollTask: Task<Void, Never>?
     private var movePollTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
@@ -125,12 +128,17 @@ public final class RobotSession {
     /// `NSError` internals that bury the one sentence worth reading. Unwrap to the
     /// root cause first, so a refused connection reads as "Could not connect to
     /// the server."
-    static func describe(_ error: Error) -> String {
+    /// Public because a session is not the only thing that has to put a daemon
+    /// failure in front of someone: an App Intent gets one line in Shortcuts and
+    /// no screen to elaborate on.
+    /// `nonisolated` because it reads only its argument: an intent runs off the
+    /// main actor and still has to render the same sentence.
+    public nonisolated static func describe(_ error: Error) -> String {
         let root = rootCause(of: error)
         return (root as? LocalizedError)?.errorDescription ?? root.localizedDescription
     }
 
-    private static func rootCause(of error: Error) -> Error {
+    private nonisolated static func rootCause(of error: Error) -> Error {
         if let clientError = error as? ClientError {
             return rootCause(of: clientError.underlyingError)
         }
@@ -143,11 +151,16 @@ public final class RobotSession {
     }
 
     /// Injectable client factory for tests.
+    ///
+    /// `snapshots` is injectable for the same reason the client is: it writes into
+    /// `UserDefaults`, and `--parallel` runs suites concurrently against one table.
     public init(
         configuration: Configuration = .init(),
+        snapshots: RobotSnapshotStore = RobotSnapshotStore(),
         makeClient: @escaping @Sendable (RobotAddress) throws -> any RobotAPIClient
     ) {
         self.configuration = configuration
+        self.snapshots = snapshots
         self.makeClient = makeClient
     }
 
@@ -308,6 +321,9 @@ public final class RobotSession {
                 do {
                     let status = try await client.daemonStatus()
                     lastStatus = status
+                    // The widget's only source of truth, refreshed wherever the
+                    // session already learns something — no extra round trip.
+                    recordSnapshot(identity: identity)
                     if case .unreachable = phase {
                         consecutiveSuccesses += 1
                         if consecutiveSuccesses >= configuration.requiredConsecutiveSuccesses {

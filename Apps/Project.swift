@@ -1,5 +1,10 @@
 import ProjectDescription
 
+/// The app and its widget extension are separate processes with separate
+/// containers, so anything both must read — the known robots, the snapshot the
+/// widget renders — lives in this group rather than in either container.
+let appGroup = "group.com.alexey1312.ReachyMini"
+
 let project = Project(
     name: "ReachyMiniApps",
     packages: [
@@ -52,11 +57,60 @@ let project = Project(
                     "Talk to people near your Reachy Mini through its speaker."
                 ),
                 "UILaunchScreen": .dictionary([:]),
+                // Read by `KnownRobots`, which is in a library and so cannot know
+                // one developer account's group. The extension declares the same.
+                "ReachyAppGroupIdentifier": .string(appGroup),
+                // The widget opens the app through this scheme. It is the one the
+                // OAuth callback already uses: an app gets a scheme, and
+                // `ASWebAuthenticationSession` claims the callback while a sign-in
+                // is running regardless of what is registered here.
+                "CFBundleURLTypes": .array([
+                    .dictionary([
+                        "CFBundleURLName": .string("com.alexey1312.ReachyMiniSpike"),
+                        "CFBundleURLSchemes": .array([.string("reachy-mini-swift")]),
+                    ]),
+                ]),
             ]),
             sources: ["ReachySpike/Sources/**"],
+            entitlements: .dictionary([
+                "com.apple.security.application-groups": .array([.string(appGroup)]),
+            ]),
             dependencies: [
                 .package(product: "ReachyKit"),
                 .package(product: "ReachyUI"),
+                // The intents live there so the widget extension can reach the same
+                // ones; the shortcuts provider that exposes them to Siri has to be
+                // in this bundle.
+                .package(product: "ReachyWidgetUI"),
+                // iOS only, and conditional so the macOS build of this app does not
+                // try to embed an extension that has no macOS destination.
+                .target(name: "ReachyWidget", condition: .when([.ios])),
+            ]
+        ),
+        // Deliberately thin: a timeline provider over the shared snapshot and a
+        // view. It depends on ReachyWidgetUI rather than ReachyUI so that a
+        // process woken for a moment does not link WebRTC and RealityKit.
+        .target(
+            name: "ReachyWidget",
+            destinations: [.iPhone, .iPad],
+            product: .appExtension,
+            bundleId: "com.alexey1312.ReachyMiniSpike.Widget",
+            deploymentTargets: .iOS("18.0"),
+            infoPlist: .extendingDefault(with: [
+                "CFBundleDisplayName": .string("Reachy Mini"),
+                // Its own process, so it needs its own copy of the group name.
+                "ReachyAppGroupIdentifier": .string(appGroup),
+                "NSExtension": .dictionary([
+                    "NSExtensionPointIdentifier": .string("com.apple.widgetkit-extension"),
+                ]),
+            ]),
+            sources: ["ReachyWidget/Sources/**"],
+            entitlements: .dictionary([
+                "com.apple.security.application-groups": .array([.string(appGroup)]),
+            ]),
+            dependencies: [
+                .package(product: "ReachyKit"),
+                .package(product: "ReachyWidgetUI"),
             ]
         ),
         .target(
@@ -79,12 +133,14 @@ let project = Project(
                 "ReachyStorybook/Sources/**",
                 "ReachyStorybook/Generated/**",
                 "../Sources/ReachyUI/Previews/**",
+                "../Sources/ReachyWidgetUI/Previews/**",
                 "ReachySpike/Sources/SpikeView.swift",
                 "ReachySpike/Sources/SpikeModel.swift",
                 "ReachySpike/Previews/**",
             ],
             dependencies: [
                 .package(product: "ReachyUI"),
+                .package(product: "ReachyWidgetUI"),
                 .package(product: "Prefire"),
             ]
         ),
@@ -97,12 +153,14 @@ let project = Project(
             sources: [
                 "ReachyUISnapshotTests/Sources/**",
                 "../Sources/ReachyUI/Previews/**",
+                "../Sources/ReachyWidgetUI/Previews/**",
                 "ReachySpike/Sources/SpikeView.swift",
                 "ReachySpike/Sources/SpikeModel.swift",
                 "ReachySpike/Previews/**",
             ],
             dependencies: [
                 .package(product: "ReachyUI"),
+                .package(product: "ReachyWidgetUI"),
                 .package(product: "Prefire"),
                 .package(product: "SnapshotTesting"),
                 .package(product: "PrefireTestsPlugin", type: .plugin),
