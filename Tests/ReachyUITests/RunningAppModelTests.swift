@@ -3,6 +3,26 @@ import ReachyKit
 @testable import ReachyUI
 import Testing
 
+private struct AppsCapablePreviewClient: RobotAPIClient, RobotAppsClient {
+    private let base = PreviewRobotClient()
+
+    func handshake() async throws -> RobotConnection.Handshake {
+        try await base.handshake()
+    }
+
+    func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
+        try await base.daemonStatus()
+    }
+
+    func wakeUp() async throws -> String {
+        try await base.wakeUp()
+    }
+
+    func gotoSleep() async throws -> String {
+        try await base.gotoSleep()
+    }
+}
+
 @MainActor
 @Suite("Running app dock", .timeLimit(.minutes(1)))
 struct RunningAppModelTests {
@@ -15,9 +35,10 @@ struct RunningAppModelTests {
     private func session(
         _ state: RobotAppStatus.State?,
         error: String? = nil,
-        phase: RobotSession.ConnectionPhase = .connected(.preview)
+        phase: RobotSession.ConnectionPhase = .connected(.preview),
+        client: any RobotAPIClient = PreviewRobotClient()
     ) -> RobotSession {
-        .preview(phase: phase, runningApp: state.map { status($0, error: error) })
+        .preview(phase: phase, runningApp: state.map { status($0, error: error) }, client: client)
     }
 
     // MARK: - Visibility
@@ -102,6 +123,18 @@ struct RunningAppModelTests {
         #expect(model.isExpanded == false)
     }
 
+    @Test("the expanded sheet closes when its app disappears")
+    func disappearanceCollapses() {
+        let model = RunningAppModel()
+        model.isExpanded = true
+
+        model.visibleStatusChanged(status(.running))
+        #expect(model.isExpanded)
+
+        model.visibleStatusChanged(nil)
+        #expect(!model.isExpanded)
+    }
+
     // MARK: - Poll cadence
 
     /// Asserted as a value rather than waited out: a test that sleeps the interval
@@ -128,6 +161,27 @@ struct RunningAppModelTests {
 
         #expect(configuration.transitioning < configuration.running)
         #expect(configuration.running <= configuration.idle)
+    }
+
+    @Test("polling starts only after compatibility and readiness accept the client")
+    func pollsOnlyEstablishedSessions() {
+        let model = RunningAppModel()
+        let client = AppsCapablePreviewClient()
+        let requirement = DaemonUpdateRequirement(
+            reported: "1.8.0",
+            minimum: "1.9.0",
+            canSelfUpdate: true
+        )
+
+        #expect(!model.canPoll(session(nil, phase: .idle, client: client)))
+        #expect(!model.canPoll(session(nil, phase: .connecting(.handshaking), client: client)))
+        #expect(!model.canPoll(session(
+            nil,
+            phase: .connecting(.needsDaemonUpdate(.preview, requirement)),
+            client: client
+        )))
+        #expect(model.canPoll(session(nil, phase: .connected(.preview), client: client)))
+        #expect(model.canPoll(session(nil, phase: .unreachable(.preview), client: client)))
     }
 
     /// A relay session reaches the robot over a data channel that does not carry the

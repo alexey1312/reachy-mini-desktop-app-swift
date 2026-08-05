@@ -88,15 +88,20 @@ final class RunningAppModel {
         isExpanded = false
     }
 
+    func visibleStatusChanged(_ status: RobotAppStatus?) {
+        guard status == nil else { return }
+        isExpanded = false
+    }
+
     // MARK: - Refresh
 
-    /// One tick. `currentApp()` writes the session through `recordRunning`, so
+    /// One tick. `refreshCurrentApp()` writes the session through `recordRunning`, so
     /// nothing is assigned here — and a failed call leaves the last known app
     /// standing rather than blanking the dock, which is what a daemon mid-restart
     /// deserves.
     func refresh(session: RobotSession) async {
-        guard session.canManageApps else { return }
-        _ = try? await session.currentApp()
+        guard canPoll(session) else { return }
+        try? await session.refreshCurrentApp()
     }
 
     /// Polls until cancelled. There is no push channel for which app holds the
@@ -107,6 +112,16 @@ final class RunningAppModel {
             await refresh(session: session)
             guard !Task.isCancelled else { return }
             try? await Task.sleep(for: interval(for: session.runningApp))
+        }
+    }
+
+    /// The app capability appears as soon as a handshake installs its client. Wait
+    /// until compatibility and readiness have accepted that client before using it.
+    func canPoll(_ session: RobotSession) -> Bool {
+        guard session.canManageApps else { return false }
+        return switch session.phase {
+        case .connected, .unreachable: true
+        case .idle, .connecting: false
         }
     }
 

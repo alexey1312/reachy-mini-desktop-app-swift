@@ -82,7 +82,11 @@ private struct RunningAppDockModifier: ViewModifier {
     /// not over a relay: `RemoteRobotConnection` does not speak the apps protocol,
     /// so every tick would simply throw `.appsUnavailable`.
     private var polls: Bool {
-        scenePhase == .active && session.canManageApps && !previewMode
+        scenePhase == .active && model.canPoll(session) && !previewMode
+    }
+
+    private var visibleStatus: RobotAppStatus? {
+        model.visibleStatus(for: session)
     }
 
     func body(content: Content) -> some View {
@@ -95,7 +99,7 @@ private struct RunningAppDockModifier: ViewModifier {
                 // Read afresh rather than captured: an app that stops while the
                 // sheet is open should close it, not leave a page about a process
                 // that no longer exists.
-                if let status = self.model.visibleStatus(for: session) {
+                if let status = visibleStatus {
                     NavigationStack {
                         RunningAppSheet(session: session, model: self.model, status: status)
                     }
@@ -105,6 +109,9 @@ private struct RunningAppDockModifier: ViewModifier {
             .task(id: polls) {
                 guard polls else { return }
                 await self.model.poll(session: session)
+            }
+            .onChange(of: visibleStatus) { _, status in
+                self.model.visibleStatusChanged(status)
             }
     }
 }
