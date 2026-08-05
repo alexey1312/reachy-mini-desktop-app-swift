@@ -47,6 +47,7 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 ./bin/mise run build          # Debug build (piped through xcsift)
 ./bin/mise run build:app      # Build the ReachySpike app target (generates first)
 ./bin/mise run build:app:ios  # Same, for iOS — the only task that compiles the widget
+./bin/mise run device         # Build, install and launch on the connected iPhone
 ./bin/mise run test           # All tests, parallel
 ./bin/mise run test:filter T  # Filter tests
 ./bin/mise run lint           # SwiftLint --strict + actionlint + hk lockstep
@@ -100,14 +101,28 @@ is Linux/BlueZ, so nothing simulates it.
 `.venv-sim` does hold the daemon's own source (`lib/python3.12/site-packages/reachy_mini/`) — read
 `daemon/app/routers/*.py` and `daemon/app/services/` there rather than inferring a route's shape. Still a
 specification (rule 1), never code to port.
-It is 1.4 GB, gitignored and **per-worktree**, so a fresh worktree spends 10–15 minutes in pip (mujoco, GStreamer)
-before the daemon starts — it is installing, not hung; watch `.venv-sim` growing rather than the port. A warm pip
-cache cuts the next one to a couple of minutes. **Do not move it out of the worktree to share it between them.**
+It is 1.3 GB and gitignored, but it is filled by `uv pip install`, which writes APFS clones instead of copying out
+of its cache: a second worktree builds one in under a second and consumes ~6 MiB of actual disk. The venv itself is
+still created by `python -m venv` — mjpython wants a real framework build, and `uv venv` was never tried against
+mujoco. **Do not move it out of the worktree to share it between them**, and do not read the old advice to wait out
+pip: an install that takes minutes now means a cold `~/.cache/uv`, not normal behaviour.
 Both a relocated copy and a clean install into `~/.cache` leave the daemon stuck before it binds :8000, logging
 `External plugin loader failed` — while the same venv under the worktree serves in four seconds. The cause is not
 the scanner binary (it executes fine from either path) and was not identified; the shared-cache experiment is a
 dead end, not an unfinished idea. Probe readiness on `/api/daemon/status` — **there is no `/api/status`**, so a
 poll for it reports a healthy daemon as down.
+
+**Device builds are one command: `mise run device`** (`Scripts/device-run.sh`, also the Conductor run button in
+`.conductor/settings.toml`). It finds the phone itself — `devicectl list devices --json-output` carries both
+identifiers per device, and they are not interchangeable: `hardwareProperties.udid` is what
+`xcodebuild -destination 'id=…'` takes, `identifier` is the CoreDevice UUID `devicectl` takes, and swapping them
+fails with "Timed out waiting for all destinations". The one thing it cannot discover is the signing team, which
+lives in `~/.config/reachy-mini/device.env` — outside every worktree, so nothing is copied when a workspace is
+created, and an exported `REACHY_DEVELOPMENT_TEAM` overrides it. Flags: `--build-only`, `--no-launch`,
+`--device <udid>`; pass them after `--` (`mise run device -- --build-only`).
+`devicectl` prints `Failed to load provisioning paramter list … No provider was found.` on every invocation and
+succeeds anyway — check for `App installed:`, not for a clean stderr. A **locked** phone accepts the install and
+refuses the launch; the script says so and exits 3 rather than reprinting the CoreDevice error wall.
 
 **An App Group is not a wildcard capability.** `iOS Team Provisioning Profile: *` cannot carry one, so every target
 that declares it — the app and each extension separately, each with its own App ID — needs it added once through

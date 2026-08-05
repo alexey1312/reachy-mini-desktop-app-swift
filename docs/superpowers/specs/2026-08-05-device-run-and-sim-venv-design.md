@@ -74,10 +74,15 @@ present via Homebrew, which the project rules forbid relying on.
 
 Measured on this machine, warm cache:
 
-|                                | `pip` (today)                              | `uv`       |
-| ------------------------------ | ------------------------------------------ | ---------- |
-| Install time                   | 10–15 min cold, "a couple of minutes" warm | **0.45 s** |
-| Disk consumed by a second venv | ~1.3 GB                                    | **6 MiB**  |
+|                                           | `pip` (today)                              | `uv`       |
+| ----------------------------------------- | ------------------------------------------ | ---------- |
+| Install time                              | 10–15 min cold, "a couple of minutes" warm | **0.45 s** |
+| Disk consumed by a second venv            | ~1.3 GB                                    | **6 MiB**  |
+| `mise run sim-daemon` from no venv at all | 10–15 min                                  | **5 s**    |
+
+Daemon boot is a separate cost and unchanged: the first `sim-daemon` in a worktree spent ~8.5 minutes between a
+finished venv and a serving `/api/daemon/status`. Nothing here makes that faster, and it is worth not mistaking
+one for the other while watching the task.
 
 The `mise.toml:271` comment "uv has known MuJoCo issues" is stale for this usage and is replaced by what was
 measured: with the venv created by `python -m venv` and uv used only as the installer, `mjpython` is present,
@@ -93,13 +98,14 @@ nothing.
 
 ## Error handling
 
-| Situation                      | Behaviour                                                                            |
-| ------------------------------ | ------------------------------------------------------------------------------------ |
-| No team configured             | Exit 1, print the `~/.config/reachy-mini/device.env` snippet to create               |
-| No paired iOS device           | Exit 1, name the check (cable/Wi-Fi, trust prompt)                                   |
-| Two or more candidates         | Exit 1, list name + udid of each, suggest `REACHY_DEVICE_UDID`                       |
-| Build fails                    | Propagate `xcodebuild`'s exit code; output already goes through xcsift               |
-| `devicectl` provisioning noise | Ignored — it prints `No provider was found.` on every invocation and succeeds anyway |
+| Situation                      | Behaviour                                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| No team configured             | Exit 1, print the `~/.config/reachy-mini/device.env` snippet to create                |
+| No paired iOS device           | Exit 1, name the check (cable/Wi-Fi, trust prompt)                                    |
+| Two or more candidates         | Exit 1, list name + udid of each, suggest `REACHY_DEVICE_UDID`                        |
+| Build fails                    | Propagate `xcodebuild`'s exit code; output already goes through xcsift                |
+| `devicectl` provisioning noise | Ignored — it prints `No provider was found.` on every invocation and succeeds anyway  |
+| Phone locked                   | Install already succeeded; print that and exit 3 instead of the CoreDevice error wall |
 
 ## Verification
 
