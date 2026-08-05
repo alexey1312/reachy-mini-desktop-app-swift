@@ -134,7 +134,7 @@ private final class StoreRobotClient: RobotAPIClient, RobotAppsClient, @unchecke
 struct AppStoreModelTests {
     @Test("a new store starts in the content-loading state")
     func initialContentLoading() {
-        let model = AppStoreModel()
+        let model = AppStoreModel(session: RobotSession())
 
         #expect(model.isContentLoading)
         #expect(!model.loading)
@@ -148,7 +148,7 @@ struct AppStoreModelTests {
 
     private func loaded(_ client: StoreRobotClient = StoreRobotClient()) async -> (AppStoreModel, RobotSession) {
         let session = await connected(client)
-        let model = AppStoreModel()
+        let model = AppStoreModel(session: session)
         await model.load(session: session)
         return (model, session)
     }

@@ -26,9 +26,12 @@ final class AppStoreModel {
     var section: Section = .installed
     var searchText = ""
 
+    /// Held so `runningApp` can read through to it. The mutating calls still take a
+    /// session of their own — collapsing them is a separate change.
+    private let session: RobotSession
+
     private(set) var installed: [RobotApp] = []
     private(set) var catalogue: [RobotApp] = []
-    private(set) var runningApp: RobotAppStatus?
     private(set) var startupApp: String?
     private(set) var updates: AppUpdatesSummary?
     private(set) var lock: RobotAppLockStatus?
@@ -43,6 +46,17 @@ final class AppStoreModel {
     /// Coalesces overlapping loads: a slow catalogue must not overwrite the result
     /// of a refresh the user asked for afterwards (`MovesModel`'s pattern).
     private var loadID: UUID?
+
+    init(session: RobotSession) {
+        self.session = session
+    }
+
+    /// Read through rather than stored: the session is the single writer, and the
+    /// global dock renders the same value. Two copies would drift the moment one
+    /// screen acted and the other did not hear about it.
+    var runningApp: RobotAppStatus? {
+        session.runningApp
+    }
 
     /// Initial load and a retry without data replace the empty content area. Refreshing
     /// a catalogue already on screen does not.
@@ -129,7 +143,12 @@ final class AppStoreModel {
 
         // Everything below is decoration: a robot whose store loaded is usable
         // even if its update check timed out.
-        runningApp = try? await session.currentApp()
+        //
+        // The running app is not assigned here — `currentApp()` writes it into the
+        // session. A failed call therefore leaves the last known app standing
+        // rather than blanking the dock, which is what a mid-restart daemon
+        // deserves.
+        _ = try? await session.currentApp()
         lock = try? await session.appLockStatus()
         startupApp = try? await session.startupApp()
         updates = try? await session.appUpdates()
@@ -137,18 +156,15 @@ final class AppStoreModel {
 
     func start(_ app: RobotApp, session: RobotSession) async {
         guard let twin = installedTwin(of: app) else { return }
-        await run { runningApp = try await session.startApp(named: twin.name) }
+        await run { _ = try await session.startApp(named: twin.name) }
     }
 
     func stop(session: RobotSession) async {
-        await run {
-            try await session.stopCurrentApp()
-            runningApp = nil
-        }
+        await run { try await session.stopCurrentApp() }
     }
 
     func restart(session: RobotSession) async {
-        await run { runningApp = try await session.restartCurrentApp() }
+        await run { _ = try await session.restartCurrentApp() }
     }
 
     /// `nil` clears it. Sent under the installed name, which is the only one the
@@ -162,7 +178,7 @@ final class AppStoreModel {
     /// catalogue from Hugging Face.
     func reloadInstalled(session: RobotSession) async {
         installed = await (try? session.installedApps(refresh: true)) ?? installed
-        runningApp = try? await session.currentApp()
+        _ = try? await session.currentApp()
         startupApp = try? await session.startupApp()
     }
 
@@ -197,22 +213,29 @@ private extension RobotApp {
         /// A store parked in one state. Lives here rather than in `Previews/`:
         /// everything it writes is `private(set)`, which `@testable` does not reach
         /// from another module.
+        ///
+        /// The running app is **not** a parameter here any more — it lives on the
+        /// session, which the dock reads too. Park it with
+        /// `RobotSession.preview(runningApp:)` and hand that same session in, or the
+        /// screen and the dock will be looking at two different robots.
+        ///
+        /// `session` defaults to `nil` rather than to a value: a default argument is
+        /// evaluated nonisolated, and `RobotSession` is main-actor isolated.
         static func preview(
+            session: RobotSession? = nil,
             section: Section = .discover,
             catalogue: [RobotApp] = RobotApp.previewCatalogue,
             installed: [RobotApp] = RobotApp.previewInstalled,
-            running: RobotAppStatus? = nil,
             startupApp: String? = nil,
             hasUpdate: Bool = false,
             lock: RobotAppLockStatus? = nil,
             loading: Bool = false,
             error: String? = nil
         ) -> AppStoreModel {
-            let model = AppStoreModel()
+            let model = AppStoreModel(session: session ?? .preview())
             model.section = section
             model.catalogue = catalogue
             model.installed = installed
-            model.runningApp = running
             model.startupApp = startupApp
             model.lock = lock
             model.loading = loading

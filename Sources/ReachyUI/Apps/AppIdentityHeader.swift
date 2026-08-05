@@ -1,0 +1,43 @@
+import ReachyKit
+import ReachyWidgetUI
+import SwiftUI
+
+/// Artwork, name, author and the badges — the way an app introduces itself.
+///
+/// Shared by the catalogue sheet and the running-app sheet. They agree on nothing
+/// else (one is about installing, the other about what is happening right now),
+/// but a user who opens both must see the same app, described the same way.
+struct AppIdentityHeader: View {
+    let app: RobotApp
+    var artworkSize: CGFloat = 64
+
+    var body: some View {
+        HStack(spacing: 14) {
+            AppArtworkTile(app: app, size: artworkSize)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(app.title)
+                    .font(.title3.weight(.semibold))
+                if let author = app.author {
+                    Text(author)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 10) {
+                    if app.isOfficial {
+                        Label("Official", systemImage: "checkmark.seal.fill")
+                    }
+                    if app.isPrivate {
+                        Label("Private", systemImage: "lock.fill")
+                    }
+                    if let likes = app.likes, likes > 0 {
+                        Label("\(likes)", systemImage: "heart.fill")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+}

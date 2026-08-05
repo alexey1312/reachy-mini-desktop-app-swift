@@ -63,40 +63,8 @@ enum PreviewScene {
         .preview()
     }
 
-    static func appStore(
-        _ session: RobotSession,
-        model: AppStoreModel? = nil,
-        install: AppInstallModel? = nil
-    ) -> some View {
-        NavigationHost {
-            AppStoreScreen(
-                session: session,
-                model: model ?? .preview(),
-                install: install ?? .preview(state: .idle, session: session)
-            )
-        }
-        .preview()
-    }
-
-    /// The sheet the store opens, previewed on its own: it carries the whole
-    /// install flow, and a snapshot of it is the only view of a job in flight.
-    static func appDetail(
-        _ session: RobotSession,
-        app: RobotApp,
-        model: AppStoreModel? = nil,
-        install: AppInstallModel? = nil
-    ) -> some View {
-        NavigationHost {
-            AppDetailSheet(
-                app: app,
-                model: model ?? .preview(),
-                session: session,
-                install: install ?? .preview(state: .idle, session: session),
-                dismiss: {}
-            )
-        }
-        .preview()
-    }
+    // The app-store and running-app wrappers live in `PreviewAppScenes.swift` —
+    // this file is at its length limit.
 
     static func logConsole(
         _ model: LogConsoleModel? = nil,
@@ -374,23 +342,5 @@ enum PreviewScene {
     }
 }
 
-private extension View {
-    func preview() -> some View {
-        environment(\.reachyPreviewMode, true)
-    }
-}
-
-/// Navigation chrome for screen previews: the title and the toolbar are part of the screen, so a
-/// snapshot has to include them.
-///
-/// Inside the storybook these toolbars end up in the app's own navigation bar rather than in the
-/// card — SwiftUI hoists `.toolbar` out of the scaled card, and dropping this stack only makes
-/// that worse, since a toolbar with no local container has nowhere else to go. The storybook hides
-/// its root bar instead.
-private struct NavigationHost<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        NavigationStack { content }
-    }
-}
+// `NavigationHost` and `View.preview()` live in `PreviewHost.swift` — they were
+// file-private here, which is what stopped the scenes being split across two files.

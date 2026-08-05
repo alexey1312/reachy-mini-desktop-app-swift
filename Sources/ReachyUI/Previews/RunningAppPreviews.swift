@@ -1,0 +1,61 @@
+import ReachyKit
+@testable import ReachyUI
+import SwiftUI
+
+// MARK: - The dock
+
+// Components, so `.sizeThatFitsLayout` rather than a device trait: the strip is
+// what these capture, not the screen it is pinned under.
+
+#Preview("Dock — running", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.running))
+}
+
+#Preview("Dock — starting", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.starting))
+}
+
+#Preview("Dock — stopping", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.stopping), busy: true)
+}
+
+// A crashed app offers Dismiss instead of Stop — there is nothing left to stop,
+// and the strip would otherwise sit there for good.
+#Preview("Dock — crashed", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.previewCrashed)
+}
+
+// The robot went quiet. The app is probably still running, so the strip stays —
+// but its controls cannot reach it and are shown inert rather than lying.
+#Preview("Dock — unreachable", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.running), isReachable: false)
+}
+
+// A daemon newer than this client. Its own word for the state is carried through
+// rather than replaced with "Unknown" (project rule 3).
+#Preview("Dock — unfamiliar state", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.unknown("reloading")))
+}
+
+// MARK: - The expanded sheet
+
+#Preview("Running app — running") {
+    PreviewScene.runningAppSheet(.preview(.running))
+}
+
+#Preview("Running app — crashed") {
+    PreviewScene.runningAppSheet(.previewCrashed)
+}
+
+#Preview("Running app — unreachable") {
+    PreviewScene.runningAppSheet(.preview(.running), phase: .unreachable(.preview))
+}
+
+// The stop call itself failed — distinct from the app failing, and the only place
+// that reason is shown.
+#Preview("Running app — command failed") {
+    PreviewScene.runningAppSheet(
+        .preview(.running),
+        model: .preview(error: "The daemon rejected the request (HTTP 400)")
+    )
+}

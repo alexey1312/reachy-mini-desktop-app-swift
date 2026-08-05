@@ -20,7 +20,7 @@ struct AppDetailSheet: View {
     var body: some View {
         Form {
             Section {
-                header
+                AppIdentityHeader(app: app)
             }
 
             if let job = jobForThisApp {
@@ -83,36 +83,6 @@ struct AppDetailSheet: View {
             } message: {
                 Text("The app and its Python environment are deleted from the robot.")
             }
-    }
-
-    private var header: some View {
-        HStack(spacing: 14) {
-            AppArtworkTile(app: app, size: 64)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(app.title)
-                    .font(.title3.weight(.semibold))
-                if let author = app.author {
-                    Text(author)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                HStack(spacing: 10) {
-                    if app.isOfficial {
-                        Label("Official", systemImage: "checkmark.seal.fill")
-                    }
-                    if app.isPrivate {
-                        Label("Private", systemImage: "lock.fill")
-                    }
-                    if let likes = app.likes, likes > 0 {
-                        Label("\(likes)", systemImage: "heart.fill")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
     }
 
     private var actions: some View {

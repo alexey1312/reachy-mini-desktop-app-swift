@@ -294,6 +294,57 @@ struct RobotSessionAppsTests {
         #expect(stores.snapshots.current?.runningAppTakenAt == nil)
     }
 
+    // MARK: - What the dock reads
+
+    /// The same funnel feeds two readers with deliberately different appetites, so
+    /// every command has to be checked against both.
+    @Test("every app command leaves the session's own reading up to date")
+    func recordsTheRunningAppOnTheSession() async throws {
+        let client = AppsRobotClient()
+        let session = try await connected(client)
+        #expect(session.runningApp == nil)
+
+        _ = try await session.startApp(named: "dance_party")
+        #expect(session.runningApp?.app.name == "dance_party")
+
+        try await session.stopCurrentApp()
+        #expect(session.runningApp == nil)
+
+        _ = try await client.startApp(named: "dance_party")
+        _ = try await session.currentApp()
+        #expect(session.runningApp?.app.name == "dance_party")
+    }
+
+    /// The divergence between the two readers, and the reason the session stores the
+    /// raw status: the dock has to be able to say "stopped with an error", while a
+    /// widget offering Stop for an app that already died would be worse than one
+    /// showing nothing.
+    @Test("a crashed app stays on the session after it leaves the widget snapshot")
+    func keepsTerminalStatusesOnTheSession() async throws {
+        let stores = try makeStores()
+        let client = AppsRobotClient()
+        let session = try await connected(client, stores: stores)
+        _ = try await session.startApp(named: "dance_party")
+
+        client.setRunning(AppsRobotClient.status(name: "dance_party", state: "error"))
+        _ = try await session.currentApp()
+
+        #expect(session.runningApp?.state == .error)
+        #expect(stores.snapshots.current?.runningAppName == nil)
+    }
+
+    /// A dock left floating over the connection screen is exactly the bug this
+    /// prevents — and `resetConnectionState` is the only place that can.
+    @Test("disconnecting forgets what was running")
+    func forgetsTheRunningAppOnDisconnect() async throws {
+        let session = try await connected(AppsRobotClient())
+        _ = try await session.startApp(named: "dance_party")
+
+        session.disconnect()
+
+        #expect(session.runningApp == nil)
+    }
+
     @Test("an empty installed response keeps the last widget menu")
     func preservesTheMenuOverAnEmptyResponse() async throws {
         let stores = try makeStores()

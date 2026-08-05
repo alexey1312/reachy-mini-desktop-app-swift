@@ -39,6 +39,22 @@ public extension RobotSession {
         return status
     }
 
+    /// Refreshes the running-app reading for background observers without changing
+    /// the session-wide error shown by user-initiated controls.
+    func refreshCurrentApp() async throws {
+        switch phase {
+        case .connected, .unreachable: break
+        case .idle, .connecting: throw ReachyKitError.notConnected
+        }
+        try assertSupportedDaemon()
+        guard let client else { throw ReachyKitError.notConnected }
+        guard let appsClient = client as? any RobotAppsClient else {
+            throw ReachyKitError.appsUnavailable
+        }
+        let status = try await appsClient.currentAppStatus()
+        recordRunning(status)
+    }
+
     /// Refused with a 400 while another app holds the robot — stop that one first.
     func startApp(named name: String) async throws -> RobotAppStatus {
         let status = try await withAppsClient { try await $0.startApp(named: name) }
@@ -136,6 +152,9 @@ private extension RobotSession {
     }
 
     func recordRunning(_ status: RobotAppStatus?) {
+        runningApp = status
+        // The snapshot keeps the narrower reading: a widget offering "Stop" for an
+        // app that already died would be worse than one showing nothing.
         let running = status.flatMap { $0.isBusy ? $0 : nil }
         let identity = connectedIdentity
         snapshots.recordRunningApp(

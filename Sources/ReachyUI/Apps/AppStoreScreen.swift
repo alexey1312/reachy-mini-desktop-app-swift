@@ -12,9 +12,11 @@ struct AppStoreScreen: View {
     @State private var selected: RobotApp?
     @Environment(\.reachyPreviewMode) private var previewMode
 
-    init(session: RobotSession, model: AppStoreModel = AppStoreModel(), install: AppInstallModel? = nil) {
+    /// `model` is `nil` rather than a defaulted value: it now needs `session`, and a
+    /// default argument cannot read another parameter.
+    init(session: RobotSession, model: AppStoreModel? = nil, install: AppInstallModel? = nil) {
         self.session = session
-        _model = State(initialValue: model)
+        _model = State(initialValue: model ?? AppStoreModel(session: session))
         _install = State(initialValue: install ?? AppInstallModel(session: session))
     }
 
@@ -71,20 +73,10 @@ struct AppStoreScreen: View {
         .contentLoading(isPresented: model.isContentLoading, title: "Browsing the robot app aisle…")
         .navigationTitle("Apps")
         .searchable(text: $model.searchText, prompt: "Search apps")
+        // No running-app inset here any more: the dock is mounted on the root
+        // `TabView`, below the tab bar, and is on screen for every tab. A second
+        // copy on this one would be the same control twice.
         .minimizedSearchToolbar()
-        .safeAreaInset(edge: .bottom) {
-            if let running = model.runningApp {
-                RunningAppBanner(status: running, busy: model.busy) { action in
-                    Task {
-                        switch action {
-                        case .stop: await model.stop(session: session)
-                        case .restart: await model.restart(session: session)
-                        }
-                    }
-                }
-                .padding()
-            }
-        }
         .toolbar {
             Button {
                 Task { await model.load(session: session, refresh: true) }
@@ -150,66 +142,6 @@ struct AppStoreScreen: View {
         } icon: {
             Image(systemName: "antenna.radiowaves.left.and.right")
                 .foregroundStyle(.tint)
-        }
-    }
-}
-
-/// What is running, and the two things worth doing about it.
-struct RunningAppBanner: View {
-    enum Action {
-        case stop
-        case restart
-    }
-
-    let status: RobotAppStatus
-    var busy = false
-    let perform: (Action) -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            AppArtworkTile(app: status.app, size: 34)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(status.app.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text(stateDescription)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 4)
-            Button {
-                perform(.restart)
-            } label: {
-                Label("Restart", systemImage: "arrow.clockwise")
-                    .labelStyle(.iconOnly)
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .disabled(busy)
-
-            Button {
-                perform(.stop)
-            } label: {
-                Label("Stop", systemImage: "stop.fill")
-                    .labelStyle(.iconOnly)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.circle)
-            .tint(.red)
-            .disabled(busy)
-        }
-        .padding(12)
-        .background(.regularMaterial, in: .rect(cornerRadius: 18, style: .continuous))
-    }
-
-    private var stateDescription: String {
-        switch status.state {
-        case .starting: "Starting…"
-        case .running: "Running"
-        case .stopping: "Stopping…"
-        case .done: "Finished"
-        case .error: status.error ?? "Stopped with an error"
-        case let .unknown(state): state
         }
     }
 }
