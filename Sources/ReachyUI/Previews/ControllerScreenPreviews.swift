@@ -19,7 +19,7 @@ import SwiftUI
 #Preview("Controller — displaced") {
     PreviewScene.controller(
         .preview(),
-        target: .init(z: 0.02, roll: 0.35, bodyYaw: 1.2, antennaLeft: -1.1, antennaRight: 0.9)
+        driver: TeleopDriver(target: .init(z: 0.02, roll: 0.35, bodyYaw: 1.2, antennaLeft: -1.1, antennaRight: 0.9))
     )
 }
 

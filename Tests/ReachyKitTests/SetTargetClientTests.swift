@@ -19,8 +19,8 @@ struct SetTargetClientTests {
         #expect(json?["target_antennas"] as? [Double] == [0.1, -0.1])
     }
 
-    @Test("throttle: a burst of sends collapses to one wire frame", .timeLimit(.minutes(1)))
-    func throttle() async throws {
+    @Test("a step goal arrives as a run of frames, not one", .timeLimit(.minutes(1)))
+    func pacing() async throws {
         let received = ReceivedCounter()
         let accepted = ReceivedCounter()
         let server = try LocalWebSocketServer { connection in
@@ -32,20 +32,58 @@ struct SetTargetClientTests {
 
         let client = try SetTargetClient(
             address: RobotAddress(host: "127.0.0.1", port: Int(port)),
-            minSendInterval: .seconds(10)
+            tickInterval: .milliseconds(10)
         )
         await client.connect()
         // `connect()` returns before the handshake, so wait on the server actually
         // accepting rather than on a duration a loaded CI runner can overrun.
         await waitUntil(accepted.count >= 1)
 
-        for i in 0 ..< 5 {
-            await client.send(.init(bodyYaw: Double(i)))
+        // Half a turn cannot be one frame: at the limiter's body ceiling it needs
+        // more than a second, so the wire must carry the whole ramp.
+        await client.send(.init(bodyYaw: .pi))
+        await waitUntil(received.count >= 5)
+        #expect(received.count >= 5)
+        await client.disconnect()
+    }
+
+    @Test("the pacer goes quiet once it reaches the goal", .timeLimit(.minutes(1)))
+    func quiescence() async throws {
+        let received = ReceivedCounter()
+        let accepted = ReceivedCounter()
+        let server = try LocalWebSocketServer { connection in
+            accepted.increment()
+            receiveLoop(connection, counter: received)
         }
-        // The 10 s throttle means no second frame can follow, so the first arrival
-        // is already the final count.
+        defer { server.stop() }
+        let port = try await server.readyPort()
+
+        let client = try SetTargetClient(
+            address: RobotAddress(host: "127.0.0.1", port: Int(port)),
+            tickInterval: .milliseconds(10)
+        )
+        await client.connect()
+        await waitUntil(accepted.count >= 1)
+
+        await client.send(.init(yaw: 0.01))
         await waitUntil(received.count >= 1)
-        #expect(received.count == 1)
+        // The condition is "the count holds still", not "some time has passed": the
+        // tail of an exponential approach is short but not instant, and a loaded
+        // runner stretches it. A pacer that never stopped never goes quiet, however
+        // long the deadline.
+        var settled = 0
+        var quietTicks = 0
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while ContinuousClock.now < deadline, quietTicks < 20 {
+            try await Task.sleep(for: .milliseconds(10))
+            if received.count == settled {
+                quietTicks += 1
+            } else {
+                settled = received.count
+                quietTicks = 0
+            }
+        }
+        #expect(quietTicks >= 20, "the pacer never stopped transmitting")
         await client.disconnect()
     }
 
