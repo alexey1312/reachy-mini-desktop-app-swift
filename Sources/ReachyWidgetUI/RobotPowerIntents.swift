@@ -45,9 +45,16 @@ public struct WakeRobotIntent: AppIntent {
     public static let description = IntentDescription(
         "Enables the robot's motors and plays its wake-up animation."
     )
-    /// Motion, so the app comes forward rather than moving a robot the user may
-    /// not be looking at from a locked phone.
-    public static let openAppWhenRun = true
+    // Runs in the background, which is the default and the only thing that works
+    // here. `openAppWhenRun = true` would bring the app forward, but it is
+    // deprecated *and* errors when the intent runs in an app extension — exactly
+    // where a Control Centre button runs it. Its replacement, `supportedModes`,
+    // is iOS 26 and this app deploys to 18.
+    //
+    // Background means the extension's own process, which cannot ask for Local
+    // Network access: it has no screen to prompt from, and a denial there is
+    // silent. Safe only because the intent already requires a robot this app has
+    // connected to before, and that connection is what obtained the permission.
 
     public init() {}
 
@@ -62,7 +69,6 @@ public struct SleepRobotIntent: AppIntent {
     public static let description = IntentDescription(
         "Plays the robot's sleep animation, then parks its motors."
     )
-    public static let openAppWhenRun = true
 
     public init() {}
 

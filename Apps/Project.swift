@@ -100,6 +100,22 @@ let project = Project(
                 "CFBundleDisplayName": .string("Reachy Mini"),
                 // Its own process, so it needs its own copy of the group name.
                 "ReachyAppGroupIdentifier": .string(appGroup),
+                // The control buttons run their intent in *this* process, and it
+                // talks to the robot over plain HTTP on the LAN. Without the ATS
+                // exception that request is refused before it leaves the device;
+                // the usage string is what the system would show if it ever had a
+                // screen to ask from, which an extension does not — so the
+                // permission has to already exist from the app having connected.
+                "NSLocalNetworkUsageDescription": .string(
+                    "Wakes and sleeps your Reachy Mini on the local network."
+                ),
+                "NSBonjourServices": .array([
+                    .string("_reachy-mini._tcp"),
+                    .string("_http._tcp"),
+                ]),
+                "NSAppTransportSecurity": .dictionary([
+                    "NSAllowsLocalNetworking": .boolean(true),
+                ]),
                 "NSExtension": .dictionary([
                     "NSExtensionPointIdentifier": .string("com.apple.widgetkit-extension"),
                 ]),
