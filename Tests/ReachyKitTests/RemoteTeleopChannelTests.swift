@@ -8,8 +8,17 @@ import Testing
 private final class TeleopChannelSpy: RemoteDataChannel, @unchecked Sendable {
     private let lock = NSLock()
     private var recorded: [String] = []
+    private var open: Bool
 
-    let isOpen = true
+    init(isOpen: Bool = true) {
+        open = isOpen
+    }
+
+    var isOpen: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return open
+    }
 
     var sent: [String] {
         lock.lock()
@@ -29,6 +38,12 @@ private final class TeleopChannelSpy: RemoteDataChannel, @unchecked Sendable {
         lock.unlock()
     }
 
+    func setOpen(_ open: Bool) {
+        lock.lock()
+        self.open = open
+        lock.unlock()
+    }
+
     func messages() -> AsyncStream<String> {
         AsyncStream { _ in }
     }
@@ -36,14 +51,27 @@ private final class TeleopChannelSpy: RemoteDataChannel, @unchecked Sendable {
 
 @Suite("Remote teleop channel", .timeLimit(.minutes(1)))
 struct RemoteTeleopChannelTests {
+    private static var immediateLimiter: TargetSlewLimiter {
+        TargetSlewLimiter(
+            tau: .nanoseconds(1),
+            headAngularRate: .greatestFiniteMagnitude,
+            bodyYawRate: .greatestFiniteMagnitude,
+            antennaRate: .greatestFiniteMagnitude,
+            translationRate: .greatestFiniteMagnitude
+        )
+    }
+
     private func teleop(
-        minSendInterval: Duration = .milliseconds(33)
+        tickInterval: Duration = .milliseconds(33),
+        limiter: TargetSlewLimiter = Self.immediateLimiter,
+        isOpen: Bool = true
     ) -> (RemoteTeleopChannel, TeleopChannelSpy) {
-        let spy = TeleopChannelSpy()
+        let spy = TeleopChannelSpy(isOpen: isOpen)
         return (
             RemoteTeleopChannel(
                 control: RemoteControlChannel(channel: spy),
-                minSendInterval: minSendInterval
+                tickInterval: tickInterval,
+                limiter: limiter
             ),
             spy
         )
@@ -60,12 +88,13 @@ struct RemoteTeleopChannelTests {
         let (teleop, spy) = teleop()
 
         await teleop.send(TeleopTarget(yaw: 0.2, bodyYaw: 0.3, antennaLeft: 0.4, antennaRight: -0.4))
+        await teleop.tick()
 
         #expect(spy.sent.count == 1)
         let body = try object(#require(spy.sent.first))
         #expect(body["type"] as? String == "set_full_target")
         #expect((body["head"] as? [Double])?.count == 16)
-        #expect(body["antennas"] as? [Double] == [0.4, -0.4])
+        #expect(body["antennas"] as? [Double] == [-0.4, 0.4])
         #expect(body["body_yaw"] as? Double == 0.3)
     }
 
@@ -88,6 +117,7 @@ struct RemoteTeleopChannelTests {
         let (teleop, spy) = teleop()
 
         await teleop.send(target)
+        await teleop.tick()
 
         // What the LAN client would have sent, read back as the daemon reads it.
         let encoded = try #require(String(bytes: SetTargetClient.encode(target), encoding: .utf8))
@@ -105,7 +135,8 @@ struct RemoteTeleopChannelTests {
         for (sent, wanted) in zip(actual, expected) {
             #expect(abs(sent - wanted) < 1e-12)
         }
-        // And the two halves the daemon does not transform at all.
+        // And the two halves the daemon does not transform at all, including
+        // its explicit `[right, left]` antenna order.
         #expect(body["antennas"] as? [Double] == lan["target_antennas"] as? [Double])
         #expect(body["body_yaw"] as? Double == lan["target_body_yaw"] as? Double)
     }
@@ -117,6 +148,7 @@ struct RemoteTeleopChannelTests {
         let (teleop, spy) = teleop()
 
         await teleop.send(TeleopTarget(x: 1, y: 2, z: 3))
+        await teleop.tick()
 
         let body = try object(#require(spy.sent.first))
         let head = try #require(body["head"] as? [Double])
@@ -127,25 +159,66 @@ struct RemoteTeleopChannelTests {
         #expect(Array(head[12 ..< 16]) == [0, 0, 0, 1])
     }
 
-    /// The UI emits at gesture rate; the wire should not. Same budget as the LAN
-    /// client, and latest-wins rather than queued.
-    @Test("a burst is throttled to one frame")
-    func throttlesABurst() async {
-        let (teleop, spy) = teleop(minSendInterval: .seconds(30))
+    /// The UI emits at gesture rate; the next tick should carry only the newest
+    /// goal, not one frame per write.
+    @Test("a burst keeps only the latest goal")
+    func burstKeepsLatestGoal() async throws {
+        let (teleop, spy) = teleop()
 
         await teleop.send(TeleopTarget(yaw: 0.1))
         await teleop.send(TeleopTarget(yaw: 0.2))
         await teleop.send(TeleopTarget(yaw: 0.3))
+        await teleop.tick()
 
         #expect(spy.sent.count == 1)
+        let body = try object(#require(spy.sent.first))
+        let head = try #require(body["head"] as? [Double])
+        #expect(abs(head[0] - cos(0.3)) < 1e-12)
     }
 
-    /// This rides a channel the peer connection opened long before a joystick
-    /// existed. Closing it would end the session the robot is being driven over.
-    @Test("connecting and disconnecting leave the channel alone")
-    func doesNotOwnTheChannel() async {
-        let (teleop, spy) = teleop()
+    /// The relay uses the same slew limiter as LAN rather than putting a step on
+    /// physical hardware.
+    @Test("a step goal is slew limited")
+    func slewLimitsAStep() async throws {
+        let (teleop, spy) = teleop(
+            tickInterval: .milliseconds(100),
+            limiter: TargetSlewLimiter()
+        )
 
+        await teleop.send(TeleopTarget(bodyYaw: .pi))
+        await teleop.tick()
+
+        let body = try object(#require(spy.sent.first))
+        let sent = try #require(body["body_yaw"] as? Double)
+        #expect(abs(sent - 12 * .pi / 180) < 1e-12)
+    }
+
+    /// A peer gap drops intermediate frames. Once a peer returns, exactly the
+    /// latest goal advances from the last pose that actually reached the robot.
+    @Test("a peer gap does not queue stale targets")
+    func peerGapKeepsLatestGoal() async throws {
+        let (teleop, spy) = teleop(isOpen: false)
+
+        await teleop.send(TeleopTarget(bodyYaw: 0.1))
+        await teleop.tick()
+        await teleop.send(TeleopTarget(bodyYaw: 0.3))
+        #expect(spy.sent.isEmpty)
+
+        spy.setOpen(true)
+        await teleop.tick()
+
+        #expect(spy.sent.count == 1)
+        let body = try object(#require(spy.sent.first))
+        #expect(body["body_yaw"] as? Double == 0.3)
+    }
+
+    /// This pacer rides a channel the peer connection opened long before a
+    /// joystick existed. Disconnecting stops the pacer, not the shared channel.
+    @Test("connecting and disconnecting leave the shared channel alone")
+    func doesNotOwnTheChannel() async {
+        let (teleop, spy) = teleop(tickInterval: .seconds(60))
+
+        await teleop.send(TeleopTarget(bodyYaw: 0.3))
         await teleop.connect()
         await teleop.disconnect()
 

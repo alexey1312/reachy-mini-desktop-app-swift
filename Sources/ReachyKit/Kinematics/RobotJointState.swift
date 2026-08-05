@@ -72,7 +72,7 @@ public struct RobotJointState: Sendable, Equatable {
             state.bodyYaw = bodyYaw
         }
         if let antennas = frame.antennas, antennas.count >= 2 {
-            // The stream reports (left, right), but the URDF's antenna joints are
+            // The stream reports (right, left), but the URDF's antenna joints are
             // mirrored and wound the other way, so the pair is crossed and negated.
             // Matches the official viewer; worth re-checking against real hardware
             // if the antennas ever look swapped.

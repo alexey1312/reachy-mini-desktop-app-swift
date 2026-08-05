@@ -7,12 +7,27 @@ import Foundation
 /// not link a media framework.
 public protocol RemoteDataChannel: Sendable {
     func send(_ text: String) async throws
+    /// Sends only when a channel is attached right now. Unlike ``send(_:)``, this
+    /// must never wait through a peer replacement: live-control frames are stale
+    /// by the time the next peer arrives.
+    func sendIfOpen(_ text: String) async throws -> Bool
     func messages() -> AsyncStream<String>
     /// Whether a command sent now would go out, rather than wait for a channel the
     /// robot has not opened yet. Deliberately the same question `send` asks itself
     /// before deciding to wait — a caller bounding that wait has to bound the same
     /// thing, or it is timing something other than what is happening.
     var isOpen: Bool { get }
+}
+
+public extension RemoteDataChannel {
+    /// Conservative default for test doubles and transports whose `send` does not
+    /// wait. The WebRTC implementation overrides this so the check and choice not
+    /// to wait are made against the same attached channel.
+    func sendIfOpen(_ text: String) async throws -> Bool {
+        guard isOpen else { return false }
+        try await send(text)
+        return true
+    }
 }
 
 /// A JSON value, for command payloads whose shape the caller decides.
@@ -165,6 +180,20 @@ public actor RemoteControlChannel {
     public func send(_ command: String, payload: [String: RemoteValue] = [:]) async throws {
         startReading()
         try await channel.send(Self.encode(command, payload: payload))
+    }
+
+    /// Sends a live frame only if the current peer can take it immediately.
+    ///
+    /// A control command may reasonably wait for a replacement peer; a teleop
+    /// target may not. Queuing those at gesture rate makes the robot replay old
+    /// motion after a reconnect, possibly after the controller has disappeared.
+    @discardableResult
+    public func sendIfOpen(
+        _ command: String,
+        payload: [String: RemoteValue] = [:]
+    ) async throws -> Bool {
+        startReading()
+        return try await channel.sendIfOpen(Self.encode(command, payload: payload))
     }
 
     /// The unsolicited messages of one `type`.

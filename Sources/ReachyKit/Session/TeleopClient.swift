@@ -22,8 +22,9 @@ public protocol TeleopChannel: Sendable {
 }
 
 /// A live-teleop target: head pose offsets from neutral in metres and radians,
-/// plus body yaw and the two antennas. The daemon clamps every safety limit
-/// server-side and ignores targets while a recorded move is running.
+/// plus body yaw and the two physically named antennas. Both transports encode
+/// them in the daemon's `[right, left]` wire order. The daemon clamps every safety
+/// limit server-side and ignores targets while a recorded move is running.
 ///
 /// Named here rather than inside `SetTargetClient` because two transports carry
 /// it now; the alias on that type keeps every existing call site compiling.

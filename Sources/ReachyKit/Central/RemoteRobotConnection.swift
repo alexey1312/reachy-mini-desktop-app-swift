@@ -77,15 +77,27 @@ public actor RemoteRobotConnection: RobotAPIClient {
     ///   — while this returned `nil` a remote robot read as permanently asleep
     ///   however awake it was, which disabled teleop, moves and the viewport.
     ///
-    /// A `get_state` that fails leaves the mode unknown rather than failing the
-    /// whole status: one quiet reply must not drop the session to `.unreachable`.
+    /// A quiet or unrecognised `get_state` leaves the mode unknown rather than
+    /// failing the whole status. Transport failures still escape: once identity
+    /// is cached this is the poll's only proof that the relay remains alive.
     public func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
         let identity = try await identity()
-        let motorMode = try? await control.perform(
-            "get_state",
-            correlation: .replyKey("state"),
-            expecting: StateReply.self
-        ).state.motorMode
+        let motorMode: String?
+        do {
+            motorMode = try await control.perform(
+                "get_state",
+                correlation: .replyKey("state"),
+                expecting: StateReply.self
+            ).state.motorMode
+        } catch RemoteControlChannel.Failure.timedOut {
+            motorMode = nil
+        } catch RemoteControlChannel.Failure.robot {
+            motorMode = nil
+        } catch is DecodingError {
+            motorMode = nil
+        } catch {
+            throw error
+        }
         return try Self.status(
             robotName: robotName ?? "",
             version: identity.version,

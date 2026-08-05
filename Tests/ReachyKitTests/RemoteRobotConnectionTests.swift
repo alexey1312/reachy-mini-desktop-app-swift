@@ -164,6 +164,35 @@ struct RemoteRobotConnectionTests {
         #expect(status.backendStatus == nil)
     }
 
+    /// A timeout can mean an older daemon that does not answer `get_state`; an
+    /// ended stream cannot. Once identity is cached, this command is the status
+    /// poll's only proof that the remote transport still exists.
+    @Test("a closed data channel fails status polling")
+    func surfacesAClosedChannel() async throws {
+        let channel = FakeDataChannel(replies: Self.identity.merging([
+            "get_state": #"{"state":{"motor_mode":"enabled"}}"#,
+        ]) { _, new in new })
+        let connection = RemoteRobotConnection(channel: channel, timeout: .seconds(5))
+
+        _ = try await connection.daemonStatus()
+        channel.removeReply(for: "get_state")
+        let sentBeforePolling = channel.sent.count
+        let status = Task {
+            try await connection.daemonStatus()
+        }
+
+        while !channel.isListening
+            || channel.sent.count == sentBeforePolling
+        {
+            await Task.yield()
+        }
+        channel.close()
+
+        await #expect(throws: RemoteControlChannel.Failure.closed) {
+            _ = try await status.value
+        }
+    }
+
     /// Neither answer changes for the life of a session and the status poll runs
     /// every three seconds, so asking again would be three commands a tick where
     /// one will do.

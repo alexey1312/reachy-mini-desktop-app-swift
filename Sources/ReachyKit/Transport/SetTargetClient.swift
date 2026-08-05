@@ -101,7 +101,9 @@ public actor SetTargetClient {
                 "x": target.x, "y": target.y, "z": target.z,
                 "roll": target.roll, "pitch": target.pitch, "yaw": target.yaw,
             ],
-            "target_antennas": [target.antennaLeft, target.antennaRight],
+            // The daemon names this tuple `[right, left]`; keep the Swift model
+            // physically named and perform the wire-order conversion here.
+            "target_antennas": [target.antennaRight, target.antennaLeft],
             "target_body_yaw": target.bodyYaw,
         ]
         // ponytail: JSONSerialization over generated FullBodyTarget — the anyOf

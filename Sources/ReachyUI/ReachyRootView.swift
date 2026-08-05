@@ -4,13 +4,6 @@ import ReachyMedia
 import SwiftUI
 import WidgetKit
 
-/// The subset of the session a widget actually renders, so `onChange` fires when
-/// that changes and not on every unrelated field of the daemon's status.
-private struct RobotWidgetFacts: Equatable {
-    let phase: RobotSession.ConnectionPhase
-    let isAwake: Bool
-}
-
 /// Entry point for the shared UI: connection flow → robot control, with one live
 /// viewport placed according to how much room there is.
 ///
@@ -163,6 +156,9 @@ public struct ReachyRootView<Developer: View>: View {
                 tab = .robot
             }
         }
+        .onChange(of: keepsRemoteLinkAlive) { _, keepAlive in
+            remoteLinkLivenessChanged(keepAlive)
+        }
         .onOpenURL { url in
             // Only a destination this app owns. The OAuth callback shares this
             // scheme and belongs to the sign-in session, so `ReachyDeepLink`
@@ -195,7 +191,7 @@ public struct ReachyRootView<Developer: View>: View {
     /// bounds the wait if it never answers.
     private func connectRemotely(to robot: CentralRobot) {
         showsRemoteRobots = false
-        remoteLink?.stop()
+        stopRemoteLink()
         let link = RemoteRobotLink(
             robot: robot,
             relay: CentralRelayClient { [hfAccount] in await hfAccount.currentToken() }
@@ -250,7 +246,10 @@ public struct ReachyRootView<Developer: View>: View {
                 if session.canManageApps {
                     AppStoreScreen(session: session)
                 } else {
-                    AppsUnavailableView(isRemote: session.isRemote) { tab = .robot }
+                    AppsUnavailableView(
+                        isRemote: session.isRemote,
+                        findRobot: appsFindRobotButtonTapped
+                    )
                 }
             }
             .hfAccountToolbar(isPresented: $showsAccount)
@@ -370,17 +369,25 @@ public struct ReachyRootView<Developer: View>: View {
         guard session.canTeleoperate else { return nil }
         return { [session] in try session.makeTeleop() }
     }
-}
 
-private extension View {
-    /// A large title inside a narrow side column is laid out against the window
-    /// rather than the column, so it starts flush against the divider with no
-    /// leading inset. Inline titles sit correctly.
-    func columnTitleStyle() -> some View {
-        #if os(iOS)
-            navigationBarTitleDisplayMode(.inline)
-        #else
-            self
-        #endif
+    private var keepsRemoteLinkAlive: Bool {
+        RemoteLinkLifetime.shouldKeepAlive(isRemote: session.isRemote, phase: session.phase)
+    }
+
+    private func stopRemoteLink() {
+        remoteLink?.stop()
+        remoteLink = nil
+    }
+
+    private func remoteLinkLivenessChanged(_ keepAlive: Bool) {
+        guard !keepAlive else { return }
+        stopRemoteLink()
+    }
+
+    private func appsFindRobotButtonTapped() {
+        if session.isRemote {
+            session.disconnect()
+        }
+        tab = .robot
     }
 }

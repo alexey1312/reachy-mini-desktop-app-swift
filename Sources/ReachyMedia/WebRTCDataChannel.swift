@@ -56,6 +56,16 @@ public final class WebRTCDataChannel: NSObject, RemoteDataChannel, @unchecked Se
         guard channel.sendData(buffer) else { throw Failure.refused }
     }
 
+    /// Teleop frames are useful only to the peer that exists now. Taking a local
+    /// snapshot of the attached channel avoids entering `attachedChannel()` and
+    /// therefore cannot leave a stale frame suspended across renegotiation.
+    public func sendIfOpen(_ text: String) async throws -> Bool {
+        guard let channel = current() else { return false }
+        let buffer = RTCDataBuffer(data: Data(text.utf8), isBinary: false)
+        guard channel.sendData(buffer) else { throw Failure.refused }
+        return true
+    }
+
     /// Called once the robot's channel is open. Anything already waiting to send
     /// goes out now.
     func attach(_ channel: RTCDataChannel) {

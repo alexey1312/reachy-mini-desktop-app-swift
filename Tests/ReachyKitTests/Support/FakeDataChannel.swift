@@ -16,7 +16,7 @@ final class FakeDataChannel: RemoteDataChannel, @unchecked Sendable {
     private var pending: [String] = []
     private var recorded: [String] = []
     /// Answers keyed by the command that provokes them.
-    private let scripted: [String: String]
+    private var scripted: [String: String]
     /// A knob rather than a simulation: `send` here always reaches the robot, and
     /// this exists only to say which wait a caller is bounding.
     private var open: Bool
@@ -36,6 +36,14 @@ final class FakeDataChannel: RemoteDataChannel, @unchecked Sendable {
     func losePeer() {
         lock.lock()
         open = false
+        lock.unlock()
+    }
+
+    /// Stops answering one command while leaving the channel itself available.
+    /// Useful when a test needs a successful warm-up followed by a pending call.
+    func removeReply(for command: String) {
+        lock.lock()
+        scripted[command] = nil
         lock.unlock()
     }
 

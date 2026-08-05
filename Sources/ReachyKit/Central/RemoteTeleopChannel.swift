@@ -16,31 +16,62 @@ import simd
 /// answer nobody is waiting on.
 public actor RemoteTeleopChannel: TeleopChannel {
     private let control: RemoteControlChannel
-    private let minSendInterval: Duration
-    private var lastSendAt: ContinuousClock.Instant?
+    private let tickInterval: Duration
+    private let limiter: TargetSlewLimiter
+    private var pacerTask: Task<Void, Never>?
+    private var goal = TeleopTarget()
+    private var emitted = TeleopTarget()
 
-    public init(control: RemoteControlChannel, minSendInterval: Duration = .milliseconds(33)) {
+    public init(
+        control: RemoteControlChannel,
+        tickInterval: Duration = .milliseconds(33),
+        limiter: TargetSlewLimiter = TargetSlewLimiter()
+    ) {
         self.control = control
-        self.minSendInterval = minSendInterval
+        self.tickInterval = tickInterval
+        self.limiter = limiter
     }
 
-    /// Both no-ops. This rides a channel the peer connection opened long before a
-    /// joystick existed, and closing it would end the session the robot is being
-    /// driven over — the camera and every command with it.
-    public func connect() async {}
+    deinit { pacerTask?.cancel() }
 
-    public func disconnect() async {}
-
-    /// Drops the frame if the previous one went out under `minSendInterval` ago,
-    /// exactly as the LAN client does: the UI emits at gesture rate, the wire
-    /// should not.
-    public func send(_ target: TeleopTarget) async {
-        let now = ContinuousClock.now
-        if let lastSendAt, lastSendAt.duration(to: now) < minSendInterval {
-            return
+    /// Starts and stops only this target pacer. The underlying data channel belongs
+    /// to the remote session, so leaving a controller must never close it.
+    public func connect() {
+        guard pacerTask == nil else { return }
+        let interval = tickInterval
+        pacerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled else { return }
+                await self?.tick()
+            }
         }
-        lastSendAt = now
-        try? await control.send("set_full_target", payload: Self.payload(for: target))
+    }
+
+    public func disconnect() async {
+        let task = pacerTask
+        pacerTask = nil
+        task?.cancel()
+        await task?.value
+    }
+
+    /// Stores the latest goal. One pacer walks toward it, so a peer gap can never
+    /// accumulate one suspended task per gesture frame.
+    public func send(_ target: TeleopTarget) {
+        goal = target
+    }
+
+    /// Internal so transport tests can advance one deterministic frame without a
+    /// duration-based assertion. Production calls it only from `pacerTask`.
+    func tick() async {
+        guard emitted != goal else { return }
+        let next = limiter.next(current: emitted, goal: goal, dt: tickInterval)
+        let frame = limiter.hasConverged(next, to: goal) ? goal : next
+        guard await (try? control.sendIfOpen(
+            "set_full_target",
+            payload: Self.payload(for: frame)
+        )) == true else { return }
+        emitted = frame
     }
 
     /// The same pose the LAN route builds, expressed the way this channel wants
@@ -53,10 +84,8 @@ public actor RemoteTeleopChannel: TeleopChannel {
     /// and flattened row by row, because `set_full_target` takes
     /// `np.array(cmd.head).reshape(4, 4)`.
     ///
-    /// The antennas are passed through in the order the LAN client uses. Both
-    /// routes hand the pair straight to `set_target_antenna_joint_positions`
-    /// without reordering, so whatever that order means physically, it means the
-    /// same thing on both transports.
+    /// The daemon's pair is `[right, left]`; the Swift target names both physical
+    /// sides, so the wire order is explicit here and on the LAN route.
     static func payload(for target: TeleopTarget) -> [String: RemoteValue] {
         let pose = RigidTransform.transform(
             translation: SIMD3(target.x, target.y, target.z),
@@ -64,7 +93,7 @@ public actor RemoteTeleopChannel: TeleopChannel {
         )
         return [
             "head": .array(RigidTransform.rowMajorValues(pose).map(RemoteValue.number)),
-            "antennas": .array([.number(target.antennaLeft), .number(target.antennaRight)]),
+            "antennas": .array([.number(target.antennaRight), .number(target.antennaLeft)]),
             "body_yaw": .number(target.bodyYaw),
         ]
     }
