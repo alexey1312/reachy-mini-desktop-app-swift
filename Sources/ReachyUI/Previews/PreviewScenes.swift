@@ -95,11 +95,16 @@ enum PreviewScene {
 
     static func controller(
         _ session: RobotSession,
-        target: SetTargetClient.Target = SetTargetClient.Target(),
+        driver: TeleopDriver? = nil,
         setupError: String? = nil
     ) -> some View {
         NavigationHost {
-            ControllerScreen(session: session, address: address, target: target, setupError: setupError)
+            ControllerScreen(
+                session: session,
+                address: address,
+                driver: driver ?? TeleopDriver(),
+                setupError: setupError
+            )
         }
         .preview()
     }

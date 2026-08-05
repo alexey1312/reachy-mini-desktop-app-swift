@@ -259,7 +259,7 @@ public struct ReachyRootView<Developer: View>: View {
         } else if session.isAwake {
             ViewportView(model: viewport, offersCamera: session.hasCamera)
         } else {
-            asleepViewport
+            asleepViewport(alignment: .center)
         }
     }
 
@@ -304,15 +304,21 @@ public struct ReachyRootView<Developer: View>: View {
         if session.isAwake {
             ViewportView(model: viewport, offersCamera: session.hasCamera)
         } else {
-            asleepViewport
+            asleepViewport(alignment: .top)
         }
     }
 
-    private var asleepViewport: some View {
+    /// The Live tab pins it to the top: the banner is the tab's only content, and a lone
+    /// card floating in the middle of an empty screen reads as a view that failed to load
+    /// rather than as a status about the robot. The wide column keeps it centred — it
+    /// stands in for the 3D viewport there, and the top of that column is where the
+    /// neighbouring screen's navigation bar is laid out, so a pinned banner collides with
+    /// its title.
+    private func asleepViewport(alignment: Alignment) -> some View {
         AsleepBanner(session: session)
             .padding()
             .frame(maxWidth: 420)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
     }
 
     // MARK: - Placement
