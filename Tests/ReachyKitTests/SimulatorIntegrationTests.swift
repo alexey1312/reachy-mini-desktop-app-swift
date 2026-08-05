@@ -34,7 +34,7 @@ struct SimulatorIntegrationTests {
 
     @Test("set_target moves the head (visible in the state stream)", .timeLimit(.minutes(1)))
     func teleop() async throws {
-        let client = try SetTargetClient(address: address, minSendInterval: .milliseconds(10))
+        let client = try SetTargetClient(address: address, tickInterval: .milliseconds(10))
         await client.connect()
 
         // Stream a yaw target for a while, then check the observed head pose moved.
