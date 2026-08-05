@@ -149,8 +149,16 @@ public final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
 
         guard !stub.chunks.isEmpty || stub.staysOpen else {
-            client?.urlProtocol(self, didLoad: stub.body)
-            client?.urlProtocolDidFinishLoading(self)
+            // The OpenAPI transport uses a streamed upload task for requests with
+            // bodies. On macOS 15 its async response-delegate callback can still be
+            // accepting `didReceive` when a synchronous `didLoad` arrives, and the
+            // data is then lost. Returning from `startLoading` before delivering the
+            // body gives URLSession the same ordering as a real network response.
+            streamQueue.async { [self] in
+                guard !isStopped else { return }
+                client?.urlProtocol(self, didLoad: stub.body)
+                client?.urlProtocolDidFinishLoading(self)
+            }
             return
         }
 
