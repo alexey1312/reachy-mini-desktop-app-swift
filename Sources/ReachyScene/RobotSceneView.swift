@@ -14,11 +14,14 @@ public struct RobotSceneView: View {
 
     public var body: some View {
         RealityView { content in
+            // The robot, its lighting and the camera angle are all reused across a
+            // teardown; only the camera entity is rebuilt, because the active-camera
+            // role belongs to the scene rather than to the entity carrying it.
             content.entities.append(model.container)
             // The scene supplies its own camera, so RealityKit's built-in controls
             // are off — they frame the scene once, at a point where the robot has
             // not downloaded yet.
-            content.entities.append(model.camera.entity)
+            content.entities.append(model.camera.makeEntity())
         } update: { _ in
             // Intentionally empty: poses are written to the entity tree directly,
             // so SwiftUI is not in the 20 Hz path.

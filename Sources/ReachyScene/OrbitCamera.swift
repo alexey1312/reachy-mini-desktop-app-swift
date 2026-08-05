@@ -9,7 +9,23 @@ import simd
 /// controller that can re-frame once the geometry is actually there.
 @MainActor
 public final class OrbitCamera {
-    public let entity = PerspectiveCamera()
+    /// Replaced per `RealityView`: see `makeEntity()`.
+    public private(set) var entity = PerspectiveCamera()
+
+    /// A fresh camera for a newly made `RealityView`.
+    ///
+    /// Carrying one `PerspectiveCamera` from a torn-down view into its replacement
+    /// leaves the new scene with no active camera — the entity is present and the
+    /// robot is present, but nothing is rendered from anywhere, which is why the
+    /// viewport came back empty. Everything else about the scene survives the swap
+    /// and is deliberately reused; only the camera is rebuilt, and it inherits the
+    /// angle the user had.
+    public func makeEntity() -> PerspectiveCamera {
+        entity = PerspectiveCamera()
+        entity.name = "camera"
+        apply()
+        return entity
+    }
 
     /// Rotation around the vertical axis.
     private var azimuth: Float = .pi * 0.85

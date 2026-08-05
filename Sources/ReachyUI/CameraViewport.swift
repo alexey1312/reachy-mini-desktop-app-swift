@@ -19,7 +19,6 @@ struct CameraViewport: View {
 
     var body: some View {
         CameraVideoView(track: session.videoTrack)
-            .background(Color.black)
             .overlay(alignment: .center) { status }
             .safeAreaInset(edge: .bottom) { joystick }
             .onAppear { connectTeleop() }
@@ -35,8 +34,6 @@ struct CameraViewport: View {
         switch session.phase {
         case .connecting:
             ProgressView("Connecting…")
-                .tint(.white)
-                .foregroundStyle(.white)
         case .waitingForProducer:
             ContentUnavailableView(
                 "Waiting for camera",

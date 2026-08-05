@@ -31,6 +31,17 @@ import SwiftUI
     PreviewScene.root(.preview(status: .preview(state: .stopped)), viewport: .preview(address: nil))
 }
 
+// The Live tab exists only on a compact width behind a running backend, so nothing captured it
+// until the tab could be selected outright — which is why a title pinned against its backdrop
+// went unverified. The iPad capture of this is the regular-width layout, where the tab is absent.
+#Preview("Root — live tab") {
+    PreviewScene.root(
+        .preview(),
+        viewport: .preview(sceneModel: .preview(.buildingScene)),
+        tab: .live
+    )
+}
+
 // A wired robot reports no camera; the viewport still shows the 3D model.
 #Preview("Root — no camera") {
     PreviewScene.root(

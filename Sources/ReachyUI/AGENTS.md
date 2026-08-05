@@ -15,8 +15,13 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   (`OnboardingBackButton`), not as a third closure.
 - `background(_:)` defaults to `ignoresSafeAreaEdges: .all`, so a full-bleed backdrop also paints the inset the
   floating tab bar sits in — bottom on iPhone, top on iPad. That bar is glass and renders whatever it finds there, so
-  it turns dark on that one tab, a frame behind the switch. State the edges (`ViewportView.backdropEdges`); bleed
-  upwards only where a bar pinned to match is waiting for it (`darkTitleBar()`).
+  it turns dark on that one tab, a frame behind the switch. Neither viewport paints a backdrop any more: the 3D scene
+  and the camera's letterbox both take the system background, so the chrome over them stays legible in both
+  appearances. **Do not pin a colour under adaptive chrome** — every such backdrop drags a pinned foreground along
+  with it, and then neither half can be removed alone. The Live tab's `Color.black` forced
+  `toolbarColorScheme(.dark)` to keep the title readable (drop one and the title goes white-on-white or
+  black-on-black); the camera's forced a white `Connecting…` for the same reason. `RTCMTLVideoView` clears its own
+  unfilled area, so the video never needed the SwiftUI backdrop — that one only ever painted the safe-area insets.
 - Deployment floor is iOS 18 / macOS 15 (`Package.swift`, `Apps/Project.swift`), set by `RealityView`.
   `ScrollPosition`, `onScrollPhaseChange` and `onScrollGeometryChange` are available; the zero-height sentinel row in
   `LogConsoleScreen` predates the bump and is not a required pattern.
@@ -35,6 +40,8 @@ Adding a screen (project rule 8) means: a preview per state in `Previews/<Screen
 - **Prefire reads previews off the filesystem; Xcode compiles the file list Tuist baked in.** A new file under
   `Previews/` is therefore picked up by the generator but not compiled until `mise run project` runs again — which is
   why the snapshot tasks depend on it. A bare `xcodebuild` skips that and fails with "cannot find … in scope".
+  **Deleting** a file needs the same regeneration, and fails less legibly: `Build input file cannot be found`, which
+  reads as a broken checkout rather than a stale file list.
 - Anything a preview body references must be visible target-wide, because Prefire copies the body into a separate
   generated file. Shared wrappers live in `PreviewScene`; a `private` helper compiles locally and breaks the test.
 - **A preview with no `traits:` is captured at full device size.** Prefire defaults the trait list to `.device`

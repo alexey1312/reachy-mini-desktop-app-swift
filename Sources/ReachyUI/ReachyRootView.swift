@@ -20,7 +20,10 @@ private struct RobotWidgetFacts: Equatable {
 /// read. The app target's own developer screen is injected and handed to
 /// Settings, so it keeps owning that screen without a tab or a nested tab bar.
 public struct ReachyRootView<Developer: View>: View {
-    private enum TabID: Hashable {
+    /// Internal for the same reason the init below is: the Live tab only exists
+    /// behind a running backend on a compact width, so a preview has to be able to
+    /// name it.
+    enum TabID: Hashable {
         case robot
         case live
         case apps
@@ -69,10 +72,12 @@ public struct ReachyRootView<Developer: View>: View {
         session: RobotSession,
         viewport: ViewportModel = ViewportModel(),
         hfAccount: HFAccount? = nil,
+        tab: TabID = .robot,
         @ViewBuilder developer: () -> Developer
     ) {
         _session = State(initialValue: session)
         _viewport = State(initialValue: viewport)
+        _tab = State(initialValue: tab)
         _hfAccount = State(
             initialValue: hfAccount ?? HFAccount(store: KeychainHFTokenStore())
         )
@@ -256,7 +261,6 @@ public struct ReachyRootView<Developer: View>: View {
             // bar and clipped.
             liveContent
                 .navigationTitle("Live")
-                .darkTitleBar()
                 .toolbar {
                     ToolbarItem {
                         Button {
@@ -289,10 +293,7 @@ public struct ReachyRootView<Developer: View>: View {
     @ViewBuilder
     private var liveContent: some View {
         if session.isAwake {
-            // Upwards only: the title bar above is pinned dark to match the black, while
-            // the tab bar below is glass and has to keep materialising what every other
-            // tab puts under it.
-            ViewportView(model: viewport, offersCamera: session.hasCamera, backdropEdges: [.top, .horizontal])
+            ViewportView(model: viewport, offersCamera: session.hasCamera)
         } else {
             asleepViewport
         }
@@ -335,19 +336,6 @@ private extension View {
     func columnTitleStyle() -> some View {
         #if os(iOS)
             navigationBarTitleDisplayMode(.inline)
-        #else
-            self
-        #endif
-    }
-
-    /// The bar cannot take a background over the viewport — both
-    /// `toolbarBackground(.visible:)` and its replacement `toolbarBackgroundVisibility`
-    /// are ignored there — so its palette is pinned instead. Safe only because the content
-    /// under it is pinned to match: on its own this put a white title on the 3D model's
-    /// white backdrop.
-    func darkTitleBar() -> some View {
-        #if os(iOS)
-            toolbarColorScheme(.dark, for: .navigationBar)
         #else
             self
         #endif
