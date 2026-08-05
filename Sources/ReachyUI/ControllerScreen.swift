@@ -1,33 +1,33 @@
 import ReachyKit
 import SwiftUI
 
-/// Live teleop: joystick drives head yaw/pitch, sliders the rest.
+/// Live teleop: joystick drives head yaw/pitch and turns the body when held
+/// sideways, sliders do the rest.
 /// Targets stream over `ws/set_target`; the daemon clamps safety limits.
 struct ControllerScreen: View {
     let session: RobotSession
 
-    @State private var client: (any TeleopChannel)?
-    @State private var target: TeleopTarget
+    @State private var driver: TeleopDriver
     @State private var setupError: String?
     @Environment(\.reachyPreviewMode) private var previewMode
 
     init(
         session: RobotSession,
-        target: TeleopTarget = TeleopTarget(),
+        driver: TeleopDriver = TeleopDriver(),
         setupError: String? = nil
     ) {
         self.session = session
-        _target = State(initialValue: target)
+        _driver = State(initialValue: driver)
         _setupError = State(initialValue: setupError)
     }
 
     // Comfortable UI ranges; hardware limits (clamped by the daemon anyway):
     // head pitch/roll ±40°, yaw ±180°, body yaw ±180°
-    private let headAngle = 40.0 * .pi / 180
     private let fullTurn = 180.0 * .pi / 180
     private let antennaRange = 150.0 * .pi / 180
 
     var body: some View {
+        @Bindable var driver = driver
         Form {
             if !session.isAwake {
                 Section {
@@ -35,37 +35,45 @@ struct ControllerScreen: View {
                 }
             }
             Group {
-                Section("Head — drag: yaw / pitch") {
-                    JoystickPad { x, y in
-                        target.yaw = -x * headAngle
-                        target.pitch = y * headAngle
-                        push()
-                    }
-                    .frame(maxWidth: 280)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                Section("Head — drag: yaw / pitch, hold sideways: turn the body") {
+                    JoystickPad(mapping: driver.mapping) { driver.apply($0) }
+                        .frame(maxWidth: 280)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                 }
                 Section("Head") {
-                    slider("Roll", value: $target.roll, range: -headAngle ... headAngle, format: .degrees)
-                    slider("Height", value: $target.z, range: -0.03 ... 0.03, format: .millimeters)
+                    slider(
+                        "Roll",
+                        value: $driver.target.roll,
+                        range: -driver.mapping.headAngle ... driver.mapping.headAngle,
+                        format: .degrees
+                    )
+                    slider("Height", value: $driver.target.z, range: -0.03 ... 0.03, format: .millimeters)
                 }
                 Section("Body") {
-                    slider("Body yaw", value: $target.bodyYaw, range: -fullTurn ... fullTurn, format: .degrees)
+                    slider(
+                        "Body yaw",
+                        value: $driver.target.bodyYaw,
+                        range: -fullTurn ... fullTurn,
+                        format: .degrees
+                    )
                 }
                 Section("Antennas") {
-                    slider("Left", value: $target.antennaLeft, range: -antennaRange ... antennaRange, format: .degrees)
+                    slider(
+                        "Left",
+                        value: $driver.target.antennaLeft,
+                        range: -antennaRange ... antennaRange,
+                        format: .degrees
+                    )
                     slider(
                         "Right",
-                        value: $target.antennaRight,
+                        value: $driver.target.antennaRight,
                         range: -antennaRange ... antennaRange,
                         format: .degrees
                     )
                 }
                 Section {
-                    Button("Reset to neutral") {
-                        target = .init()
-                        push()
-                    }
+                    Button("Reset to neutral") { driver.reset() }
                 }
             }
             .disabled(!session.isAwake)
@@ -83,13 +91,10 @@ struct ControllerScreen: View {
         .onChange(of: session.isAwake) { _, awake in
             // Targets accumulated while asleep would be replayed as one jump.
             if awake {
-                target = .init()
+                driver.reset()
             }
         }
-        .onDisappear {
-            let client = client
-            Task { await client?.disconnect() }
-        }
+        .onDisappear { driver.stop() }
     }
 
     private enum SliderFormat { case degrees, millimeters }
@@ -108,10 +113,7 @@ struct ControllerScreen: View {
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
-            Slider(value: Binding(
-                get: { value.wrappedValue },
-                set: { value.wrappedValue = $0; push() }
-            ), in: range)
+            Slider(value: value, in: range)
         }
     }
 
@@ -125,17 +127,9 @@ struct ControllerScreen: View {
     private func start() {
         guard !previewMode else { return }
         do {
-            let client = try session.makeTeleop()
-            self.client = client
-            Task { await client.connect() }
+            try driver.start { try session.makeTeleop() }
         } catch {
             setupError = RobotSession.describe(error)
         }
-    }
-
-    private func push() {
-        guard let client else { return }
-        let target = target
-        Task { await client.send(target) }
     }
 }

@@ -2,10 +2,14 @@ import Foundation
 
 /// Live teleop: streams `FullBodyTarget` frames to `ws://…/api/move/ws/set_target`.
 ///
+/// `send(_:)` sets a *goal*; a ticker walks the emitted pose toward it under
+/// `TargetSlewLimiter` and stops transmitting once it arrives. Every writer in the
+/// app funnels through here, so none of them — a joystick release, a slider jump,
+/// "Reset to neutral" — can put a step on the wire.
+///
 /// The daemon clamps all safety limits server-side and ignores targets while a
-/// recorded move is running — this client just ships raw targets. Sends are
-/// throttled to `minSendInterval` (latest wins); the server's error replies are
-/// drained and kept in `lastServerError`.
+/// recorded move is running. The server's error replies are drained and kept in
+/// `lastServerError`.
 public actor SetTargetClient {
     public static let path = "/api/move/ws/set_target"
 
@@ -18,14 +22,18 @@ public actor SetTargetClient {
 
     private let url: URL
     private let session: URLSession
-    private let minSendInterval: Duration
+    private let tickInterval: Duration
+    private let limiter: TargetSlewLimiter
     private var socket: URLSessionWebSocketTask?
     private var drainTask: Task<Void, Never>?
-    private var lastSendAt: ContinuousClock.Instant?
+    private var pacerTask: Task<Void, Never>?
+    private var goal = Target()
+    private var emitted = Target()
 
     public init(
         address: RobotAddress,
-        minSendInterval: Duration = .milliseconds(33),
+        tickInterval: Duration = .milliseconds(33),
+        limiter: TargetSlewLimiter = TargetSlewLimiter(),
         session: URLSession = .shared
     ) throws {
         guard let url = address.webSocketURL(path: Self.path) else {
@@ -33,7 +41,8 @@ public actor SetTargetClient {
         }
         self.url = url
         self.session = session
-        self.minSendInterval = minSendInterval
+        self.tickInterval = tickInterval
+        self.limiter = limiter
     }
 
     public func connect() {
@@ -49,25 +58,35 @@ public actor SetTargetClient {
                 }
             }
         }
+        let interval = tickInterval
+        pacerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                await self?.tick()
+            }
+        }
     }
 
     public func disconnect() {
+        pacerTask?.cancel()
+        pacerTask = nil
         drainTask?.cancel()
         drainTask = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
     }
 
-    /// Sends a target; drops the frame if the previous send was under
-    /// `minSendInterval` ago (the UI emits at gesture rate, the wire shouldn't).
-    public func send(_ target: Target) async {
-        guard let socket else { return }
-        let now = ContinuousClock.now
-        if let lastSendAt, lastSendAt.duration(to: now) < minSendInterval {
-            return
-        }
-        lastSendAt = now
-        guard let text = String(bytes: Self.encode(target), encoding: .utf8) else { return }
+    /// Aims at `target`. Nothing goes out here — the pacer decides when and how
+    /// fast, which is what makes every command path smooth by construction.
+    public func send(_ target: Target) {
+        goal = target
+    }
+
+    private func tick() async {
+        guard let socket, emitted != goal else { return }
+        let next = limiter.next(current: emitted, goal: goal, dt: tickInterval)
+        emitted = limiter.hasConverged(next, to: goal) ? goal : next
+        guard let text = String(bytes: Self.encode(emitted), encoding: .utf8) else { return }
         try? await socket.send(.string(text))
     }
 

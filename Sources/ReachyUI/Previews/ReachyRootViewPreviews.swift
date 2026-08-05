@@ -43,6 +43,16 @@ import SwiftUI
     )
 }
 
+// The one state that renders `asleepViewport`, and the only capture of it in place: the iPhone
+// shot is the Live tab, the iPad one the wide column, which is the same view in a narrower space.
+#Preview("Root — live tab asleep") {
+    PreviewScene.root(
+        .preview(status: .preview(motorMode: .disabled)),
+        viewport: .preview(sceneModel: .preview(.buildingScene)),
+        tab: .live
+    )
+}
+
 // A wired robot reports no camera; the viewport still shows the 3D model.
 #Preview("Root — no camera") {
     PreviewScene.root(
