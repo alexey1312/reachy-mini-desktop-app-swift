@@ -7,6 +7,10 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 - All robot interaction goes through `RobotSession` / `RobotBrowser` from ReachyKit — no direct URLSession here.
 - Screen logic belongs in a `@MainActor @Observable` model beside the view (`MovesModel`, `LogConsoleModel`), covered
   by `Tests/ReachyUITests`; the view stays thin. `@Observable` does honour `didSet`, so derived caches can live there.
+- Content catalogues use `contentLoading(isPresented:title:)` for their initial or uncached load. The model must
+  distinguish "never answered" from a real empty result and expose loading before `.task` gets its first turn, so the
+  first frame never lies with an empty-state. A refresh keeps any rows already on screen; only a request with no data
+  gets the centred, lightly robot-themed label. Every such state gets a frozen preview and recorded snapshots.
 - `Section` has no title-plus-footer overload: `Section("X") { … } footer: { … }` fails to compile with a misleading
   "generic parameter 'Content' could not be inferred". Either `Section("X") { … }` or the full
   `Section { … } header: { Text("X") } footer: { … }`.

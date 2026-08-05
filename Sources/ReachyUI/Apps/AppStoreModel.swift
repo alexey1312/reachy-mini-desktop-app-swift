@@ -35,10 +35,20 @@ final class AppStoreModel {
     private(set) var loading = false
     private(set) var busy = false
     private(set) var lastError: String?
+    /// A successful answer, including `[]`, is different from never having received
+    /// the catalogue. That distinction keeps empty and loading states honest.
+    private var hasCatalogueResult = false
+    private var attemptedCatalogueLoad = false
 
     /// Coalesces overlapping loads: a slow catalogue must not overwrite the result
     /// of a refresh the user asked for afterwards (`MovesModel`'s pattern).
     private var loadID: UUID?
+
+    /// Initial load and a retry without data replace the empty content area. Refreshing
+    /// a catalogue already on screen does not.
+    var isContentLoading: Bool {
+        !hasCatalogueResult && (loading || !attemptedCatalogueLoad)
+    }
 
     var visibleApps: [RobotApp] {
         let apps = switch section {
@@ -107,11 +117,12 @@ final class AppStoreModel {
             guard loadID == requestID, !Task.isCancelled else { return }
             catalogue = apps.filter { !$0.isInstalled }
             installed = apps.filter(\.isInstalled)
+            hasCatalogueResult = true
+            attemptedCatalogueLoad = true
             lastError = nil
         } catch {
             guard loadID == requestID, !Task.isCancelled else { return }
-            catalogue = []
-            installed = []
+            attemptedCatalogueLoad = true
             lastError = Self.describe(error)
             return
         }
@@ -206,6 +217,8 @@ private extension RobotApp {
             model.lock = lock
             model.loading = loading
             model.lastError = error
+            model.hasCatalogueResult = !catalogue.isEmpty || !installed.isEmpty || (!loading && error == nil)
+            model.attemptedCatalogueLoad = !loading || model.hasCatalogueResult
             if hasUpdate, let first = installed.first {
                 model.updates = .preview(appName: first.name)
             }

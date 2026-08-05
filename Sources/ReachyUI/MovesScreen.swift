@@ -29,33 +29,33 @@ struct MovesScreen: View {
                 }
                 .pickerStyle(.segmented)
             }
-            Section {
-                if model.loading {
-                    ProgressView()
-                } else if model.moves.isEmpty {
-                    Text("No moves").foregroundStyle(.secondary)
-                } else {
-                    ForEach(model.moves, id: \.self) { move in
-                        Button {
-                            Task { await model.play(move, session: session) }
-                        } label: {
-                            HStack {
-                                Text(MovesModel.displayName(move))
-                                Spacer()
-                                if session.currentMove?.move == move {
-                                    Image(systemName: "waveform")
-                                        .symbolEffect(.variableColor.iterative)
-                                } else {
-                                    Image(systemName: "play.circle")
+            if !model.isContentLoading {
+                Section {
+                    if model.moves.isEmpty {
+                        Text("No moves").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(model.moves, id: \.self) { move in
+                            Button {
+                                Task { await model.play(move, session: session) }
+                            } label: {
+                                HStack {
+                                    Text(MovesModel.displayName(move))
+                                    Spacer()
+                                    if session.currentMove?.move == move {
+                                        Image(systemName: "waveform")
+                                            .symbolEffect(.variableColor.iterative)
+                                    } else {
+                                        Image(systemName: "play.circle")
+                                    }
                                 }
                             }
+                            // Browsing the library stays available; only playback needs a woken robot.
+                            .disabled(model.startingMove || session.isStoppingMove || !session.isAwake)
                         }
-                        // Browsing the library stays available; only playback needs a woken robot.
-                        .disabled(model.startingMove || session.isStoppingMove || !session.isAwake)
                     }
                 }
             }
-            if let lastError = session.lastError {
+            if let lastError = session.lastError, !model.isContentLoading {
                 Section {
                     Text(lastError)
                         .font(.caption.monospaced())
@@ -64,6 +64,10 @@ struct MovesScreen: View {
             }
         }
         .formStyle(.grouped)
+        .contentLoading(
+            isPresented: model.isContentLoading,
+            title: model.selectedLibrary.loadingTitle
+        )
         .navigationTitle("Moves")
         .safeAreaInset(edge: .bottom) {
             if session.currentMove != nil {
@@ -95,7 +99,7 @@ struct MovesScreen: View {
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .disabled(model.loading)
+            .disabled(model.loading || model.isContentLoading)
         }
         .task(id: model.selection) {
             guard !previewMode else { return }

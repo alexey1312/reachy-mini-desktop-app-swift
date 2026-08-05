@@ -8,21 +8,48 @@ final class MovesModel {
     struct Library: Equatable {
         let title: String
         let dataset: String
+        let loadingTitle: String
     }
 
     static let libraries = [
-        Library(title: "Dances", dataset: "pollen-robotics/reachy-mini-dances-library"),
-        Library(title: "Emotions", dataset: "pollen-robotics/reachy-mini-emotions-library"),
-        Library(title: "Music", dataset: "Anne-Charlotte/music"),
+        Library(
+            title: "Dances",
+            dataset: "pollen-robotics/reachy-mini-dances-library",
+            loadingTitle: "Teaching the servos new steps…"
+        ),
+        Library(
+            title: "Emotions",
+            dataset: "pollen-robotics/reachy-mini-emotions-library",
+            loadingTitle: "Calibrating robot feelings…"
+        ),
+        Library(
+            title: "Music",
+            dataset: "Anne-Charlotte/music",
+            loadingTitle: "Warming up the tiny speakers…"
+        ),
     ]
 
-    var selection = 0
+    var selection = 0 {
+        didSet {
+            guard Self.libraries.indices.contains(selection) else { return }
+            let dataset = selectedLibrary.dataset
+            if movesByDataset[dataset] == nil {
+                // `.task(id:)` will retry this uncached library. Mark it pending now so
+                // the frame drawn for the picker change cannot say "No moves" first.
+                attemptedDatasets.remove(dataset)
+            }
+        }
+    }
+
     private(set) var startingMove = false
     /// Keyed by dataset rather than held as one array: `selection` changes a frame before
     /// `.task(id:)` gets to run, so a shared array leaves the previous library's rows under
     /// the newly selected tab for as long as the fetch takes.
     private var movesByDataset: [String: [String]] = [:]
     private var loadingDataset: String?
+    /// An absent result starts as loading, but after a failed request it must become
+    /// an actionable error instead of an infinite spinner. A later visit still retries.
+    private var attemptedDatasets: Set<String> = []
     private var loadID: UUID?
 
     var selectedLibrary: Library {
@@ -36,6 +63,13 @@ final class MovesModel {
 
     var loading: Bool {
         loadingDataset == selectedLibrary.dataset
+    }
+
+    /// Unlike `loading`, this only replaces an empty content area. A refresh of rows
+    /// already on screen is deliberately non-blocking.
+    var isContentLoading: Bool {
+        movesByDataset[selectedLibrary.dataset] == nil
+            && (loading || !attemptedDatasets.contains(selectedLibrary.dataset))
     }
 
     func load(session: RobotSession, refresh: Bool = false) async {
@@ -57,7 +91,10 @@ final class MovesModel {
             let loaded = try await session.moves(in: dataset, refresh: refresh)
             guard !Task.isCancelled, loadID == requestID else { return }
             movesByDataset[dataset] = loaded
+            attemptedDatasets.insert(dataset)
         } catch {
+            guard !Task.isCancelled, loadID == requestID else { return }
+            attemptedDatasets.insert(dataset)
             // Deliberately records nothing. An absent key means "never fetched", so the next
             // visit to the tab retries, and a failed refresh leaves the rows already on screen
             // in place rather than clearing them over one bad round trip. A stored `[]` is
@@ -89,8 +126,16 @@ final class MovesModel {
         ) -> MovesModel {
             let model = MovesModel()
             model.selection = selection
-            model.movesByDataset[model.selectedLibrary.dataset] = moves
-            model.loadingDataset = loading ? model.selectedLibrary.dataset : nil
+            if loading {
+                model.loadingDataset = model.selectedLibrary.dataset
+                if !moves.isEmpty {
+                    model.movesByDataset[model.selectedLibrary.dataset] = moves
+                    model.attemptedDatasets.insert(model.selectedLibrary.dataset)
+                }
+            } else {
+                model.movesByDataset[model.selectedLibrary.dataset] = moves
+                model.attemptedDatasets.insert(model.selectedLibrary.dataset)
+            }
             model.startingMove = startingMove
             return model
         }

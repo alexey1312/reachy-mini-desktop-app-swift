@@ -9,6 +9,7 @@ import SwiftUI
 /// in the list *is* the online signal.
 struct YourReachiesScreen<SignIn: View>: View {
     let model: YourReachiesModel
+    @Environment(\.reachyPreviewMode) private var previewMode
     /// Called with the robot the user picked. The session is built by whoever
     /// presented this screen — it owns the WebRTC half.
     var connect: (CentralRobot) -> Void
@@ -48,23 +49,29 @@ struct YourReachiesScreen<SignIn: View>: View {
             }
         }
         .overlay { placeholder }
+        .contentLoading(isPresented: model.isContentLoading, title: "Calling your Reachies home…")
         .navigationTitle("Your Reachies")
         .refreshable { await model.refresh() }
-        .task { await model.load() }
+        .task {
+            guard !previewMode else { return }
+            await model.load()
+        }
     }
 
     @ViewBuilder
     private var placeholder: some View {
         switch model.state {
         case .loading:
-            ProgressView("Asking Hugging Face")
+            EmptyView()
         case .signedOut:
-            ContentUnavailableView {
-                Label("Not signed in", systemImage: "person.crop.circle.badge.questionmark")
-            } description: {
-                Text("Sign in to Hugging Face to reach robots linked to your account.")
-            } actions: {
-                NavigationLink("Sign in", destination: signIn)
+            if !model.isContentLoading {
+                ContentUnavailableView {
+                    Label("Not signed in", systemImage: "person.crop.circle.badge.questionmark")
+                } description: {
+                    Text("Sign in to Hugging Face to reach robots linked to your account.")
+                } actions: {
+                    NavigationLink("Sign in", destination: signIn)
+                }
             }
         case .needsSignIn:
             // Deliberately not a Retry: the same token will be refused again.

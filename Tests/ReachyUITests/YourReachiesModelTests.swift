@@ -62,6 +62,20 @@ struct YourReachiesModelTests {
         return (YourReachiesModel(listing: listing, isSignedIn: { signedIn }), listing)
     }
 
+    @Test("a signed-in account starts in the content-loading state")
+    func initialContentLoading() {
+        let (model, _) = model([.success([])])
+
+        #expect(model.isContentLoading)
+    }
+
+    @Test("a signed-out account starts at sign-in instead of a loader")
+    func signedOutIsNotContentLoading() {
+        let (model, _) = model([.success([])], signedIn: false)
+
+        #expect(!model.isContentLoading)
+    }
+
     /// Central authenticates every call with the user's own token. Without one
     /// there is nothing to ask with, and asking would only spend a round trip to
     /// be told so.
@@ -83,6 +97,7 @@ struct YourReachiesModelTests {
         await model.load()
 
         #expect(model.state == .empty)
+        #expect(!model.isContentLoading)
     }
 
     @Test("robots central lists come back to the screen")
@@ -154,6 +169,7 @@ struct YourReachiesModelTests {
 
         #expect(model.state == .listed(robots))
         #expect(model.lastRefreshError != nil)
+        #expect(!model.isContentLoading)
     }
 
     /// The one signal a user can act on directly, and the only place this app can
