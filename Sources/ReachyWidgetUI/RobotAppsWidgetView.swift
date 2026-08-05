@@ -1,0 +1,149 @@
+import SwiftUI
+import WidgetKit
+
+/// The launcher's face.
+///
+/// Unlike `RobotWidgetView` this does import `WidgetKit`, for
+/// `invalidatableContent()` alone — the one signal a widget has that a button's
+/// intent is still running. It is inert outside a widget, so previews and the
+/// snapshot suite render this the same as any other view.
+///
+/// The grid takes its shape from how many tiles it was handed rather than from
+/// the widget family, so small, medium and large fall out of one `limit` decided
+/// in the provider.
+public struct RobotAppsWidgetView: View {
+    private let content: RobotAppsWidgetContent
+
+    public init(content: RobotAppsWidgetContent) {
+        self.content = content
+    }
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8), count: content.tiles.count <= 2 ? 1 : 2)
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if content.tiles.isEmpty {
+                emptyState
+            } else {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(content.tiles) { tile in
+                        RobotAppTileView(tile: tile)
+                    }
+                }
+                if let message = content.notice.message {
+                    noticeRow(message)
+                }
+                if let footnote = content.footnote {
+                    Text(footnote)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: "square.grid.2x2")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Text(content.notice.message ?? "")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private func noticeRow(_ message: String) -> some View {
+        Text(content.notice.invitesTheApp ? "\(message) Tap to open." : message)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+    }
+}
+
+/// One app. A button when the tap means something, plain text when it does not —
+/// a dimmed `Button` that silently declines is worse than no button, and letting
+/// the tap fall through to the widget's own `widgetURL` opens the app instead,
+/// which is where a blocked or missing app is actually resolved.
+struct RobotAppTileView: View {
+    let tile: RobotAppsWidgetContent.Tile
+
+    var body: some View {
+        if tile.isTappable {
+            Button(intent: ToggleRobotAppIntent(id: tile.id, name: tile.name)) {
+                label
+            }
+            .buttonStyle(.plain)
+        } else {
+            label
+        }
+    }
+
+    private var label: some View {
+        HStack(spacing: 8) {
+            AppArtworkTile(
+                artwork: AppArtwork(emoji: tile.emoji, gradient: tile.gradient, key: tile.id),
+                size: 30
+            )
+            .overlay {
+                if tile.state == .running {
+                    Image(systemName: "stop.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.white)
+                        .padding(4)
+                        .background(.black.opacity(0.45), in: Circle())
+                }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(tile.title)
+                    .font(.caption)
+                    .fontWeight(tile.state == .running ? .semibold : .regular)
+                    .lineLimit(1)
+                if let caption {
+                    Text(caption)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(6)
+        .background(background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .opacity(isDimmed ? 0.4 : 1)
+        // WidgetKit dims this by itself while the button's intent is in flight,
+        // which is the only progress a widget can show across a process boundary.
+        // The durable pending marker is what keeps the caption up through the
+        // reload the intent triggers on its way out.
+        .invalidatableContent(isPending)
+    }
+
+    private var caption: String? {
+        switch tile.state {
+        case .idle, .blocked: nil
+        case .running: "Running"
+        case .starting: "Starting…"
+        case .stopping: "Stopping…"
+        case .notInstalled: "Not installed"
+        }
+    }
+
+    private var background: AnyShapeStyle {
+        tile.state == .running ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.fill.quaternary)
+    }
+
+    private var isDimmed: Bool {
+        tile.state == .blocked || tile.state == .notInstalled
+    }
+
+    private var isPending: Bool {
+        tile.state == .starting || tile.state == .stopping
+    }
+}

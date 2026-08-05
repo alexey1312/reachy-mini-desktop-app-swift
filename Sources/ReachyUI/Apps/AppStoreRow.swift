@@ -1,4 +1,5 @@
 import ReachyKit
+import ReachyWidgetUI
 import SwiftUI
 
 /// One app in the store list.

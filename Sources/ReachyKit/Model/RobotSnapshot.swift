@@ -11,15 +11,30 @@ public struct RobotSnapshot: Codable, Sendable, Equatable {
     /// that cannot be renamed at all.
     public let robotName: String?
     public let isAwake: Bool
-    /// The app the robot is running, when it is running one.
+    /// The app the robot is running, when it is running one — its display title,
+    /// which is what a widget puts on screen.
     public let runningApp: String?
+    /// The same app's installed name, which is the identity `start-app` and
+    /// `stop-current-app` are keyed by. A title cannot stand in for it: the two
+    /// are chosen independently (`RobotApp.matches(installed:)`).
+    ///
+    /// Defaulted so a blob written before this field existed decodes as a robot
+    /// running nothing identifiable rather than failing.
+    public let runningAppName: String?
     /// When the app saw this. Not decoration: everything below turns on it.
     public let takenAt: Date
 
-    public init(robotName: String?, isAwake: Bool, runningApp: String?, takenAt: Date) {
+    public init(
+        robotName: String?,
+        isAwake: Bool,
+        runningApp: String?,
+        runningAppName: String? = nil,
+        takenAt: Date
+    ) {
         self.robotName = robotName
         self.isAwake = isAwake
         self.runningApp = runningApp
+        self.runningAppName = runningAppName
         self.takenAt = takenAt
     }
 }
@@ -78,5 +93,32 @@ public struct RobotSnapshotStore {
         // manual correction — not a reading from the future gone stale.
         let age = date.timeIntervalSince(current.takenAt)
         return age <= Self.freshness ? .fresh(current) : .stale(current)
+    }
+
+    /// Folds what a caller just learned about the running app into the reading
+    /// already there, inventing nothing else about it.
+    ///
+    /// `takenAt` moves to `date` because whoever calls this has just spoken to the
+    /// robot — the reading genuinely is that fresh, even though only one field of
+    /// it was re-checked. Both name parameters nil is "nothing is running", not "I
+    /// do not know", so it clears rather than leaves the last app behind.
+    ///
+    /// `isAwake` is for a caller that learned it in the same breath; nil keeps
+    /// what was already there. The `true` floor is only reached when no reading
+    /// exists at all, and every caller here has just commanded a robot
+    /// successfully — which a parked one does not answer.
+    public func recordRunningApp(
+        title: String?,
+        name: String?,
+        isAwake: Bool? = nil,
+        at date: Date = Date()
+    ) {
+        write(RobotSnapshot(
+            robotName: current?.robotName,
+            isAwake: isAwake ?? current?.isAwake ?? true,
+            runningApp: title,
+            runningAppName: name,
+            takenAt: date
+        ))
     }
 }

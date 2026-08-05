@@ -28,6 +28,26 @@ public enum RobotIntentError: Error, LocalizedError {
 /// from the robot's network this fails immediately and says so, which is the
 /// honest outcome rather than a slow one.
 public enum RobotIntentTarget {
+    /// One connection whose every sub-session is capped at `timeout`.
+    ///
+    /// `RobotConnection` reuses an injected session for all of them, including the
+    /// 35-second hub session that `/api/apps/*` normally runs on — which is the
+    /// point here rather than a side effect. That budget exists for a screen with
+    /// a spinner; an intent that sat on it would be killed with nothing written
+    /// down.
+    public static func connection(timeout: TimeInterval) throws -> RobotConnection {
+        guard let address = KnownRobots.lastAddress else {
+            throw RobotIntentError.noKnownRobot
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = timeout
+        do {
+            return try RobotConnection(address: address, session: URLSession(configuration: configuration))
+        } catch {
+            throw RobotIntentError.unreachable(RobotSession.describe(error))
+        }
+    }
+
     public static func power() throws -> RobotPower {
         guard let address = KnownRobots.lastAddress else {
             throw RobotIntentError.noKnownRobot

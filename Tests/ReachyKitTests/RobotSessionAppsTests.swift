@@ -9,6 +9,7 @@ private final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked
     private(set) var catalogueCalls = 0
     private(set) var installedCalls = 0
     private(set) var removed: [String] = []
+    private(set) var running: RobotAppStatus?
     var failsCatalogue = false
 
     private var status: Components.Schemas.DaemonStatus {
@@ -42,7 +43,10 @@ private final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked
         if failsCatalogue {
             throw ReachyKitError.daemonRejected(statusCode: 503)
         }
-        return [Self.app(name: "reachy-mini-dance", kind: "hf_space")]
+        return [
+            Self.app(name: "reachy-mini-dance", kind: "hf_space"),
+            Self.app(name: "dance_party", kind: "installed"),
+        ]
     }
 
     func installedApps() async throws -> [RobotApp] {
@@ -53,6 +57,27 @@ private final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked
     func removeApp(named name: String) async throws -> String {
         lock.withLock { removed.append(name) }
         return "job-1"
+    }
+
+    func currentAppStatus() async throws -> RobotAppStatus? {
+        lock.withLock { running }
+    }
+
+    func startApp(named name: String) async throws -> RobotAppStatus {
+        let status = Self.status(name: name)
+        lock.withLock { running = status }
+        return status
+    }
+
+    func stopCurrentApp() async throws {
+        lock.withLock { running = nil }
+    }
+
+    static func status(name: String) -> RobotAppStatus {
+        // swiftlint:disable:next force_try
+        try! JSONDecoder().decode(RobotAppStatus.self, from: Data(#"""
+        {"info": {"name": "\#(name)", "source_kind": "installed", "extra": {}}, "state": "running"}
+        """#.utf8))
     }
 
     static func app(name: String, kind: String) -> RobotApp {
@@ -96,8 +121,25 @@ private final class PlainRobotClient: RobotAPIClient, @unchecked Sendable {
 @MainActor
 @Suite("Robot session apps", .timeLimit(.minutes(1)))
 struct RobotSessionAppsTests {
-    private func connected(_ client: any RobotAPIClient) async -> RobotSession {
-        let session = RobotSession { _ in client }
+    /// What the session leaves behind for the widget. One table per test:
+    /// `--parallel` runs suites concurrently against a single shared one.
+    private struct Stores {
+        let snapshots: RobotSnapshotStore
+        let apps: RobotAppsCacheStore
+
+        init(defaults: UserDefaults) {
+            snapshots = RobotSnapshotStore(defaults: defaults)
+            apps = RobotAppsCacheStore(defaults: defaults)
+        }
+    }
+
+    private func makeStores() throws -> Stores {
+        try Stores(defaults: #require(UserDefaults(suiteName: "RobotSessionAppsTests.\(UUID().uuidString)")))
+    }
+
+    private func connected(_ client: any RobotAPIClient, stores: Stores? = nil) async throws -> RobotSession {
+        let stores = try stores ?? makeStores()
+        let session = RobotSession(snapshots: stores.snapshots, appsCache: stores.apps) { _ in client }
         #expect(await session.connect(to: .init(host: "127.0.0.1")))
         return session
     }
@@ -115,8 +157,8 @@ struct RobotSessionAppsTests {
     /// remote session reaches the robot over a data channel that carries only part
     /// of it, so the capability still has to be asked for rather than assumed.
     @Test("a daemon with no app surface says so instead of failing later")
-    func reportsMissingCapability() async {
-        let session = await connected(PlainRobotClient())
+    func reportsMissingCapability() async throws {
+        let session = try await connected(PlainRobotClient())
 
         #expect(session.canManageApps == false)
         await #expect(throws: ReachyKitError.appsUnavailable) {
@@ -129,7 +171,7 @@ struct RobotSessionAppsTests {
     @Test("the catalogue is fetched once and reused")
     func cachesTheCatalogue() async throws {
         let client = AppsRobotClient()
-        let session = await connected(client)
+        let session = try await connected(client)
 
         _ = try await session.appCatalogue()
         _ = try await session.appCatalogue()
@@ -142,7 +184,7 @@ struct RobotSessionAppsTests {
     @Test("removing an app makes the installed list stale at once")
     func removalInvalidatesTheInstalledList() async throws {
         let client = AppsRobotClient()
-        let session = await connected(client)
+        let session = try await connected(client)
 
         _ = try await session.installedApps()
         _ = try await session.installedApps()
@@ -159,7 +201,7 @@ struct RobotSessionAppsTests {
     func reportsFailures() async throws {
         let client = AppsRobotClient()
         client.failsCatalogue = true
-        let session = await connected(client)
+        let session = try await connected(client)
 
         await #expect(throws: ReachyKitError.daemonRejected(statusCode: 503)) {
             try await session.appCatalogue()
@@ -172,7 +214,7 @@ struct RobotSessionAppsTests {
     @Test("disconnecting forgets what was cached")
     func forgetsCacheOnDisconnect() async throws {
         let client = AppsRobotClient()
-        let session = await connected(client)
+        let session = try await connected(client)
 
         _ = try await session.appCatalogue()
         session.disconnect()
@@ -180,5 +222,69 @@ struct RobotSessionAppsTests {
         _ = try await session.appCatalogue()
 
         #expect(client.catalogueCalls == 2)
+    }
+
+    // MARK: - What the widget reads
+
+    /// The widget offers a menu of apps it cannot ask for, so the catalogue call
+    /// leaves one behind. Only the installed half: the rest is not launchable.
+    @Test("listing the catalogue leaves the installed apps where a widget can read them")
+    func cachesInstalledAppsForTheWidget() async throws {
+        let stores = try makeStores()
+        let session = try await connected(AppsRobotClient(), stores: stores)
+
+        _ = try await session.appCatalogue()
+
+        #expect(stores.apps.current?.installed.map(\.name) == ["dance_party"])
+    }
+
+    @Test("listing the installed apps leaves the same menu behind")
+    func cachesInstalledAppsFromTheInstalledList() async throws {
+        let stores = try makeStores()
+        let session = try await connected(AppsRobotClient(), stores: stores)
+
+        _ = try await session.installedApps()
+
+        #expect(stores.apps.current?.installed.map(\.name) == ["dance_party"])
+    }
+
+    @Test("starting an app names it in the snapshot, and stopping clears it")
+    func recordsTheRunningApp() async throws {
+        let stores = try makeStores()
+        let session = try await connected(AppsRobotClient(), stores: stores)
+
+        _ = try await session.startApp(named: "dance_party")
+        #expect(stores.snapshots.current?.runningAppName == "dance_party")
+
+        try await session.stopCurrentApp()
+        #expect(stores.snapshots.current?.runningAppName == nil)
+    }
+
+    @Test("asking what is running records the answer")
+    func recordsTheAnswerToCurrentApp() async throws {
+        let stores = try makeStores()
+        let client = AppsRobotClient()
+        let session = try await connected(client, stores: stores)
+        _ = try await client.startApp(named: "dance_party")
+
+        _ = try await session.currentApp()
+
+        #expect(stores.snapshots.current?.runningAppName == "dance_party")
+    }
+
+    /// The three-second status poll does not learn what the robot is running —
+    /// naming it would cost a round trip of its own. So it must carry the last
+    /// answer forward rather than blank it, or the widget's running app survives
+    /// exactly three seconds.
+    @Test("the status poll does not forget the running app")
+    func pollDoesNotClobberTheRunningApp() async throws {
+        let stores = try makeStores()
+        let session = try await connected(AppsRobotClient(), stores: stores)
+        _ = try await session.startApp(named: "dance_party")
+
+        session.recordSnapshot(identity: .init(hardwareID: "hw", name: "testbot", daemonVersion: "1.9.0"))
+
+        #expect(stores.snapshots.current?.runningAppName == "dance_party")
+        #expect(stores.snapshots.current?.robotName == "testbot")
     }
 }

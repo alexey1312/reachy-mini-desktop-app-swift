@@ -9,6 +9,11 @@ import WidgetKit
 private struct RobotWidgetFacts: Equatable {
     let phase: RobotSession.ConnectionPhase
     let isAwake: Bool
+    /// The launcher dims every tile but one while an app holds the robot, so
+    /// starting one from the Apps screen has to reach the widget too. Read back
+    /// out of the snapshot rather than from the session: `RobotSession+Apps` is
+    /// what learns it, and only on the calls that already ask.
+    let runningApp: String?
 }
 
 /// Entry point for the shared UI: connection flow → robot control, with one live
@@ -170,7 +175,11 @@ public struct ReachyRootView<Developer: View>: View {
     /// single `Equatable`, and reloading on every unrelated status field would
     /// wake the extension for nothing.
     private var widgetFacts: RobotWidgetFacts {
-        RobotWidgetFacts(phase: session.phase, isAwake: session.isAwake)
+        RobotWidgetFacts(
+            phase: session.phase,
+            isAwake: session.isAwake,
+            runningApp: RobotSnapshotStore().current?.runningAppName
+        )
     }
 
     /// Opens the relay session first, then hands the session a client that speaks

@@ -50,7 +50,7 @@ struct RobotStatusProvider: TimelineProvider {
 
 struct RobotStatusWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "RobotStatus", provider: RobotStatusProvider()) { entry in
+        StaticConfiguration(kind: ReachyWidgetKind.status, provider: RobotStatusProvider()) { entry in
             RobotWidgetView(content: entry.content)
                 .containerBackground(.fill.tertiary, for: .widget)
                 .widgetURL(ReachyDeepLink.robot.url)

@@ -9,20 +9,17 @@ import Foundation
 /// plays the sound, and does not move. Camera and daemon logs sit outside both.
 public extension RobotSession {
     var isBackendRunning: Bool {
-        lastStatus?.state == .running
+        lastStatus?.isBackendRunning ?? false
     }
 
     /// Reported by all three backend flavours (robot, MuJoCo, mockup sim).
     var motorMode: Components.Schemas.MotorControlMode? {
-        guard let status = lastStatus?.backendStatus else { return nil }
-        return status.value1?.motorControlMode
-            ?? status.value2?.motorControlMode
-            ?? status.value3?.motorControlMode
+        lastStatus?.motorControlMode
     }
 
     /// Gate for anything that moves the robot.
     var isAwake: Bool {
-        isBackendRunning && motorMode == .enabled
+        lastStatus?.isAwake ?? false
     }
 
     /// The daemon's own fault text, e.g. "Power supply not connected".

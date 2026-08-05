@@ -107,6 +107,10 @@ public final class RobotSession {
     /// Where the widget reads what this session last saw. The widget's process
     /// cannot connect to anything, so this is the only thing it has.
     let snapshots: RobotSnapshotStore
+    /// The installed apps, for a widget that has to offer a menu of them without
+    /// being able to ask. Written wherever this session lists them anyway, so it
+    /// costs the robot nothing. Lives in `RobotSession+Apps`.
+    let appsCache: RobotAppsCacheStore
     private var pollTask: Task<Void, Never>?
     private var movePollTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
@@ -152,15 +156,18 @@ public final class RobotSession {
 
     /// Injectable client factory for tests.
     ///
-    /// `snapshots` is injectable for the same reason the client is: it writes into
-    /// `UserDefaults`, and `--parallel` runs suites concurrently against one table.
+    /// `snapshots` and `appsCache` are injectable for the same reason the client
+    /// is: they write into `UserDefaults`, and `--parallel` runs suites
+    /// concurrently against one table.
     public init(
         configuration: Configuration = .init(),
         snapshots: RobotSnapshotStore = RobotSnapshotStore(),
+        appsCache: RobotAppsCacheStore = RobotAppsCacheStore(),
         makeClient: @escaping @Sendable (RobotAddress) throws -> any RobotAPIClient
     ) {
         self.configuration = configuration
         self.snapshots = snapshots
+        self.appsCache = appsCache
         self.makeClient = makeClient
     }
 

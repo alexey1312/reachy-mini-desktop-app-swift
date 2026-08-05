@@ -107,7 +107,7 @@ let project = Project(
                 // screen to ask from, which an extension does not — so the
                 // permission has to already exist from the app having connected.
                 "NSLocalNetworkUsageDescription": .string(
-                    "Wakes and sleeps your Reachy Mini on the local network."
+                    "Wakes your Reachy Mini and starts its apps on the local network."
                 ),
                 "NSBonjourServices": .array([
                     .string("_reachy-mini._tcp"),

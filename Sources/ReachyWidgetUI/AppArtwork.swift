@@ -7,24 +7,37 @@ import SwiftUI
 /// palette *names* (`colorFrom` / `colorTo`) drawn from a fixed set. Resolving
 /// those names is a UI concern, which is why `RobotApp.Gradient` carries them
 /// unresolved.
-struct AppArtwork {
-    let emoji: String?
-    let colors: [Color]
+///
+/// It lives here rather than in `ReachyUI` because the widget extension draws the
+/// same tile and cannot link that target. Duplicating the palette map instead
+/// would guarantee the two drift the first time the Hub adds a colour name.
+public struct AppArtwork: Sendable {
+    public let emoji: String?
+    public let colors: [Color]
 
-    init(app: RobotApp) {
-        emoji = app.emoji
-        if let gradient = app.gradient {
+    /// `key` is what an app with no palette gets a stable colour derived from.
+    public init(emoji: String?, gradient: RobotApp.Gradient?, key: String) {
+        self.emoji = emoji
+        if let gradient {
             colors = [Self.color(named: gradient.from), Self.color(named: gradient.to)]
         } else {
             // An installed app that lost its metadata has no palette. Deriving one
             // from the name keeps the list legible — and keeps it *stable*, which
             // a random colour would not.
-            colors = Self.derivedColors(for: app.id)
+            colors = Self.derivedColors(for: key)
         }
     }
 
+    public init(app: RobotApp) {
+        self.init(emoji: app.emoji, gradient: app.gradient, key: app.id)
+    }
+
+    public init(_ summary: RobotAppSummary) {
+        self.init(emoji: summary.emoji, gradient: summary.gradient, key: summary.id)
+    }
+
     /// Tailwind's palette, which is what the Hub's card editor offers.
-    static func color(named name: String) -> Color {
+    public static func color(named name: String) -> Color {
         switch name.lowercased() {
         case "red": .red
         case "orange": .orange
@@ -57,12 +70,20 @@ struct AppArtwork {
 }
 
 /// The rounded tile a store row leads with.
-struct AppArtworkTile: View {
-    let app: RobotApp
-    var size: CGFloat = 52
+public struct AppArtworkTile: View {
+    private let artwork: AppArtwork
+    private let size: CGFloat
 
-    var body: some View {
-        let artwork = AppArtwork(app: app)
+    public init(artwork: AppArtwork, size: CGFloat = 52) {
+        self.artwork = artwork
+        self.size = size
+    }
+
+    public init(app: RobotApp, size: CGFloat = 52) {
+        self.init(artwork: AppArtwork(app: app), size: size)
+    }
+
+    public var body: some View {
         RoundedRectangle(cornerRadius: size / 4.5, style: .continuous)
             .fill(
                 LinearGradient(colors: artwork.colors, startPoint: .topLeading, endPoint: .bottomTrailing)

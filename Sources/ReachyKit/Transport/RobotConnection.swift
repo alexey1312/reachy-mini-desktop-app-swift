@@ -39,7 +39,10 @@ public actor RobotConnection {
 
         func makeSession(timeout: TimeInterval, resourceTimeout: TimeInterval? = nil) -> URLSession {
             // An injected session belongs to a test harness — reuse it so stubbed
-            // protocols still intercept every request.
+            // protocols still intercept every request. It is also how an App Intent
+            // caps every budget at once (`RobotIntentTarget.connection(timeout:)`):
+            // the 35 s hub session is meant for a screen with a spinner, and an
+            // intent that waited it out would be killed before writing anything.
             if let session {
                 return session
             }

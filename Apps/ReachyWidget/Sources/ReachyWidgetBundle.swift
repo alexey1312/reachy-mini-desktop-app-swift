@@ -5,6 +5,7 @@ import WidgetKit
 struct ReachyWidgetBundle: WidgetBundle {
     var body: some Widget {
         RobotStatusWidget()
+        ReachyAppsWidget()
         WakeRobotControl()
         SleepRobotControl()
     }

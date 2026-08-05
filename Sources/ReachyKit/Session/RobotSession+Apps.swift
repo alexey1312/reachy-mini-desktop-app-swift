@@ -19,6 +19,7 @@ public extension RobotSession {
         }
         let apps = try await withAppsClient { try await $0.availableApps() }
         appCatalogueCache = apps
+        recordInstalled(apps.filter(\.isInstalled))
         return apps
     }
 
@@ -28,26 +29,34 @@ public extension RobotSession {
         }
         let apps = try await withAppsClient { try await $0.installedApps() }
         installedAppsCache = apps
+        recordInstalled(apps)
         return apps
     }
 
     func currentApp() async throws -> RobotAppStatus? {
-        try await withAppsClient { try await $0.currentAppStatus() }
+        let status = try await withAppsClient { try await $0.currentAppStatus() }
+        recordRunning(status)
+        return status
     }
 
     /// Refused with a 400 while another app holds the robot — stop that one first.
     func startApp(named name: String) async throws -> RobotAppStatus {
-        try await withAppsClient { try await $0.startApp(named: name) }
+        let status = try await withAppsClient { try await $0.startApp(named: name) }
+        recordRunning(status)
+        return status
     }
 
     func restartCurrentApp() async throws -> RobotAppStatus {
-        try await withAppsClient { try await $0.restartCurrentApp() }
+        let status = try await withAppsClient { try await $0.restartCurrentApp() }
+        recordRunning(status)
+        return status
     }
 
     /// Refused with a 400 when nothing is running, which is what a second Stop
     /// looks like.
     func stopCurrentApp() async throws {
         try await withAppsClient { try await $0.stopCurrentApp() }
+        recordRunning(nil)
     }
 
     /// All four return a job id; follow it with `appJobEvents(jobID:)`.
@@ -107,6 +116,27 @@ public extension RobotSession {
     /// nobody.
     func appLockStatus() async throws -> RobotAppLockStatus {
         try await withAppsClient { try await $0.appLockStatus() }
+    }
+}
+
+/// What this session leaves behind for a widget that cannot ask the robot
+/// anything itself.
+///
+/// Both writes ride calls the app was already making, so neither costs a round
+/// trip — which is the whole reason they sit here rather than in the screen that
+/// happens to trigger them, or in the three-second status poll, which learns
+/// neither of these things.
+private extension RobotSession {
+    func recordInstalled(_ apps: [RobotApp]) {
+        appsCache.write(apps.map(RobotAppSummary.init))
+    }
+
+    func recordRunning(_ status: RobotAppStatus?) {
+        snapshots.recordRunningApp(
+            title: status?.app.title,
+            name: status?.app.name,
+            isAwake: isAwake
+        )
     }
 }
 

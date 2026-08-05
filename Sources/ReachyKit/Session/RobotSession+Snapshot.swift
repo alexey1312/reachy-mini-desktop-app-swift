@@ -12,12 +12,16 @@ extension RobotSession {
     /// each status poll — so the widget costs the robot nothing of its own. The
     /// date is injectable because a snapshot's whole value is when it was taken.
     func recordSnapshot(identity: RobotIdentity, at date: Date = Date()) {
+        // Naming the running app would cost a round trip of its own every poll —
+        // it is not in the status the session already has. So the poll carries
+        // forward what `recordRunningApp` last learned rather than blanking it:
+        // this does not learn it, and therefore must not forget it.
+        let running = snapshots.current
         snapshots.write(RobotSnapshot(
             robotName: robotName(from: identity),
             isAwake: isAwake,
-            // Naming it would cost a round trip of its own every poll — the app
-            // the robot is running is not in the status the session already has.
-            runningApp: nil,
+            runningApp: running?.runningApp,
+            runningAppName: running?.runningAppName,
             takenAt: date
         ))
     }

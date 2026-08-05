@@ -55,7 +55,10 @@ let package = Package(
         ),
         .target(
             name: "ReachyUI",
-            dependencies: ["HuggingFaceAuth", "ReachyKit", "ReachyMedia", "ReachyScene"],
+            // `ReachyWidgetUI` for the app artwork alone, which both the store
+            // rows and the widget's tiles draw. The arrow points this way round on
+            // purpose: the widget target must stay clear of ReachyMedia.
+            dependencies: ["HuggingFaceAuth", "ReachyKit", "ReachyMedia", "ReachyScene", "ReachyWidgetUI"],
             // `Previews` sits beside the views it documents but is compiled by the Xcode targets
             // in `Apps/`, not by this one: `#Preview` is an external macro whose implementation
             // ships inside Xcode's platform SDKs, so SwiftPM builds on the pinned swift.org
