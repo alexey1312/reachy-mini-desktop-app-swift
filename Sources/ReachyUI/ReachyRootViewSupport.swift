@@ -6,6 +6,11 @@ import SwiftUI
 struct RobotWidgetFacts: Equatable {
     let phase: RobotSession.ConnectionPhase
     let isAwake: Bool
+    /// The launcher dims every tile but one while an app holds the robot, so
+    /// starting one from the Apps screen has to reach the widget too. Read back
+    /// out of the snapshot rather than from the session: `RobotSession+Apps` is
+    /// what learns it, and only on the calls that already ask.
+    let runningApp: String?
 }
 
 /// The link owns signaling, the peer connection and potentially an open

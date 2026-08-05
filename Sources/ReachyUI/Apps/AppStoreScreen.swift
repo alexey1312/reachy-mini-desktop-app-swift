@@ -1,4 +1,5 @@
 import ReachyKit
+import ReachyWidgetUI
 import SwiftUI
 
 /// The robot's app store: what is installed, what the Hub offers, and what is

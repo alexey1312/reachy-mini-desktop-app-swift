@@ -45,6 +45,7 @@ public struct RobotPower: Sendable {
     private func waitForMoveToFinish(_ uuid: String) async {
         let deadline = ContinuousClock.now + configuration.moveCompletionTimeout
         while ContinuousClock.now < deadline {
+            guard !Task.isCancelled else { return }
             guard let running = try? await client.runningMoveUUIDs() else { return }
             if !running.contains(uuid) {
                 return

@@ -94,7 +94,11 @@ public struct RobotApp: Sendable, Equatable, Identifiable, Codable {
 
     /// The Hub's own palette names (`cardData.colorFrom` / `colorTo`), passed
     /// through unresolved — mapping them to colours is the UI layer's business.
-    public struct Gradient: Sendable, Equatable {
+    ///
+    /// `Codable` for `RobotAppSummary`, which the widget reads out of the App
+    /// Group. It is not part of `RobotApp`'s own coding, which is a passthrough of
+    /// the generated `AppInfo`.
+    public struct Gradient: Codable, Sendable, Equatable {
         public let from: String
         public let to: String
 

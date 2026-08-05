@@ -1,6 +1,6 @@
 import Foundation
 import ReachyKit
-@testable import ReachyUI
+@testable import ReachyWidgetUI
 import Testing
 
 /// A Space has no thumbnail — an emoji on a two-colour gradient is the whole

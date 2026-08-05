@@ -182,7 +182,11 @@ public struct ReachyRootView<Developer: View>: View {
     /// single `Equatable`, and reloading on every unrelated status field would
     /// wake the extension for nothing.
     private var widgetFacts: RobotWidgetFacts {
-        RobotWidgetFacts(phase: session.phase, isAwake: session.isAwake)
+        RobotWidgetFacts(
+            phase: session.phase,
+            isAwake: session.isAwake,
+            runningApp: RobotSnapshotStore().current?.runningAppName
+        )
     }
 
     /// Opens the relay session first, then hands the session a client that speaks

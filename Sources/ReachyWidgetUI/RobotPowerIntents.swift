@@ -5,14 +5,23 @@ import ReachyKit
 ///
 /// Shortcuts shows this text and nothing else, so each case has to say what the
 /// user can do about it rather than what went wrong internally.
-public enum RobotIntentError: Error, LocalizedError {
+public enum RobotIntentError: Error, LocalizedError, Equatable {
     case noKnownRobot
+    case wrongRobot
+    case unsupportedDaemon(String)
+    case timedOut
     case unreachable(String)
 
     public var errorDescription: String? {
         switch self {
         case .noKnownRobot:
             "No robot to reach. Open Reachy Mini and connect to one first."
+        case .wrongRobot:
+            "That address belongs to a different Reachy Mini. Open Reachy Mini to reconnect."
+        case let .unsupportedDaemon(message):
+            message
+        case .timedOut:
+            "The robot took too long to answer. Open Reachy Mini and try again."
         case let .unreachable(reason):
             reason
         }
@@ -28,14 +37,77 @@ public enum RobotIntentError: Error, LocalizedError {
 /// from the robot's network this fails immediately and says so, which is the
 /// honest outcome rather than a slow one.
 public enum RobotIntentTarget {
-    public static func power() throws -> RobotPower {
-        guard let address = KnownRobots.lastAddress else {
+    public struct VerifiedConnection: Sendable {
+        public let robot: KnownRobot
+        public let client: RobotConnection
+    }
+
+    /// The last completed handshake, including the stable identity an intent must
+    /// verify before it sends a command to the remembered address.
+    public static var knownRobot: KnownRobot? {
+        KnownRobots.all.first
+    }
+
+    /// One connection whose every sub-session is capped at `timeout`.
+    ///
+    /// `RobotConnection` reuses an injected session for all of them, including the
+    /// 35-second hub session that `/api/apps/*` normally runs on — which is the
+    /// point here rather than a side effect. That budget exists for a screen with
+    /// a spinner; an intent that sat on it would be killed with nothing written
+    /// down.
+    public static func connection(timeout: TimeInterval) async throws -> VerifiedConnection {
+        guard let robot = knownRobot else {
             throw RobotIntentError.noKnownRobot
         }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = timeout
+        configuration.timeoutIntervalForResource = timeout
         do {
-            return try RobotPower(client: RobotConnection(address: address))
+            let connection = try RobotConnection(
+                address: robot.address,
+                session: URLSession(configuration: configuration)
+            )
+            let handshake = try await connection.handshake()
+            try validate(handshake, expected: robot)
+            return VerifiedConnection(robot: robot, client: connection)
+        } catch let error as RobotIntentError {
+            throw error
         } catch {
             throw RobotIntentError.unreachable(RobotSession.describe(error))
+        }
+    }
+
+    public static func power() async throws -> RobotPower {
+        let target = try await connection(timeout: 10)
+        return RobotPower(client: target.client)
+    }
+
+    static func validate(_ handshake: RobotConnection.Handshake, expected robot: KnownRobot) throws {
+        guard handshake.identity.deduplicationKey == robot.key else {
+            throw RobotIntentError.wrongRobot
+        }
+        if case let .unsupported(reported, minimum) = handshake.compatibility {
+            throw RobotIntentError.unsupportedDaemon(
+                "Daemon \(reported) is unsupported; version \(minimum) is required."
+            )
+        }
+    }
+
+    /// A request timeout bounds one period of inactivity. This bounds the entire
+    /// multi-request intent, including the identity handshake and wake sequence.
+    static func withTimeout<T: Sendable>(
+        _ timeout: Duration,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw RobotIntentError.timedOut
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw CancellationError() }
+            return first
         }
     }
 }
@@ -59,7 +131,8 @@ public struct WakeRobotIntent: AppIntent {
     public init() {}
 
     public func perform() async throws -> some IntentResult {
-        try await RobotIntentTarget.power().wake()
+        let power = try await RobotIntentTarget.power()
+        try await power.wake()
         return .result()
     }
 }
@@ -73,7 +146,8 @@ public struct SleepRobotIntent: AppIntent {
     public init() {}
 
     public func perform() async throws -> some IntentResult {
-        try await RobotIntentTarget.power().sleep()
+        let power = try await RobotIntentTarget.power()
+        try await power.sleep()
         return .result()
     }
 }

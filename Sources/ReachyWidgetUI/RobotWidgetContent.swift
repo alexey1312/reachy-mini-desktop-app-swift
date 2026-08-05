@@ -36,8 +36,8 @@ public struct RobotWidgetContent: Equatable, Sendable {
         case let .fresh(snapshot):
             self.init(
                 title: Self.name(of: snapshot),
-                detail: Self.activity(of: snapshot),
-                symbolName: Self.symbol(for: snapshot),
+                detail: Self.activity(of: snapshot, at: date),
+                symbolName: Self.symbol(for: snapshot, at: date),
                 isStale: false
             )
         case let .stale(snapshot):
@@ -59,15 +59,15 @@ public struct RobotWidgetContent: Equatable, Sendable {
 
     /// A running app is the most useful thing there is to say, so it displaces
     /// the plain awake reading rather than crowding in beside it.
-    private static func activity(of snapshot: RobotSnapshot) -> String {
-        if let runningApp = snapshot.runningApp {
+    private static func activity(of snapshot: RobotSnapshot, at date: Date) -> String {
+        if let runningApp = snapshot.runningAppTitle(at: date) {
             return runningApp
         }
         return snapshot.isAwake ? "Awake" : "Asleep"
     }
 
-    private static func symbol(for snapshot: RobotSnapshot) -> String {
-        if snapshot.runningApp != nil {
+    private static func symbol(for snapshot: RobotSnapshot, at date: Date) -> String {
+        if snapshot.runningAppTitle(at: date) != nil {
             return "square.grid.2x2.fill"
         }
         return snapshot.isAwake ? "figure.wave" : "moon.zzz.fill"

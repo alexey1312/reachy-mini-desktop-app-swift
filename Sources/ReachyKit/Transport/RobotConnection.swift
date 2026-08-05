@@ -39,7 +39,10 @@ public actor RobotConnection {
 
         func makeSession(timeout: TimeInterval, resourceTimeout: TimeInterval? = nil) -> URLSession {
             // An injected session belongs to a test harness — reuse it so stubbed
-            // protocols still intercept every request.
+            // protocols still intercept every request. It is also how an App Intent
+            // caps every budget at once (`RobotIntentTarget.connection(timeout:)`):
+            // the 35 s hub session is meant for a screen with a spinner, and an
+            // intent that waited it out would be killed before writing anything.
             if let session {
                 return session
             }
@@ -51,9 +54,18 @@ public actor RobotConnection {
             return URLSession(configuration: configuration)
         }
 
+        /// Generated routes exchange finite JSON. The actual streams use their own
+        /// clients, so avoid URLSession's bidirectional upload path here: on macOS 15
+        /// its response callbacks can race a custom URLProtocol used by tests.
+        func makeTransport(_ session: URLSession) -> URLSessionTransport {
+            URLSessionTransport(
+                configuration: .init(session: session, httpBodyProcessingMode: .buffered)
+            )
+        }
+
         client = Client(
             serverURL: serverURL,
-            transport: URLSessionTransport(configuration: .init(session: makeSession(timeout: 3.5)))
+            transport: makeTransport(makeSession(timeout: 3.5))
         )
         readinessSession = makeSession(timeout: 10)
         assetSession = makeSession(timeout: 20, resourceTimeout: 120)
@@ -62,7 +74,7 @@ public actor RobotConnection {
         self.hubSession = hubSession
         hubClient = Client(
             serverURL: serverURL,
-            transport: URLSessionTransport(configuration: .init(session: hubSession))
+            transport: makeTransport(hubSession)
         )
     }
 

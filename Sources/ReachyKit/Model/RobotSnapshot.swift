@@ -7,20 +7,68 @@ import Foundation
 /// wrote the last time it was connected — and `takenAt` is what keeps that
 /// honest rather than merely confident.
 public struct RobotSnapshot: Codable, Sendable, Equatable {
+    /// Stable identity of the robot that produced this reading. Optional only so
+    /// snapshots written before identity was persisted still decode.
+    public let robotID: String?
     /// Nil for a robot whose daemon never answered a name — the same daemons
     /// that cannot be renamed at all.
     public let robotName: String?
     public let isAwake: Bool
-    /// The app the robot is running, when it is running one.
+    /// The app the robot is running, when it is running one — its display title,
+    /// which is what a widget puts on screen.
     public let runningApp: String?
+    /// The same app's installed name, which is the identity `start-app` and
+    /// `stop-current-app` are keyed by. A title cannot stand in for it: the two
+    /// are chosen independently (`RobotApp.matches(installed:)`).
+    ///
+    /// Defaulted so a blob written before this field existed decodes as a robot
+    /// running nothing identifiable rather than failing.
+    public let runningAppName: String?
+    /// When the running app itself was checked. Status polling refreshes
+    /// `takenAt`, but cannot refresh this without another robot round trip.
+    public let runningAppTakenAt: Date?
     /// When the app saw this. Not decoration: everything below turns on it.
     public let takenAt: Date
 
-    public init(robotName: String?, isAwake: Bool, runningApp: String?, takenAt: Date) {
+    public init(
+        robotID: String? = nil,
+        robotName: String?,
+        isAwake: Bool,
+        runningApp: String?,
+        runningAppName: String? = nil,
+        runningAppTakenAt: Date? = nil,
+        takenAt: Date
+    ) {
+        self.robotID = robotID
         self.robotName = robotName
         self.isAwake = isAwake
         self.runningApp = runningApp
+        self.runningAppName = runningAppName
+        self.runningAppTakenAt = runningAppTakenAt
         self.takenAt = takenAt
+    }
+
+    /// The app observation expires independently of the daemon status. For a
+    /// legacy snapshot without its own date, the snapshot date is the safest
+    /// compatible approximation.
+    public func runningAppName(at date: Date) -> String? {
+        guard runningAppIsFresh(at: date) else { return nil }
+        return runningAppName
+    }
+
+    public func runningAppTitle(at date: Date) -> String? {
+        guard runningAppIsFresh(at: date) else { return nil }
+        return runningApp ?? runningAppName
+    }
+
+    public var runningAppExpiresAt: Date? {
+        guard runningApp != nil || runningAppName != nil else { return nil }
+        return (runningAppTakenAt ?? takenAt).addingTimeInterval(RobotSnapshotStore.freshness)
+    }
+
+    private func runningAppIsFresh(at date: Date) -> Bool {
+        guard let expiry = runningAppExpiresAt else { return false }
+        return date <= expiry
     }
 }
 
@@ -78,5 +126,40 @@ public struct RobotSnapshotStore {
         // manual correction — not a reading from the future gone stale.
         let age = date.timeIntervalSince(current.takenAt)
         return age <= Self.freshness ? .fresh(current) : .stale(current)
+    }
+
+    /// Folds what a caller just learned about the running app into the reading
+    /// already there, inventing nothing else about it.
+    ///
+    /// `takenAt` moves to `date` because whoever calls this has just spoken to the
+    /// robot — the reading genuinely is that fresh, even though only one field of
+    /// it was re-checked. Both name parameters nil is "nothing is running", not "I
+    /// do not know", so it clears rather than leaves the last app behind.
+    ///
+    /// `isAwake` is for a caller that learned it in the same breath; nil keeps
+    /// what was already there. The `true` floor is only reached when no reading
+    /// exists at all, and every caller here has just commanded a robot
+    /// successfully — which a parked one does not answer.
+    public func recordRunningApp(
+        title: String?,
+        name: String?,
+        robotID: String? = nil,
+        robotName: String? = nil,
+        isAwake: Bool? = nil,
+        at date: Date = Date()
+    ) {
+        let previous = current
+        let resolvedID = robotID ?? previous?.robotID
+        let sameRobot = robotID == nil || previous?.robotID == robotID
+        let hasRunningApp = title != nil || name != nil
+        write(RobotSnapshot(
+            robotID: resolvedID,
+            robotName: robotName ?? (sameRobot ? previous?.robotName : nil),
+            isAwake: isAwake ?? (sameRobot ? previous?.isAwake : nil) ?? true,
+            runningApp: title,
+            runningAppName: name,
+            runningAppTakenAt: hasRunningApp ? date : nil,
+            takenAt: date
+        ))
     }
 }
