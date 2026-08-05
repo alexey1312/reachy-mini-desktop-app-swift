@@ -17,3 +17,9 @@ ever sends the robot a command.
   `container.scene` non-nil and the full child count — no property of the entity graph reveals it, because the
   entity graph is fine. Reproducing it needs the real screen: a bare box in a two-branch `ViewBuilder` swap does
   _not_ show it, since a trivial view tree releases the old scene before the new one is made.
+- `head_pose` is the head's transform with the daemon's `head_z_offset` subtracted — both engines end `fk` with
+  `T_world_head.z -= head_z_offset` — so drawing it is that subtraction undone, and nothing else. The offset is a
+  **literal 0.177**, not a robot dimension: the URDF's own rest height is 0.14957, 27 mm lower. `StewartGeometry`
+  therefore carries 0.177 rather than deriving it, and `RobotSceneGraph` takes its lift from there so the head and
+  the rods `PassiveJointSolver` aims at it cannot end up at two different heights. Either number alone looks
+  plausible on screen — one detaches the head from the platform, the other sinks it into the body.

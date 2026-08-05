@@ -25,27 +25,22 @@ public final class RobotSceneGraph {
         let axis: SIMD3<Float>
     }
 
-    /// The link the daemon's `head_pose` describes, and the fixed offset from it
-    /// to the link actually drawn.
+    /// The link the daemon's `head_pose` describes.
     private let headLinkName = "xl_330"
-    private var headToDrawnLink: simd_double4x4?
     private var baseEntity: Entity?
+    /// Both halves of turning a `head_pose` into a transform for the drawn link —
+    /// the rest height it is measured from, and the offset to the link the meshes
+    /// hang off. Absent for a description with no Stewart platform in it, and the
+    /// head is then left wherever the tree puts it.
+    private let geometry: StewartGeometry?
 
-    /// `head_pose` is measured from the neutral head height, not from the base;
-    /// the daemon adds this before solving and removes it after.
-    private static let headHeightOffset = 0.177
-
-    public init(urdf: URDFDocument, meshes: [String: MeshResource]) {
+    public init(urdf: URDFDocument, meshes: [String: MeshResource], geometry: StewartGeometry?) {
+        self.geometry = geometry
         root.name = "robot"
         root.transform = Transform(rotation: simd_quatf(angle: -.pi / 2, axis: SIMD3(1, 0, 0)))
         let base = buildLink(named: urdf.rootLinkName, urdf: urdf, meshes: meshes)
         baseEntity = base
         root.addChild(base)
-        // Derived from the URDF rather than hard-coded: `head_frame` fixes the
-        // drawn link to the frame the pose refers to.
-        headToDrawnLink = urdf.joints
-            .first { $0.parent == headLinkName && $0.kind == .fixed && $0.child == "head" }
-            .map(\.origin.matrix.inverse)
     }
 
     /// Places the head straight from the daemon's pose.
@@ -57,10 +52,13 @@ public final class RobotSceneGraph {
         guard let pose,
               let head = linkEntities[headLinkName],
               let base = baseEntity,
-              let headToDrawnLink else { return }
+              let geometry else { return }
+        // Undoes the subtraction the daemon's `fk` ends with. Taken from the same
+        // `StewartGeometry` the solver uses, because a lift that differs from the
+        // solver's by even a little detaches the head from the rods pointing at it.
         var lifted = pose
-        lifted.columns.3.z += Self.headHeightOffset
-        head.setTransformMatrix(simd_float4x4(lifted * headToDrawnLink), relativeTo: base)
+        lifted.columns.3.z += geometry.headHeightOffset
+        head.setTransformMatrix(simd_float4x4(lifted * geometry.headToDrawnLink), relativeTo: base)
     }
 
     public func entity(forLink name: String) -> Entity? {

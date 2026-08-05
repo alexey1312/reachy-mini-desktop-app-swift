@@ -108,11 +108,14 @@ public final class RobotSceneModel {
         phase = .buildingScene
         let meshes = await MeshResourceFactory.makeAll(geometry.meshes)
         guard !Task.isCancelled else { return }
-        let graph = RobotSceneGraph(urdf: geometry.urdf, meshes: meshes)
-        self.graph = graph
         // Derived from the description that was just downloaded, so the linkage is
-        // solved with this robot's dimensions rather than assumed ones.
-        solver = StewartGeometry(urdf: geometry.urdf).map(PassiveJointSolver.init)
+        // solved — and the head placed — with this robot's dimensions rather than
+        // assumed ones. Both consumers share the one derivation, so the rods cannot
+        // point at a height the head is not drawn at.
+        let stewart = StewartGeometry(urdf: geometry.urdf)
+        solver = stewart.map(PassiveJointSolver.init)
+        let graph = RobotSceneGraph(urdf: geometry.urdf, meshes: meshes, geometry: stewart)
+        self.graph = graph
         container.addChild(graph.root)
         // Framing has to wait for the meshes: before they exist the model has no
         // extent, and a camera aimed at an empty point ends up inside the robot.
