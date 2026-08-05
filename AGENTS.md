@@ -168,7 +168,12 @@ environment keys are written out by hand — swiftformat's `environmentEntry` ru
    and hook scripts need an explicit `git add`, and a commit with nothing staged fails before the hook runs.
 7. **Tests wait on conditions, not durations.** A fixed `Task.sleep` before an assertion is a CI flake waiting to
    happen: the suites are `@MainActor` and a loaded runner starves them. Poll the condition, and give an injected
-   timeout headroom its deadline cannot cut short.
+   timeout headroom its deadline cannot cut short. **But where two paths end in the _same_ error and differ only in
+   how long they take** — two timeout budgets, a retry against a first try — the error alone proves nothing: the
+   wrong branch throws the very same thing, just later, and the suite passes green with only `test_time` quietly
+   grown. There the duration _is_ the assertion. Measure a `ContinuousClock` span and bound it loosely enough that a
+   loaded runner cannot cross it — separating milliseconds from tens of seconds leaves room to spare
+   (`RemoteControlChannelTests.expectTimeout`). Mutate the branch and watch it go red before trusting it.
 8. **A new screen ships with its previews.** Every screen, and every state a user can land in, gets a `#Preview`
    under `Sources/ReachyUI/Previews` and a recorded reference — `mise run test:snapshots:record`, then `git add` the
    PNGs, which no hook stages for you. A state that needs a live robot to reach is the one most worth capturing: add

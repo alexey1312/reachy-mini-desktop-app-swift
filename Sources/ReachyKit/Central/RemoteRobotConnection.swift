@@ -25,10 +25,15 @@ public actor RemoteRobotConnection: RobotAPIClient {
     public init(
         channel: any RemoteDataChannel,
         robotName: String? = nil,
-        timeout: Duration = .seconds(10)
+        timeout: Duration = .seconds(10),
+        openingTimeout: Duration = .seconds(30)
     ) {
         self.init(
-            control: RemoteControlChannel(channel: channel, timeout: timeout),
+            control: RemoteControlChannel(
+                channel: channel,
+                timeout: timeout,
+                openingTimeout: openingTimeout
+            ),
             robotName: robotName
         )
     }

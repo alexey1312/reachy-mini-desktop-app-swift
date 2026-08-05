@@ -21,6 +21,10 @@ private final class ScriptedChannel: RemoteDataChannel, @unchecked Sendable {
         return recorded
     }
 
+    /// These tests are about what the commands say, not about how long they may
+    /// take, so the channel is simply up throughout.
+    let isOpen = true
+
     func send(_ text: String) async throws {
         guard let reply = record(text) else { return }
         emit(reply)

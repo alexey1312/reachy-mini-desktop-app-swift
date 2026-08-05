@@ -8,6 +8,11 @@ import Foundation
 public protocol RemoteDataChannel: Sendable {
     func send(_ text: String) async throws
     func messages() -> AsyncStream<String>
+    /// Whether a command sent now would go out, rather than wait for a channel the
+    /// robot has not opened yet. Deliberately the same question `send` asks itself
+    /// before deciding to wait — a caller bounding that wait has to bound the same
+    /// thing, or it is timing something other than what is happening.
+    var isOpen: Bool { get }
 }
 
 /// A JSON value, for command payloads whose shape the caller decides.
@@ -70,15 +75,35 @@ public actor RemoteControlChannel {
 
     private let channel: any RemoteDataChannel
     private let timeout: Duration
+    /// The robot is the one that opens the channel, and only once a negotiation
+    /// this side does not drive has got far enough — so a command issued before
+    /// that pays for the relay round trip, ICE and DTLS too. On the same budget as
+    /// a reply, a slow network reads as a robot that never answered.
+    private let openingTimeout: Duration
     private var reader: Task<Void, Never>?
     /// One waiter per correlation token, which is all the wire can distinguish.
     private var waiting: [String: CheckedContinuation<Data, any Error>] = [:]
     /// Commands already in flight under the same token. Awaited in turn.
     private var queued: [String: [CheckedContinuation<Void, Never>]] = [:]
 
-    public init(channel: any RemoteDataChannel, timeout: Duration = .seconds(10)) {
+    public init(
+        channel: any RemoteDataChannel,
+        timeout: Duration = .seconds(10),
+        openingTimeout: Duration = .seconds(30)
+    ) {
         self.channel = channel
         self.timeout = timeout
+        self.openingTimeout = openingTimeout
+    }
+
+    /// Which budget a command gets. Two different waits are being bounded here —
+    /// "the channel is not open yet" and "the robot has not answered" — and only
+    /// the second one says anything about the robot. Asked afresh each time rather
+    /// than latched, because the opening wait comes back: an ICE failure replaces
+    /// the peer under a session that has been up for hours, and the command after
+    /// it sits out a whole negotiation again.
+    private var currentTimeout: Duration {
+        channel.isOpen ? timeout : openingTimeout
     }
 
     deinit { reader?.cancel() }
@@ -113,8 +138,8 @@ public actor RemoteControlChannel {
         // before it could exit, and a continuation nothing resumes has no way to
         // let it — one continuation with exactly four ways to be resumed (reply,
         // send failure, deadline, closed channel) has no such corner.
-        let deadline = Task { [timeout] in
-            try? await Task.sleep(for: timeout)
+        let deadline = Task { [budget = currentTimeout] in
+            try? await Task.sleep(for: budget)
             guard !Task.isCancelled else { return }
             self.expire(token)
         }
@@ -163,8 +188,18 @@ public actor RemoteControlChannel {
                 guard !Task.isCancelled else { return }
                 deliver(text)
             }
-            failAll(with: .closed)
+            endReading()
         }
+    }
+
+    /// A finished stream cannot be restarted, so surviving one means asking the
+    /// channel for another — which the next command does, once the reader is
+    /// cleared out of its way. Without this the first close is permanent: replies
+    /// keep arriving at a channel nobody reads, and every later command sits out
+    /// its whole deadline.
+    private func endReading() {
+        reader = nil
+        failAll(with: .closed)
     }
 
     /// The robot also broadcasts messages nobody asked for — joint positions at

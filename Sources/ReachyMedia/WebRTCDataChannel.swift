@@ -43,6 +43,13 @@ public final class WebRTCDataChannel: NSObject, RemoteDataChannel, @unchecked Se
         }
     }
 
+    /// Exactly while a peer connection has handed its channel over: not before the
+    /// first negotiation finishes, and not between peers while a session heals.
+    /// `send` waits in both of those, which is what makes this the honest answer.
+    public var isOpen: Bool {
+        current() != nil
+    }
+
     public func send(_ text: String) async throws {
         let channel = await attachedChannel()
         let buffer = RTCDataBuffer(data: Data(text.utf8), isBinary: false)
@@ -63,9 +70,21 @@ public final class WebRTCDataChannel: NSObject, RemoteDataChannel, @unchecked Se
         }
     }
 
+    /// The peer connection was replaced. Every re-negotiation does this — including
+    /// the very first offer, which arrives after this object already exists — so it
+    /// is a gap, not an ending: sends go back to waiting for a channel and the
+    /// message stream is deliberately left running. Ending it here would tell
+    /// `RemoteControlChannel` the session was over and fail the handshake that is
+    /// waiting for this negotiation to finish.
+    func detachPeer() {
+        lock.lock()
+        channel = nil
+        lock.unlock()
+    }
+
     /// The session is gone. Ends the message stream, which is what tells
     /// `RemoteControlChannel` to fail everything still pending.
-    func detach() {
+    func close() {
         lock.lock()
         channel = nil
         let continuation = continuation
@@ -119,9 +138,11 @@ public final class WebRTCDataChannel: NSObject, RemoteDataChannel, @unchecked Se
 }
 
 extension WebRTCDataChannel: RTCDataChannelDelegate {
+    /// One channel closing is one peer going away, which the session heals by
+    /// negotiating another — so the control channel above is left intact.
     public func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         guard dataChannel.readyState == .closed else { return }
-        detach()
+        detachPeer()
     }
 
     /// The daemon speaks JSON text on this channel; a binary frame is not ours.

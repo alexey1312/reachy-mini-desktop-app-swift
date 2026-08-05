@@ -17,9 +17,26 @@ private final class FakeDataChannel: RemoteDataChannel, @unchecked Sendable {
     private var recorded: [String] = []
     /// Answers keyed by the command that provokes them.
     private let scripted: [String: String]
+    /// A knob rather than a simulation: `send` here always reaches the robot, and
+    /// this exists only to say which wait a caller is bounding.
+    private var open: Bool
 
-    init(replies: [String: String] = [:]) {
+    init(replies: [String: String] = [:], isOpen: Bool = true) {
         scripted = replies
+        open = isOpen
+    }
+
+    var isOpen: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return open
+    }
+
+    /// The peer connection went away and another is being negotiated in its place.
+    func losePeer() {
+        lock.lock()
+        open = false
+        lock.unlock()
     }
 
     var sent: [String] {
@@ -57,6 +74,24 @@ private final class FakeDataChannel: RemoteDataChannel, @unchecked Sendable {
         }
     }
 
+    /// Whether anyone is reading. Polled rather than slept on, so a loaded runner
+    /// cannot turn the wait into a flake.
+    var isListening: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return continuation != nil
+    }
+
+    /// The stream ends — which is the only thing a data channel can say to mean
+    /// "nothing more is coming this way".
+    func close() {
+        lock.lock()
+        let listener = continuation
+        continuation = nil
+        lock.unlock()
+        listener?.finish()
+    }
+
     /// Anything the robot says on its own — a broadcast, or a reply to something
     /// this test never sent.
     ///
@@ -83,10 +118,15 @@ private final class FakeDataChannel: RemoteDataChannel, @unchecked Sendable {
 struct RemoteControlChannelTests {
     private func channel(
         _ replies: [String: String] = [:],
-        timeout: Duration = .seconds(5)
+        timeout: Duration = .seconds(5),
+        openingTimeout: Duration = .seconds(5),
+        isOpen: Bool = true
     ) -> (RemoteControlChannel, FakeDataChannel) {
-        let fake = FakeDataChannel(replies: replies)
-        return (RemoteControlChannel(channel: fake, timeout: timeout), fake)
+        let fake = FakeDataChannel(replies: replies, isOpen: isOpen)
+        return (
+            RemoteControlChannel(channel: fake, timeout: timeout, openingTimeout: openingTimeout),
+            fake
+        )
     }
 
     /// The robot answers by echoing the command back. There is no request id on
@@ -140,6 +180,51 @@ struct RemoteControlChannelTests {
         await #expect(throws: RemoteControlChannel.Failure.timedOut) {
             try await control.perform("wake_up")
         }
+    }
+
+    /// Over the relay the robot opens the channel, and only once signaling, ICE and
+    /// DTLS are through — so a command issued before that waits for a session as
+    /// well as for a reply, and gets its own budget for it.
+    @Test("a command sent before the channel opens waits on the opening budget")
+    func spendsTheOpeningBudgetBeforeTheChannelOpens() async {
+        let (control, _) = channel(
+            timeout: .seconds(30), openingTimeout: .milliseconds(100), isOpen: false
+        )
+
+        await expectTimeout {
+            try await control.perform("get_version", correlation: .replyKey("version"))
+        }
+    }
+
+    /// Once it is open, a robot that says nothing is just a robot that says nothing.
+    @Test("an open channel puts a command on the reply budget")
+    func spendsTheReplyBudgetOnceOpen() async {
+        let (control, _) = channel(timeout: .milliseconds(100), openingTimeout: .seconds(30))
+
+        await expectTimeout { try await control.perform("wake_up") }
+    }
+
+    /// And it is a question about now, not a stage the channel grows out of. An ICE
+    /// failure replaces the peer under a session that has been up for hours, and
+    /// the command after it waits out a whole negotiation again.
+    @Test("a channel that lost its peer is back on the opening budget")
+    func returnsToTheOpeningBudgetWhenThePeerGoes() async {
+        let (control, fake) = channel(timeout: .seconds(30), openingTimeout: .milliseconds(100))
+        fake.losePeer()
+
+        await expectTimeout { try await control.perform("wake_up") }
+    }
+
+    /// Both budgets end in `.timedOut`, so the error alone proves nothing about
+    /// which one was in force — the 100 ms budget answering 30 s late is still a
+    /// `.timedOut`. Only the elapsed time tells them apart, so it is asserted:
+    /// generously, since it is separating milliseconds from tens of seconds, and a
+    /// loaded runner cannot stretch one into the other.
+    private func expectTimeout(_ command: () async throws -> Void) async {
+        let clock = ContinuousClock()
+        let started = clock.now
+        await #expect(throws: RemoteControlChannel.Failure.timedOut) { try await command() }
+        #expect(clock.now - started < .seconds(5))
     }
 
     /// Not every reply echoes a command: `get_version` answers a bare
@@ -220,6 +305,25 @@ struct RemoteControlChannelTests {
         _ = try await second
 
         #expect(fake.sent.count == 2)
+    }
+
+    /// A WebRTC session is re-negotiated in place: the peer connection is replaced,
+    /// its data channel with it, while the control channel above stays the same
+    /// object. The first close must not deafen it for good.
+    @Test("a channel that closed serves commands again once it reopens")
+    func readsAgainAfterTheStreamEnds() async throws {
+        let (control, fake) = channel([
+            "wake_up": #"{"status":"ok","command":"wake_up","completed":true}"#,
+        ], timeout: .seconds(2))
+
+        let inFlight = Task { try await control.perform("get_version", correlation: .replyKey("version")) }
+        while !fake.isListening {
+            await Task.yield()
+        }
+        fake.close()
+        await #expect(throws: RemoteControlChannel.Failure.closed) { _ = try await inFlight.value }
+
+        try await control.perform("wake_up")
     }
 
     /// Commands carry parameters, and the robot's models name them its way.

@@ -96,6 +96,7 @@ public final class CameraSession {
         eventsTask?.cancel()
         eventsTask = nil
         teardownPeer()
+        dataChannel.close()
         phase = .connecting
         let signaling = signaling
         Task { await signaling.disconnect() } // best-effort endSession; ws close also suffices
@@ -133,10 +134,17 @@ public final class CameraSession {
             teardownPeer()
             // On the LAN the client re-negotiates on its own, so this is a lull
             // rather than an ending. Over the relay central says why, and there is
-            // nothing further coming.
-            phase = reason.map { .failed(RemoteSessionEnd(reason: $0).message) } ?? .connecting
+            // nothing further coming — which is also the line the control channel
+            // is drawn on: a lull leaves its commands waiting, an ending fails them.
+            guard let reason else {
+                phase = .connecting
+                return
+            }
+            dataChannel.close()
+            phase = .failed(RemoteSessionEnd(reason: reason).message)
         case let .failed(message):
             teardownPeer()
+            dataChannel.close()
             phase = .failed(message)
         }
     }
@@ -248,7 +256,7 @@ public final class CameraSession {
     private func teardownPeer() {
         watchdogTask?.cancel()
         watchdogTask = nil
-        dataChannel.detach()
+        dataChannel.detachPeer()
         peerConnection?.close()
         peerConnection = nil
         delegateAdapter = nil
