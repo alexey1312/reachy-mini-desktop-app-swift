@@ -11,10 +11,13 @@ import Testing
     .enabled(if: ProcessInfo.processInfo.environment["REACHY_URDF_FIXTURE"] != nil)
 )
 struct PassiveJointSolverTests {
-    private func loadGeometry() throws -> StewartGeometry {
+    private func loadDescription() throws -> URDFDocument {
         let path = try #require(ProcessInfo.processInfo.environment["REACHY_URDF_FIXTURE"])
-        let urdf = try URDFParser.parse(Data(contentsOf: URL(fileURLWithPath: path)))
-        return try #require(StewartGeometry(urdf: urdf))
+        return try URDFParser.parse(Data(contentsOf: URL(fileURLWithPath: path)))
+    }
+
+    private func loadGeometry() throws -> StewartGeometry {
+        try #require(StewartGeometry(urdf: loadDescription()))
     }
 
     private func polar(_ point: SIMD3<Double>) -> (radius: Double, degrees: Double) {
@@ -50,14 +53,20 @@ struct PassiveJointSolverTests {
         }
     }
 
-    /// Upstream carries 0.177 for the head height. That number is expressed in
-    /// their solver's own frame, not the URDF root, and using it here would put
-    /// the rest pose 27 mm out — `restPose` below is what pins the right value.
-    @Test("crank and head height come out of the description")
+    /// `headHeightOffset` is the one scalar that must *not* follow the description.
+    /// It is the daemon's `head_z_offset`, a literal both kinematics engines
+    /// subtract at the end of `fk`, and the head's rest height in the URDF is a
+    /// different number entirely — 27 mm lower. Deriving the prettier one draws the
+    /// robot somewhere the daemon never reported.
+    @Test("the crank comes out of the description, the height offset out of the daemon")
     func scalars() throws {
-        let geometry = try loadGeometry()
+        let urdf = try loadDescription()
+        let geometry = try #require(StewartGeometry(urdf: urdf))
         #expect(abs(geometry.armLength - 0.04) < 1e-9)
-        #expect(abs(geometry.headHeightOffset - 0.14957) < 1e-4)
+        #expect(geometry.headHeightOffset == 0.177)
+        let rest = try #require(urdf.restTransformFromRoot("head")).translation.z
+        #expect(abs(rest - 0.14957) < 1e-4, "rest height moved: \(rest)")
+        #expect(abs(geometry.headHeightOffset - rest - 0.02743) < 1e-4)
     }
 
     /// Leg 2's rod mount is rotated, so its direction is not axis-aligned like the
@@ -82,14 +91,25 @@ struct PassiveJointSolverTests {
 
     // MARK: - Solver
 
-    /// The URDF's zero configuration is a real assembled pose, so a robot sitting
-    /// at rest must solve to all-zero wrists. Any frame taken from the wrong
-    /// parent shows up here immediately.
+    /// The URDF's zero configuration is a real assembled pose — its five closing
+    /// pairs meet to within a micrometre — so a robot sitting there must solve to
+    /// all-zero wrists. Any frame taken from the wrong parent shows up here at once.
+    ///
+    /// That configuration is *not* `head_pose` zero: the daemon measures from
+    /// `head_z_offset`, which sits 27 mm above it, so the pose that means "at rest"
+    /// on the wire is the rest height minus that offset. Feeding identity here
+    /// instead asks where the wrists go with the platform jacked up 27 mm, and the
+    /// answer is a legitimate 7°.
     @Test("a robot at rest solves to zero everywhere")
     func restPose() throws {
-        let solver = try PassiveJointSolver(geometry: loadGeometry())
+        let urdf = try loadDescription()
+        let geometry = try #require(StewartGeometry(urdf: urdf))
+        let rest = try #require(urdf.restTransformFromRoot("head")).translation.z
+        let solver = PassiveJointSolver(geometry: geometry)
+        var atRest = matrix_identity_double4x4
+        atRest.columns.3.z = rest - geometry.headHeightOffset
         let angles = solver.solve(
-            headPose: matrix_identity_double4x4,
+            headPose: atRest,
             bodyYaw: 0,
             stewart: Array(repeating: 0, count: 6)
         )

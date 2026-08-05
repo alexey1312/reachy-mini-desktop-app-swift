@@ -22,9 +22,19 @@ public struct StewartGeometry: Sendable {
     /// every leg — leg 2's mount is rotated.
     public let rodDirections: [SIMD3<Double>]
     public let armLength: Double
-    /// The head pose is measured from the head's rest height, so this is added
-    /// before solving.
-    public let headHeightOffset: Double
+    /// What the daemon subtracted from the head's height before reporting it, so
+    /// adding it back is how a `head_pose` becomes a position in the root link's
+    /// frame. Every consumer — the solver and the scene graph both — has to use
+    /// this one value, or the rods end up pointing at a head drawn somewhere else.
+    ///
+    /// The one number here that is *not* derived, because it is not a dimension of
+    /// the robot: `head_z_offset` is a literal in the daemon's own kinematics
+    /// (`placo_kinematics.py`, mirrored into `kinematics_data.json`), and both
+    /// engines end `fk` with `T_world_head.z -= head_z_offset`. It is a reporting
+    /// datum, and deriving a prettier number from the URDF only moves the drawn
+    /// robot away from what the daemon said. Notably it is *not* the head's rest
+    /// height: the URDF's zero configuration sits 27 mm lower, at 0.14957.
+    public let headHeightOffset = 0.177
     /// Rest transform from the pose's frame to the link the meshes hang off.
     public let headToDrawnLink: simd_double4x4
 
@@ -61,7 +71,6 @@ public struct StewartGeometry: Sendable {
         }
 
         guard let armLength,
-              let head = urdf.restTransformFromRoot("head"),
               let headToDrawnLink = urdf.restTransform(from: "head", to: "xl_330") else { return nil }
 
         self.motorFrames = motorFrames
@@ -69,7 +78,6 @@ public struct StewartGeometry: Sendable {
         self.passiveOffsets = passiveOffsets
         self.rodDirections = rodDirections
         self.armLength = armLength
-        headHeightOffset = head.translation.z
         self.headToDrawnLink = headToDrawnLink
     }
 
