@@ -1,5 +1,6 @@
 import Foundation
 @testable import ReachyKit
+import ReachyTestSupport
 import Testing
 
 /// `/wifi/*` mounts at the app root and only under `--wireless-version`, so the

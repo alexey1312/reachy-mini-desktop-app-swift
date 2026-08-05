@@ -1,3 +1,4 @@
+import HuggingFaceAuth
 import ReachyKit
 @testable import ReachyUI
 import SwiftUI
@@ -38,6 +39,41 @@ enum PreviewScene {
     static func movesScreen(_ session: RobotSession, model: MovesModel? = nil) -> some View {
         NavigationHost {
             MovesScreen(session: session, model: model ?? .preview())
+        }
+        .preview()
+    }
+
+    static func appStore(
+        _ session: RobotSession,
+        model: AppStoreModel? = nil,
+        install: AppInstallModel? = nil
+    ) -> some View {
+        NavigationHost {
+            AppStoreScreen(
+                session: session,
+                model: model ?? .preview(),
+                install: install ?? .preview(state: .idle, session: session)
+            )
+        }
+        .preview()
+    }
+
+    /// The sheet the store opens, previewed on its own: it carries the whole
+    /// install flow, and a snapshot of it is the only view of a job in flight.
+    static func appDetail(
+        _ session: RobotSession,
+        app: RobotApp,
+        model: AppStoreModel? = nil,
+        install: AppInstallModel? = nil
+    ) -> some View {
+        NavigationHost {
+            AppDetailSheet(
+                app: app,
+                model: model ?? .preview(),
+                session: session,
+                install: install ?? .preview(state: .idle, session: session),
+                dismiss: {}
+            )
         }
         .preview()
     }
@@ -99,7 +135,7 @@ enum PreviewScene {
 
     static func root(_ session: RobotSession, viewport: ViewportModel? = nil) -> some View {
         ReachyRootView(session: session, viewport: viewport ?? .preview()) {
-            Text("Diagnostics")
+            Text("Developer tools")
         }
         .preview()
     }
@@ -170,6 +206,59 @@ enum PreviewScene {
         NavigationHost {
             SettingsScreen(session: session)
         }
+        .preview()
+    }
+
+    static func yourReachies(
+        _ state: YourReachiesModel.State,
+        refreshFailure: String? = nil
+    ) -> some View {
+        NavigationHost {
+            YourReachiesScreen(
+                model: .preview(state, refreshFailure: refreshFailure),
+                connect: { _ in },
+                // The real destination: a pushed view costs nothing until it is
+                // pushed, so the preview carries the one the app pushes rather
+                // than a placeholder that would hide a broken link.
+                signIn: { HFSignInScreen(session: .preview(), model: .preview()) }
+            )
+        }
+        .preview()
+    }
+
+    /// The way in that «Your Reachies» pushes. Nothing is connected in this state —
+    /// that is why the list was empty — so the plain preview client, which does not
+    /// speak `HFAuthClient`, leaves the account half standing alone.
+    static func hfSignIn(model: HFSignInModel? = nil) -> some View {
+        NavigationHost {
+            HFSignInScreen(session: .preview(), model: model ?? .preview())
+        }
+        .preview()
+    }
+
+    /// The account card on its own. The robot half only renders when the session's
+    /// client speaks `HFAuthClient`, so the preview client is the one that does.
+    static func hfAccount(
+        model: HFSignInModel? = nil,
+        robotAccount: HFAuthStatus? = nil,
+        relay: RelayStatus? = nil,
+        linkError: String? = nil
+    ) -> some View {
+        Form {
+            HFAccountSection(
+                session: .preview(
+                    client: PreviewHFRobotClient(
+                        account: robotAccount ?? HFAuthStatus(isLoggedIn: false),
+                        relay: relay ?? RelayStatus(state: .stopped, isConnected: false)
+                    )
+                ),
+                model: model ?? .preview(),
+                robotAccount: robotAccount ?? HFAuthStatus(isLoggedIn: false),
+                relay: relay ?? RelayStatus(state: .stopped, message: "Relay not initialized", isConnected: false),
+                linkError: linkError
+            )
+        }
+        .formStyle(.grouped)
         .preview()
     }
 

@@ -80,8 +80,10 @@ struct AudioSettingsSection: View {
                 guard !editing else { return }
                 Task { await commit() }
             }
-            if let device {
-                Text("\(device.device) · \(device.platform)")
+            // Only the LAN routes name the device; a remote session reports the
+            // level alone, and a line reading " · " would be worse than none.
+            if let name = device?.device, let platform = device?.platform {
+                Text("\(name) · \(platform)")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

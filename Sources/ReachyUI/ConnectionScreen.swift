@@ -5,6 +5,9 @@ import SwiftUI
 /// not a fallback (upstream issue #269).
 struct ConnectionScreen: View {
     let session: RobotSession
+    /// Absent in previews and wherever the remote list has nowhere to be
+    /// presented from, which is what hides the section rather than a flag.
+    var showRemoteRobots: (() -> Void)?
 
     @State private var browser: RobotBrowser
     @State private var manualInput: String
@@ -28,9 +31,11 @@ struct ConnectionScreen: View {
         session: RobotSession,
         browser: RobotBrowser = RobotBrowser(),
         manualInput: String? = nil,
-        knownRobots: KnownRobotsModel? = nil
+        knownRobots: KnownRobotsModel? = nil,
+        showRemoteRobots: (() -> Void)? = nil
     ) {
         self.session = session
+        self.showRemoteRobots = showRemoteRobots
         _browser = State(initialValue: browser)
         _manualInput = State(initialValue: manualInput ?? KnownRobots.lastAddress.map(\.displayString) ?? "")
         _knownRobots = State(initialValue: knownRobots)
@@ -63,6 +68,7 @@ struct ConnectionScreen: View {
                     // answers, which is exactly when that button is the way out.
                     discoverySection
                         .disabled(isProbing)
+                    YourReachiesSection(show: showRemoteRobots)
                     setUpSection
                     manualSection
                         .disabled(isProbing)
@@ -161,7 +167,7 @@ struct ConnectionScreen: View {
                     connectManually(to: entry.robot.address)
                 } label: {
                     LabeledContent(entry.robot.name ?? entry.robot.address.displayString) {
-                        statusLabel(for: entry.status)
+                        KnownRobotStatusLabel(status: entry.status)
                     }
                 }
                 .swipeActions {
@@ -197,22 +203,6 @@ struct ConnectionScreen: View {
         let known = Set(knownEntries.map(\.id))
         return browser.services.filter { service in
             service.hardwareID.map { !known.contains($0) } ?? true
-        }
-    }
-
-    @ViewBuilder
-    private func statusLabel(for status: KnownRobotsModel.Status) -> some View {
-        switch status {
-        case .checking:
-            ProgressView()
-        case .reachable:
-            Text("On the network")
-                .font(.caption)
-                .foregroundStyle(.green)
-        case .unreachable:
-            Text("Not responding")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 

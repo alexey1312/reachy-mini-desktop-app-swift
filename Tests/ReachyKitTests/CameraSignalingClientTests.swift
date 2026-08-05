@@ -127,8 +127,8 @@ struct CameraSignalingClientTests {
         var events = await client.events().makeAsyncIterator()
         #expect(await events.next() == .offer(sessionID: "sess-1", sdp: "v=0 offer"))
 
-        fake.send(.endSession(sessionID: "sess-1"))
-        #expect(await events.next() == .sessionEnded)
+        fake.send(.endSession(sessionID: "sess-1", reason: nil))
+        #expect(await events.next() == .sessionEnded(reason: nil))
         // The client re-lists and re-negotiates a fresh session on its own.
         #expect(await events.next() == .offer(sessionID: "sess-1", sdp: "v=0 offer"))
         #expect(fake.received(.startSession(peerID: "prod-1")) == 2)
@@ -156,7 +156,7 @@ struct CameraSignalingClientTests {
         #expect(await events.next() == .offer(sessionID: "sess-1", sdp: "v=0 offer"))
 
         fake.dropConnections()
-        #expect(await events.next() == .sessionEnded)
+        #expect(await events.next() == .sessionEnded(reason: nil))
         #expect(await events.next() == .offer(sessionID: "sess-1", sdp: "v=0 offer"))
         #expect(fake.connectionCount == 2)
     }

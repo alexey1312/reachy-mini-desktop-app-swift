@@ -23,7 +23,7 @@ public extension RobotSession {
 
     func updateLog(jobID: String) throws -> AsyncStream<UpdateLogEvent> {
         guard let address else { throw ReachyKitError.notConnected }
-        return try UpdateLogStreamClient(address: address, jobID: jobID).events()
+        return try JobLogStreamClient.daemonUpdate(address: address, jobID: jobID).events()
     }
 
     /// Waits out the `systemctl restart` an update ends with and reports the version

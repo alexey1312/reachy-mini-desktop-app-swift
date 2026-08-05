@@ -73,6 +73,18 @@ result — verify the artifact, or rerun the tool directly
 (`./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike`). Always pass those explicit paths — a bare
 `.` walks into `Apps/DerivedData`, and swiftformat then "fails" on generated and vendored sources.
 `mise run clean` only clears `.build` — `Apps/DerivedData` (Xcode's, several GB) is not touched.
+**SwiftPM holds one `.build` lock per worktree**, so a second invocation waits instead of failing, printing
+`Another instance of SwiftPM (PID: …) is already running` — a line that never appears when the output is piped
+through `tail`. A run that timed out in your tool keeps running and keeps the lock, and every later command then
+looks like the code under test is hanging. Check `pgrep -f 'swift-build|swift-test|swift-frontend'` before
+diagnosing a hang, and run one SwiftPM process at a time.
+**A hang with no test output at all is the compiler, not the code.** `ps -o command= -p <frontend-pid>` names the
+`-primary-file` it is stuck on and `sample <pid>` names the pass. One shape found here: a closure nested inside an
+`AsyncStream { continuation in … }` builder that captures the escaping continuation (e.g. `lock.withLock { … }`
+assigning it to a stored property) emits a `convert_escape_to_noescape` that sends the `ClosureLifetimeFixup` SIL
+pass into a dominator walk it does not return from — 20+ minutes of one core, no diagnostic, no timeout. It is a
+diagnostic pass, so `-Onone` does not avoid it; flatten the nesting and lock by hand instead
+(`Tests/ReachyKitTests/RemoteControlChannelTests.swift` carries the worked example).
 Two files sharing a basename in one target fail as `couldn't build <name>.swift.o because of multiple producers`,
 never as a redeclaration and never naming the other file — check `find Sources -name Foo.swift` before adding one.
 `sim-daemon` **cannot** serve `/wifi/*` or `/update/*`: `--wireless-version` crashes on import (`.venv-sim` has
@@ -108,7 +120,13 @@ pinned too**, by `simctl ui … appearance light` in `snapshots:_run`: the simul
 destination and outlives a reboot, so without it whoever last switched that device to dark re-records the whole set.
 Run `test:snapshots` before `test:snapshots:record` — it names every reference that moved, which `record` then
 overwrites blind. If _every_ reference moved, suspect the environment rather than the code: check one nothing could
-have affected (`JoystickPad`) against HEAD with `git show HEAD:<png> | git lfs smudge > /tmp/old.png`. Reference images are
+have affected (`JoystickPad`) against HEAD with `git show HEAD:<png> | git lfs smudge > /tmp/old.png`.
+**Adding previews moves references belonging to screens you did not touch.** Every preview holding an indeterminate
+`ProgressView` — anything named _loading_, _scanning_, _connecting_, _waking up_, _building_ — captures that spinner at
+whatever phase it reached, and the phase depends on where in the run the test lands. Add fourteen previews and roughly
+twenty unrelated references move, deterministically, in every run. It is not flakiness and not the environment: the
+same suite on a clean HEAD passes, and re-recording settles it. Diff one to confirm nothing but the spinner moved
+before accepting a sweep that wide. Reference images are
 **Git LFS**; `bootstrap.sh` enables the filter, and without it they check out as text stubs. LFS uploads objects from
 a `pre-push` hook, and `core.hooksPath` makes git ignore `.git/hooks` — so its four hooks are tracked in `.githooks/`
 alongside the hand-written ones. Drop them and `git push` sends pointers with no data behind them.
@@ -126,12 +144,13 @@ environment keys are written out by hand — swiftformat's `environmentEntry` ru
 
 ## Project Context
 
-|              |                                                                                                                     |
-| ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Robot API    | `http://<robot>:8000/api`, OpenAPI 3.1 spec committed at `Sources/ReachyKit/openapi.json`                           |
-| State stream | WebSocket `/api/state/ws/full`, 10 Hz by default (not in the OpenAPI spec — hand-written client)                    |
-| Upstream     | `pollen-robotics/reachy-mini-desktop-app` + `pollen-robotics/reachy_mini` — **specification only, never copy code** |
-| Packages     | `ReachyKit` (transport + domain) → `ReachyMedia` (WebRTC) / `ReachyScene` (RealityKit) → `ReachyUI` → `Apps/`       |
+|                 |                                                                                                                                                                                                                                                                                                                  |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Robot API       | `http://<robot>:8000/api`, OpenAPI 3.1 spec committed at `Sources/ReachyKit/openapi.json`                                                                                                                                                                                                                        |
+| State stream    | WebSocket `/api/state/ws/full`, 10 Hz by default (not in the OpenAPI spec — hand-written client)                                                                                                                                                                                                                 |
+| Upstream        | `pollen-robotics/reachy-mini-desktop-app` + `pollen-robotics/reachy_mini` — **specification only, never copy code**                                                                                                                                                                                              |
+| Packages        | `ReachyKit` (transport + domain) → `ReachyMedia` (WebRTC) / `ReachyScene` (RealityKit) → `ReachyUI` → `Apps/`                                                                                                                                                                                                    |
+| Off to the side | `HuggingFaceAuth` — this app's own HF session (sign-in, Keychain, renewal). Nothing in it knows what a robot is, and `ReachyKit` does **not** depend on it: a token reaches the robot as a value the UI passes in. `ReachyTestSupport` holds stubs shared by the test targets and is deliberately not a product. |
 
 ## Project Rules
 

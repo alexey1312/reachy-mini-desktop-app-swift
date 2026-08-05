@@ -21,6 +21,15 @@ public actor RobotConnection {
     /// PyPI or driven `nmcli`, so they need a far longer budget than the health poll.
     /// Not `private`: the routes live in `RobotConnection+Wireless`, a sibling file.
     let wirelessSession: URLSession
+    /// Everything the robot answers only after talking to Hugging Face: the app
+    /// catalogue, which the daemon budgets at 30 s
+    /// (`apps/sources/hf_space.REQUEST_TIMEOUT`), and `/api/hf-auth/*`, whose
+    /// status route runs a `whoami` on every call. Under the 3.5 s health-poll
+    /// budget neither would ever load.
+    let hubSession: URLSession
+    /// The generated client again, on that longer budget — the transport carries
+    /// the timeout, so one `Client` cannot serve both.
+    let hubClient: Client
 
     public init(address: RobotAddress, session: URLSession? = nil) throws {
         guard let serverURL = address.rootURL else {
@@ -49,6 +58,12 @@ public actor RobotConnection {
         readinessSession = makeSession(timeout: 10)
         assetSession = makeSession(timeout: 20, resourceTimeout: 120)
         wirelessSession = makeSession(timeout: 15)
+        let hubSession = makeSession(timeout: 35)
+        self.hubSession = hubSession
+        hubClient = Client(
+            serverURL: serverURL,
+            transport: URLSessionTransport(configuration: .init(session: hubSession))
+        )
     }
 
     /// Result of a successful handshake with the daemon.

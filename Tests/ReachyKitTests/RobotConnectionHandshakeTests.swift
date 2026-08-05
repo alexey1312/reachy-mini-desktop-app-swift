@@ -1,5 +1,6 @@
 import Foundation
 @testable import ReachyKit
+import ReachyTestSupport
 import Testing
 
 /// The hardware id is a join key, not a display string: the robot hands out the same

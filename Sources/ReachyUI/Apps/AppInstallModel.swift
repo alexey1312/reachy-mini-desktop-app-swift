@@ -1,0 +1,181 @@
+import Foundation
+import Observation
+import ReachyKit
+
+/// Drives one install, update or removal from the moment the daemon accepts the
+/// job to the moment there is something honest to tell the user.
+///
+/// The daemon answers all three with a job id straight away and reports the work
+/// out of band, so nothing here can be learned from an HTTP status: a job that
+/// fails still returns 200, and a job whose daemon restarted stops existing
+/// altogether. `AppJobMonitor` reconciles the socket and the poll; this turns its
+/// four outcomes into four things a screen can say.
+@MainActor
+@Observable
+final class AppInstallModel {
+    enum Operation: Equatable {
+        case install(RobotApp)
+        case update(RobotApp)
+        case remove(RobotApp)
+
+        var app: RobotApp {
+            switch self {
+            case let .install(app), let .update(app), let .remove(app): app
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .install: "Installing"
+            case .update: "Updating"
+            case .remove: "Removing"
+            }
+        }
+
+        /// Upstream's budgets, which are what the robot was tested against.
+        var configuration: AppJobMonitor.Configuration {
+            switch self {
+            case .install: .install
+            case .update: .update
+            case .remove: .removal
+            }
+        }
+    }
+
+    enum State: Equatable {
+        case idle
+        case running(Operation)
+        case succeeded(Operation)
+        case failed(Operation, String)
+        /// The daemon restarted mid-job and took its job register with it. The work
+        /// may well have finished — the installed list is the only way to know.
+        case daemonRestarted(Operation)
+    }
+
+    private(set) var state: State = .idle
+    /// Shared with `LogConsoleView`, so `uv pip install` output gets the same
+    /// filter, pause and export the daemon journal has.
+    let log = LogConsoleModel()
+
+    private let session: RobotSession
+    /// The one step a stubbed client cannot drive: it opens a WebSocket and polls
+    /// alongside it. Injected by tests and previews.
+    private let makeEvents: (String, AppJobMonitor.Configuration) throws -> AsyncStream<AppJobMonitor.Event>
+
+    init(
+        session: RobotSession,
+        events: ((String, AppJobMonitor.Configuration) throws -> AsyncStream<AppJobMonitor.Event>)? = nil
+    ) {
+        self.session = session
+        makeEvents = events ?? { [session] jobID, configuration in
+            try session.appJobEvents(jobID: jobID, configuration: configuration)
+        }
+    }
+
+    var isBusy: Bool {
+        if case .running = state {
+            return true
+        }
+        return false
+    }
+
+    var operation: Operation? {
+        switch state {
+        case .idle: nil
+        case let .running(operation), let .succeeded(operation),
+             let .failed(operation, _), let .daemonRestarted(operation):
+            operation
+        }
+    }
+
+    func perform(_ operation: Operation) async {
+        state = .running(operation)
+        log.clear()
+
+        let jobID: String
+        do {
+            jobID = try await start(operation)
+        } catch {
+            state = .failed(operation, Self.describe(error))
+            return
+        }
+
+        do {
+            for await event in try makeEvents(jobID, operation.configuration) {
+                switch event {
+                case let .line(line):
+                    log.ingest(line)
+                case .status:
+                    // The terminal status arrives again as an outcome; showing it
+                    // twice would just make the log noisier.
+                    break
+                case let .finished(outcome):
+                    state = Self.state(for: outcome, operation: operation)
+                }
+            }
+        } catch {
+            state = .failed(operation, Self.describe(error))
+        }
+    }
+
+    func dismiss() {
+        state = .idle
+        log.clear()
+    }
+
+    private func start(_ operation: Operation) async throws -> String {
+        switch operation {
+        case let .install(app):
+            // A private Space cannot be installed by posting its `AppInfo`: the
+            // files are only readable with the token the robot stores, so the
+            // daemon has to fetch it through its own route.
+            if app.isPrivate, let spaceID = app.spaceID {
+                return try await session.installPrivateSpace(id: spaceID)
+            }
+            return try await session.installApp(app)
+        case let .update(app):
+            return try await session.updateApp(named: app.name)
+        case let .remove(app):
+            return try await session.removeApp(named: app.name)
+        }
+    }
+
+    private static func state(for outcome: AppJobMonitor.Outcome, operation: Operation) -> State {
+        switch outcome {
+        case .succeeded:
+            .succeeded(operation)
+        case let .failed(reason):
+            .failed(operation, reason ?? "The robot did not say why.")
+        case .daemonRestarted:
+            .daemonRestarted(operation)
+        case .timedOut:
+            .failed(operation, "The robot took too long to answer. Check the app list before trying again.")
+        }
+    }
+
+    private static func describe(_ error: any Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+}
+
+#if DEBUG
+    extension AppInstallModel {
+        /// One job parked mid-flight. `events` is stubbed rather than left at its
+        /// default, which opens a socket.
+        static func preview(
+            state: State,
+            session: RobotSession? = nil,
+            log lines: [String] = []
+        ) -> AppInstallModel {
+            let model = AppInstallModel(
+                session: session ?? .preview(),
+                events: { _, _ in AsyncStream { $0.finish() } }
+            )
+            model.state = state
+            for line in lines {
+                model.log.ingest(line)
+            }
+            return model
+        }
+    }
+#endif

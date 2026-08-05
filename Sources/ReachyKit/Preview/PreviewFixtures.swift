@@ -100,6 +100,28 @@
         }
     }
 
+    public extension CentralRobot {
+        /// Decoded rather than constructed: `CentralRobot` is `Decodable` only, so
+        /// central's own wire shape is the thing to pin a fixture to.
+        static func preview(
+            peerID: String = "peer-preview",
+            name: String = "Reachy Mini",
+            hardwareID: String = "a1b2c3d4e5f60718",
+            transport: String = "wifi",
+            isBusy: Bool = false,
+            activeApp: String? = nil
+        ) -> CentralRobot {
+            let app = activeApp.map { #""activeApp":"\#($0)","# } ?? ""
+            let json = """
+            {"peerId":"\(peerID)","robotName":"\(name)","busy":\(isBusy),\(app)
+             "meta":{"name":"\(name)","transport":"\(transport)","hardware_id":"\(hardwareID)"}}
+            """
+            // A fixture that cannot decode is a broken fixture, not a runtime path.
+            // swiftlint:disable:next force_try
+            return try! JSONDecoder().decode(CentralRobot.self, from: Data(json.utf8))
+        }
+    }
+
     public extension RobotIdentity {
         static let preview = RobotIdentity(hardwareID: "hw-preview", name: "Reachy Mini", daemonVersion: "1.9.0")
     }
@@ -181,10 +203,15 @@
             isStoppingMove: Bool = false,
             automaticConnectionAllowed: Bool = true,
             supportsRename: Bool = true,
-            client: PreviewRobotClient = PreviewRobotClient()
+            client: any RobotAPIClient = PreviewRobotClient()
         ) -> RobotSession {
             let session = RobotSession { _ in client }
             session.supportsRename = supportsRename
+            // Claimed without connecting: the capability flags a screen asks about
+            // (`canConfigureWiFi`, `canManageApps`, `canLinkHuggingFace`) are all
+            // "does this client speak that protocol", and a nil client answers no
+            // to every one of them.
+            session.client = client
             session.phase = phase
             session.lastStatus = status
             session.address = address

@@ -101,11 +101,21 @@ public final class RobotSession {
     var client: (any RobotAPIClient)?
     var connectionAttemptID = UUID()
 
-    private let makeClient: @Sendable (RobotAddress) throws -> any RobotAPIClient
+    /// Not `private`: `connect(to:)` lives in `RobotSession+Connect.swift`, like
+    /// the rest of the connection protocol.
+    let makeClient: @Sendable (RobotAddress) throws -> any RobotAPIClient
     private var pollTask: Task<Void, Never>?
     private var movePollTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
     private var moveCache: [String: [String]] = [:]
+    /// Both lists cost the robot a Hugging Face round trip, so they are held for
+    /// the life of the connection — and only that long. Not `private`: the store
+    /// lives in `RobotSession+Apps`, a sibling file.
+    var appCatalogueCache: [RobotApp]?
+    var installedAppsCache: [RobotApp]?
+    /// The daemon answers `hf-auth/status` by running `whoami` against the Hub, so
+    /// this is held for the connection too. Lives in `RobotSession+HFAuth`.
+    var hfAccountCache: HFAuthStatus?
 
     /// `ReachyKitError` carries actionable text; raw interpolation would print
     /// the bare case name instead.
@@ -139,80 +149,6 @@ public final class RobotSession {
     ) {
         self.configuration = configuration
         self.makeClient = makeClient
-    }
-
-    /// Connects manually by default. Automatic attempts respect a preceding explicit Disconnect.
-    @discardableResult
-    public func connect(to address: RobotAddress, automatically: Bool = false) async -> Bool {
-        guard !automatically || automaticConnectionAllowed else { return false }
-        if !automatically {
-            automaticConnectionAllowed = true
-        }
-
-        let attemptID = UUID()
-        connectionAttemptID = attemptID
-        resetConnectionState()
-        self.address = address
-        phase = .connecting(.handshaking)
-        lastError = nil
-
-        do {
-            let client = try makeClient(address)
-            let handshake = try await client.handshake()
-            guard connectionAttemptID == attemptID, !Task.isCancelled else {
-                if connectionAttemptID == attemptID {
-                    resetConnectionState()
-                }
-                return false
-            }
-            // Claimed before the readiness stage so `startBackend()` has something
-            // to talk to while the attempt sits on `.backendUnavailable`. Only the
-            // stepper is mounted then, so the rest of the surface stays unreachable.
-            self.client = client
-            lastStatus = handshake.status
-            compatibilityWarning = handshake.compatibility.warningMessage
-            supportsRename = handshake.supportsRename
-            KnownRobots.lastAddress = address
-            KnownRobots.remember(identity: handshake.identity, address: address)
-            // A robot set up over Bluetooth has arrived under its own identity. This is
-            // the only place that sees a handshake, and identity is all there is to match
-            // on — it was provisioned at one address and turns up at another (rule 4).
-            if KnownRobots.pendingProvisionedHardwareID == handshake.identity.hardwareID {
-                KnownRobots.pendingProvisionedHardwareID = nil
-            }
-            if case let .unsupported(reported, minimum) = handshake.compatibility {
-                return haltOnUnsupportedDaemon(
-                    identity: handshake.identity,
-                    requirement: DaemonUpdateRequirement(
-                        reported: reported,
-                        minimum: minimum,
-                        canSelfUpdate: handshake.status.wirelessVersion
-                    )
-                )
-            }
-            phase = .connecting(.checkingBackend(handshake.identity))
-            return await settleReadiness(
-                identity: handshake.identity,
-                status: handshake.status,
-                client: client,
-                attemptID: attemptID,
-                automatically: automatically
-            )
-        } catch {
-            guard connectionAttemptID == attemptID else { return false }
-            guard !Task.isCancelled else {
-                resetConnectionState()
-                return false
-            }
-            return failAttempt(.connect, error: error, address: address, automatically: automatically)
-        }
-    }
-
-    public func disconnect() {
-        automaticConnectionAllowed = false
-        connectionAttemptID = UUID()
-        resetConnectionState()
-        lastError = nil
     }
 
     /// Returns a session-scoped cached dataset index. Actual move assets stay daemon-side.
@@ -299,6 +235,9 @@ public final class RobotSession {
         isStoppingMove = false
         powerTransition = nil
         moveCache = [:]
+        appCatalogueCache = nil
+        installedAppsCache = nil
+        hfAccountCache = nil
         phase = .idle
     }
 

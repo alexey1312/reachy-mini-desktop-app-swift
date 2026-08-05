@@ -21,16 +21,6 @@ public actor CameraSignalingClient {
         public init() {}
     }
 
-    public enum Event: Sendable, Equatable {
-        /// Signaling is up but no producer is registered yet (sim before media acquire).
-        case waitingForProducer
-        case offer(sessionID: String, sdp: String)
-        case remoteCandidate(sessionID: String, candidate: String, sdpMLineIndex: Int32, sdpMid: String?)
-        /// Session or socket dropped — the consumer must discard its peer connection;
-        /// this client re-negotiates a new session on its own.
-        case sessionEnded
-    }
-
     private let url: URL
     private let configuration: Configuration
     private let session: URLSession
@@ -58,8 +48,8 @@ public actor CameraSignalingClient {
 
     /// Signaling events. Single consumer; connects lazily, reconnects forever,
     /// finishes only when the consumer cancels.
-    public func events() -> AsyncStream<Event> {
-        let (stream, continuation) = AsyncStream.makeStream(of: Event.self)
+    public func events() -> AsyncStream<SignalingEvent> {
+        let (stream, continuation) = AsyncStream.makeStream(of: SignalingEvent.self)
         let task = Task { await run(continuation) }
         continuation.onTermination = { _ in task.cancel() }
         return stream
@@ -81,7 +71,7 @@ public actor CameraSignalingClient {
     /// its own; cancel the events stream to stop for good.
     public func disconnect() async {
         if let sessionID {
-            await send(.endSession(sessionID: sessionID))
+            await send(.endSession(sessionID: sessionID, reason: nil))
         }
         sessionID = nil
         producerID = nil
@@ -91,7 +81,7 @@ public actor CameraSignalingClient {
 
     // MARK: - Internals
 
-    private func run(_ continuation: AsyncStream<Event>.Continuation) async {
+    private func run(_ continuation: AsyncStream<SignalingEvent>.Continuation) async {
         while !Task.isCancelled {
             let socket = session.webSocketTask(with: url)
             socket.resume()
@@ -121,7 +111,7 @@ public actor CameraSignalingClient {
             }
             self.socket = nil
             if sessionID != nil || producerID != nil {
-                continuation.yield(.sessionEnded)
+                continuation.yield(.sessionEnded(reason: nil))
             }
             if Task.isCancelled {
                 break
@@ -136,7 +126,7 @@ public actor CameraSignalingClient {
 
     // Flat wire-protocol switch: one branch per message type.
     // swiftlint:disable:next cyclomatic_complexity
-    private func handle(_ message: SignalingMessage, _ continuation: AsyncStream<Event>.Continuation) async {
+    private func handle(_ message: SignalingMessage, _ continuation: AsyncStream<SignalingEvent>.Continuation) async {
         switch message {
         case let .welcome(peerID):
             ownPeerID = peerID
@@ -179,6 +169,8 @@ public actor CameraSignalingClient {
             break
         case .setPeerStatus, .list, .startSession:
             break // outbound-only types; a server never sends these to a listener
+        case .sessionRejected, .sessionStateChanged:
+            break // the central relay's vocabulary; the robot's own socket has neither
         }
     }
 
@@ -187,11 +179,11 @@ public actor CameraSignalingClient {
         await send(.startSession(peerID: producerID))
     }
 
-    private func endCurrentSession(_ continuation: AsyncStream<Event>.Continuation) {
+    private func endCurrentSession(_ continuation: AsyncStream<SignalingEvent>.Continuation) {
         guard sessionID != nil || producerID != nil else { return }
         sessionID = nil
         producerID = nil
-        continuation.yield(.sessionEnded)
+        continuation.yield(.sessionEnded(reason: nil))
     }
 
     private func send(_ message: SignalingMessage) async {

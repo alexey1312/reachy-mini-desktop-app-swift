@@ -1,5 +1,126 @@
 import Foundation
 
+/// The two ways into a robot. Both end in the same place — `settle` — because a
+/// session does not care how its client reaches the robot, only that it does.
+public extension RobotSession {
+    /// Connects manually by default. Automatic attempts respect a preceding explicit Disconnect.
+    @discardableResult
+    func connect(to address: RobotAddress, automatically: Bool = false) async -> Bool {
+        guard !automatically || automaticConnectionAllowed else { return false }
+        if !automatically {
+            automaticConnectionAllowed = true
+        }
+
+        let attemptID = beginAttempt(at: address)
+        let client: any RobotAPIClient
+        do {
+            client = try makeClient(address)
+        } catch {
+            return failAttempt(.connect, error: error, address: address, automatically: automatically)
+        }
+        return await settle(
+            client: client,
+            address: address,
+            attemptID: attemptID,
+            automatically: automatically
+        )
+    }
+
+    /// Connects through a transport built elsewhere.
+    ///
+    /// A remote session has no address to dial: its client speaks over the data
+    /// channel of a WebRTC session that was negotiated through the Hugging Face
+    /// relay, and by the time it gets here it is already talking to the robot.
+    @discardableResult
+    func connect(using client: any RobotAPIClient) async -> Bool {
+        // Picking a robot off the remote list is as explicit as typing an address.
+        automaticConnectionAllowed = true
+        let attemptID = beginAttempt(at: nil)
+        return await settle(client: client, address: nil, attemptID: attemptID, automatically: false)
+    }
+
+    private func beginAttempt(at address: RobotAddress?) -> UUID {
+        let attemptID = UUID()
+        connectionAttemptID = attemptID
+        resetConnectionState()
+        self.address = address
+        phase = .connecting(.handshaking)
+        lastError = nil
+        return attemptID
+    }
+
+    /// Everything from the handshake on, shared by both ways in. Only the parts
+    /// that name an address are conditional — the rest of a session does not care
+    /// how its client reaches the robot.
+    private func settle(
+        client: any RobotAPIClient,
+        address: RobotAddress?,
+        attemptID: UUID,
+        automatically: Bool
+    ) async -> Bool {
+        do {
+            let handshake = try await client.handshake()
+            guard connectionAttemptID == attemptID, !Task.isCancelled else {
+                if connectionAttemptID == attemptID {
+                    resetConnectionState()
+                }
+                return false
+            }
+            // Claimed before the readiness stage so `startBackend()` has something
+            // to talk to while the attempt sits on `.backendUnavailable`. Only the
+            // stepper is mounted then, so the rest of the surface stays unreachable.
+            self.client = client
+            lastStatus = handshake.status
+            compatibilityWarning = handshake.compatibility.warningMessage
+            // A property of the daemon, not of how it was reached, so it is set for
+            // a remote session too — where the answer is simply always no.
+            supportsRename = handshake.supportsRename
+            if let address {
+                KnownRobots.lastAddress = address
+                KnownRobots.remember(identity: handshake.identity, address: address)
+                // A robot set up over Bluetooth has arrived under its own identity. This is
+                // the only place that sees a handshake, and identity is all there is to match
+                // on — it was provisioned at one address and turns up at another (rule 4).
+                if KnownRobots.pendingProvisionedHardwareID == handshake.identity.hardwareID {
+                    KnownRobots.pendingProvisionedHardwareID = nil
+                }
+            }
+            if case let .unsupported(reported, minimum) = handshake.compatibility {
+                return haltOnUnsupportedDaemon(
+                    identity: handshake.identity,
+                    requirement: DaemonUpdateRequirement(
+                        reported: reported,
+                        minimum: minimum,
+                        canSelfUpdate: handshake.status.wirelessVersion
+                    )
+                )
+            }
+            phase = .connecting(.checkingBackend(handshake.identity))
+            return await settleReadiness(
+                identity: handshake.identity,
+                status: handshake.status,
+                client: client,
+                attemptID: attemptID,
+                automatically: automatically
+            )
+        } catch {
+            guard connectionAttemptID == attemptID else { return false }
+            guard !Task.isCancelled else {
+                resetConnectionState()
+                return false
+            }
+            return failAttempt(.connect, error: error, address: address, automatically: automatically)
+        }
+    }
+
+    func disconnect() {
+        automaticConnectionAllowed = false
+        connectionAttemptID = UUID()
+        resetConnectionState()
+        lastError = nil
+    }
+}
+
 /// What the current daemon status says about driving the robot.
 private enum ReadinessVerdict {
     case ready
@@ -133,7 +254,10 @@ extension RobotSession {
         let message = Self.describe(error)
         resetConnectionState()
         lastError = message
-        guard !automatically, let address else { return false }
+        guard !automatically else { return false }
+        // A remote attempt has no address and still has to show its failure: the
+        // user picked that robot off a list, and gating the report on an address
+        // would swallow every remote failure there is.
         self.address = address
         phase = .connecting(.failed(stage, message: message))
         return false

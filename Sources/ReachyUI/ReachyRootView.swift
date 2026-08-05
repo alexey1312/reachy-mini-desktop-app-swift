@@ -1,4 +1,6 @@
+import HuggingFaceAuth
 import ReachyKit
+import ReachyMedia
 import SwiftUI
 
 /// Entry point for the shared UI: connection flow → robot control, with one live
@@ -7,19 +9,29 @@ import SwiftUI
 /// The tab bar lives here rather than in the app target because the Live tab and
 /// the Robot tab share a `RobotSession` and a `ViewportModel`, and because
 /// whether Live exists at all depends on the size class — which an `App` cannot
-/// read. Diagnostics is injected so the app target keeps owning its own screen
-/// without a second, nested tab bar.
-public struct ReachyRootView<Diagnostics: View>: View {
+/// read. The app target's own developer screen is injected and handed to
+/// Settings, so it keeps owning that screen without a tab or a nested tab bar.
+public struct ReachyRootView<Developer: View>: View {
     private enum TabID: Hashable {
         case robot
         case live
-        case diagnostics
+        case apps
     }
 
     @State private var session: RobotSession
     @State private var viewport: ViewportModel
+    /// One Hugging Face session for the whole app, restored from the Keychain on
+    /// launch and handed down through the environment — the account outlives any
+    /// one robot connection, and several screens read it.
+    @State private var hfAccount: HFAccount
     @State private var tab: TabID = .robot
     @State private var showsSettings = false
+    /// The two ways to reach a robot are two entry points to the same list, so it
+    /// is presented from here rather than owned by either screen that offers it.
+    @State private var showsRemoteRobots = false
+    /// Held for as long as the remote session is: dropping it would close the
+    /// peer connection the session is talking over.
+    @State private var remoteLink: RemoteRobotLink?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.reachyPreviewMode) private var previewMode
 
@@ -36,11 +48,11 @@ public struct ReachyRootView<Diagnostics: View>: View {
         }
     #endif
 
-    private let diagnostics: Diagnostics
+    private let developer: Developer
 
     @MainActor
-    public init(@ViewBuilder diagnostics: () -> Diagnostics) {
-        self.init(session: RobotSession(), diagnostics: diagnostics)
+    public init(@ViewBuilder developer: () -> Developer) {
+        self.init(session: RobotSession(), developer: developer)
     }
 
     /// Internal so previews can park the root in a phase a real connection would have to reach.
@@ -48,11 +60,15 @@ public struct ReachyRootView<Diagnostics: View>: View {
     init(
         session: RobotSession,
         viewport: ViewportModel = ViewportModel(),
-        @ViewBuilder diagnostics: () -> Diagnostics
+        hfAccount: HFAccount? = nil,
+        @ViewBuilder developer: () -> Developer
     ) {
         _session = State(initialValue: session)
         _viewport = State(initialValue: viewport)
-        self.diagnostics = diagnostics()
+        _hfAccount = State(
+            initialValue: hfAccount ?? HFAccount(store: KeychainHFTokenStore())
+        )
+        self.developer = developer()
     }
 
     public var body: some View {
@@ -65,9 +81,39 @@ public struct ReachyRootView<Diagnostics: View>: View {
                     liveTab
                 }
             }
-            Tab("Diagnostics", systemImage: "stethoscope", value: TabID.diagnostics) {
-                diagnostics
+            Tab("Apps", systemImage: "square.grid.2x2", value: TabID.apps) {
+                appsTab
             }
+        }
+        .environment(\.reachyDeveloperScreen) { [developer] in AnyView(developer) }
+        .environment(hfAccount)
+        .sheet(isPresented: $showsRemoteRobots) {
+            NavigationStack {
+                YourReachiesScreen(
+                    model: YourReachiesModel(
+                        listing: CentralRelayClient { [hfAccount] in await hfAccount.currentToken() },
+                        // `.needsReauth` also carries a username, so the state is
+                        // the question, not whether a name is known.
+                        isSignedIn: { [hfAccount] in
+                            if case .signedIn = hfAccount.state {
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    ),
+                    connect: connectRemotely,
+                    // Pushed inside this sheet rather than sending the user to
+                    // the robot's Settings: that screen is presented from the
+                    // Live tab, which does not exist until a robot is connected —
+                    // exactly the case that brings anyone here.
+                    signIn: { HFSignInScreen(session: session, model: HFSignInModel(account: hfAccount)) }
+                )
+            }
+        }
+        .task {
+            guard !previewMode else { return }
+            hfAccount.restore()
         }
         .task(id: viewportAddress) {
             guard !previewMode else { return }
@@ -90,13 +136,30 @@ public struct ReachyRootView<Diagnostics: View>: View {
         }
     }
 
+    /// Opens the relay session first, then hands the session a client that speaks
+    /// over it. `start()` only begins asking central for a session — nothing has
+    /// reached the robot yet, and the control channel's own deadline is what
+    /// bounds the wait if it never answers.
+    private func connectRemotely(to robot: CentralRobot) {
+        showsRemoteRobots = false
+        remoteLink?.stop()
+        let link = RemoteRobotLink(
+            robot: robot,
+            relay: CentralRelayClient { [hfAccount] in await hfAccount.currentToken() }
+        )
+        remoteLink = link
+        link.start()
+        tab = .robot
+        Task { await session.connect(using: link.client) }
+    }
+
     // MARK: - Tabs
 
     @ViewBuilder
     private var robotTab: some View {
         switch session.phase {
         case .idle, .connecting:
-            ConnectionScreen(session: session)
+            ConnectionScreen(session: session, showRemoteRobots: { showsRemoteRobots = true })
         case .connected, .unreachable:
             if isCompact {
                 NavigationStack { RobotScreen(session: session) }
@@ -110,6 +173,30 @@ public struct ReachyRootView<Diagnostics: View>: View {
                     }
                     .frame(minWidth: 320, idealWidth: 380, maxWidth: 420)
                 }
+            }
+        }
+    }
+
+    /// The store is its own destination rather than a row inside the robot screen:
+    /// it is somewhere a user goes back to, and a widget can open it directly.
+    private var appsTab: some View {
+        NavigationStack {
+            if session.canManageApps {
+                AppStoreScreen(session: session)
+            } else {
+                // The catalogue is served by the daemon, not by the Hub — the robot
+                // fetches it — so there is genuinely nothing to show without one.
+                // Both ways to get one are offered, because "not on this network"
+                // stopped meaning "out of reach".
+                ContentUnavailableView {
+                    Label("No robot connected", systemImage: "square.grid.2x2")
+                } description: {
+                    Text("Apps are installed on the robot, so this needs one connected.")
+                } actions: {
+                    Button("Find one nearby") { tab = .robot }
+                    Button("Your Reachies") { showsRemoteRobots = true }
+                }
+                .navigationTitle("Apps")
             }
         }
     }

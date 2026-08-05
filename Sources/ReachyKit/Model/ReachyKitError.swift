@@ -20,6 +20,14 @@ public enum ReachyKitError: Error, Sendable, Equatable {
     /// verb and answers the bare FastAPI 404. Same distinction as
     /// `wirelessFeaturesUnavailable`: the robot cannot do this, the request was fine.
     case renameUnavailable
+    /// This connection cannot manage the robot's apps. Every daemon serves
+    /// `/api/apps/*` over the LAN, but a remote session reaches the robot through
+    /// a data channel that carries only part of that surface.
+    case appsUnavailable
+    /// This connection cannot reach the robot's Hugging Face account — the same
+    /// distinction as `appsUnavailable`, for the routes that link a robot to an
+    /// account and report its relay.
+    case hfAuthUnavailable
     /// Any other status the daemon rejected the call with.
     case daemonRejected(statusCode: Int)
 
@@ -50,6 +58,10 @@ extension ReachyKitError: LocalizedError {
             "This robot does not offer Wi-Fi setup or software updates over the network"
         case .renameUnavailable:
             "This daemon cannot rename the robot — update the robot software to change its name"
+        case .appsUnavailable:
+            "Apps cannot be managed over this connection"
+        case .hfAuthUnavailable:
+            "This robot's Hugging Face account cannot be reached over this connection"
         case let .daemonRejected(statusCode):
             "The daemon rejected the request (HTTP \(statusCode))"
         }

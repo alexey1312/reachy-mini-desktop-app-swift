@@ -1,5 +1,6 @@
 import Foundation
 @testable import ReachyKit
+import ReachyTestSupport
 import Testing
 
 /// Daemon 1.9.0 does not mount `/api/daemon/robot-name` at all — it answers the bare

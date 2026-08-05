@@ -1,5 +1,6 @@
 import Foundation
 @testable import ReachyKit
+import ReachyTestSupport
 import Testing
 
 /// `.ok` on a generated call turns every non-200 into an opaque `undocumented`

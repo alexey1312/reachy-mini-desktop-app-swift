@@ -1,5 +1,6 @@
 import Foundation
 @testable import ReachyKit
+import ReachyTestSupport
 import Testing
 
 /// `/update/*` is hand-written: it lives outside `/api`, exists only on a wireless

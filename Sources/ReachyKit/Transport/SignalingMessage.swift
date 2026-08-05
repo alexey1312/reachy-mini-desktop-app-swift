@@ -9,6 +9,10 @@ enum SignalingMessage: Equatable, Sendable {
     struct Producer: Equatable, Sendable {
         var id: String
         var name: String?
+        /// Central only. The robot's own socket never says whether a producer is
+        /// taken, because on the LAN there is only ever one consumer asking.
+        var isBusy = false
+        var activeApp: String?
     }
 
     case welcome(peerID: String)
@@ -21,13 +25,21 @@ enum SignalingMessage: Equatable, Sendable {
     case sessionStarted(peerID: String, sessionID: String)
     case sdp(sessionID: String, type: String, sdp: String)
     case ice(sessionID: String, candidate: String, sdpMLineIndex: Int32, sdpMid: String?)
-    case endSession(sessionID: String)
+    /// `reason` is central's: `robot_busy`, `robot_busy_local_app`,
+    /// `local_app_started`, `install_id_takeover`. The robot's own socket sends
+    /// none, so it stays optional.
+    case endSession(sessionID: String, reason: String?)
+    /// Central's refusal, answered in the body of the POST that asked for the
+    /// session rather than over the event stream.
+    case sessionRejected(reason: String, activeApp: String?)
+    case sessionStateChanged(sessionID: String, state: String)
     case error(details: String)
 }
 
 extension SignalingMessage: Codable {
     private enum CodingKeys: String, CodingKey {
         case type, peerId, roles, meta, producers, sessionId, sdp, ice, details
+        case reason, activeApp, state, busy
     }
 
     private struct Meta: Codable {
@@ -50,6 +62,8 @@ extension SignalingMessage: Codable {
         var id: String?
         var peerId: String?
         var meta: Meta?
+        var busy: Bool?
+        var activeApp: String?
     }
 
     // Flat wire-protocol switches: one branch per message type, no logic to extract.
@@ -71,13 +85,7 @@ extension SignalingMessage: Codable {
                 name: container.decodeIfPresent(Meta.self, forKey: .meta)?.name
             )
         case "list":
-            if let payloads = try container.decodeIfPresent([ProducerPayload].self, forKey: .producers) {
-                self = .producerList(payloads.compactMap { payload in
-                    (payload.id ?? payload.peerId).map { Producer(id: $0, name: payload.meta?.name) }
-                })
-            } else {
-                self = .list
-            }
+            self = try Self.list(in: container)
         case "startSession":
             self = try .startSession(peerID: container.decode(String.self, forKey: .peerId))
         case "sessionStarted":
@@ -102,13 +110,77 @@ extension SignalingMessage: Codable {
                 )
             }
         case "endSession":
-            self = try .endSession(sessionID: container.decode(String.self, forKey: .sessionId))
+            self = try .endSession(
+                sessionID: container.decode(String.self, forKey: .sessionId),
+                reason: container.decodeIfPresent(String.self, forKey: .reason)
+            )
         case "error":
             self = try .error(details: container.decode(String.self, forKey: .details))
         case let other:
-            throw DecodingError.dataCorruptedError(
-                forKey: .type, in: container, debugDescription: "unknown message type \(other)"
+            guard let central = try Self.central(other, in: container) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .type, in: container, debugDescription: "unknown message type \(other)"
+                )
+            }
+            self = central
+        }
+    }
+
+    /// A `list` with producers is the server's answer; without them it is the
+    /// request this client sends.
+    private static func list(in container: KeyedDecodingContainer<CodingKeys>) throws -> SignalingMessage {
+        guard let payloads = try container.decodeIfPresent([ProducerPayload].self, forKey: .producers) else {
+            return .list
+        }
+        return .producerList(payloads.compactMap { payload in
+            (payload.id ?? payload.peerId).map {
+                Producer(
+                    id: $0,
+                    name: payload.meta?.name,
+                    isBusy: payload.busy ?? false,
+                    activeApp: payload.activeApp
+                )
+            }
+        })
+    }
+
+    /// The types only the Hugging Face relay sends. Split out because the robot's
+    /// own socket has none of them, and because one switch over both vocabularies
+    /// is longer than anything in this codebase is allowed to be.
+    private static func central(
+        _ type: String,
+        in container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> SignalingMessage? {
+        switch type {
+        case "sessionRejected":
+            try .sessionRejected(
+                reason: container.decode(String.self, forKey: .reason),
+                activeApp: container.decodeIfPresent(String.self, forKey: .activeApp)
             )
+        case "sessionStateChanged":
+            try .sessionStateChanged(
+                sessionID: container.decode(String.self, forKey: .sessionId),
+                state: container.decode(String.self, forKey: .state)
+            )
+        default:
+            nil
+        }
+    }
+
+    /// Central's own types, for symmetry with `central(_:in:)` — a test round-trips
+    /// every case, and a one-way decoder would let one rot unnoticed.
+    private func encodeCentral(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
+        switch self {
+        case let .sessionRejected(reason, activeApp):
+            try container.encode("sessionRejected", forKey: .type)
+            try container.encode(reason, forKey: .reason)
+            try container.encodeIfPresent(activeApp, forKey: .activeApp)
+        case let .sessionStateChanged(sessionID, state):
+            try container.encode("sessionStateChanged", forKey: .type)
+            try container.encode(sessionID, forKey: .sessionId)
+            try container.encode(state, forKey: .state)
+        default:
+            break
         }
     }
 
@@ -133,7 +205,15 @@ extension SignalingMessage: Codable {
         case let .producerList(producers):
             try container.encode("list", forKey: .type)
             try container.encode(
-                producers.map { ProducerPayload(id: $0.id, peerId: nil, meta: Meta(name: $0.name)) },
+                producers.map {
+                    ProducerPayload(
+                        id: $0.id,
+                        peerId: nil,
+                        meta: Meta(name: $0.name),
+                        busy: $0.isBusy ? true : nil,
+                        activeApp: $0.activeApp
+                    )
+                },
                 forKey: .producers
             )
         case let .startSession(peerID):
@@ -154,9 +234,12 @@ extension SignalingMessage: Codable {
                 ICEPayload(candidate: candidate, sdpMLineIndex: sdpMLineIndex, sdpMid: sdpMid),
                 forKey: .ice
             )
-        case let .endSession(sessionID):
+        case let .endSession(sessionID, reason):
             try container.encode("endSession", forKey: .type)
             try container.encode(sessionID, forKey: .sessionId)
+            try container.encodeIfPresent(reason, forKey: .reason)
+        case .sessionRejected, .sessionStateChanged:
+            try encodeCentral(to: &container)
         case let .error(details):
             try container.encode("error", forKey: .type)
             try container.encode(details, forKey: .details)

@@ -1,5 +1,6 @@
 import Foundation
 @testable import ReachyKit
+import ReachyTestSupport
 import Testing
 
 @Suite("RobotReachability", .timeLimit(.minutes(1)))

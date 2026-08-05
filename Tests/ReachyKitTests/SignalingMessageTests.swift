@@ -65,7 +65,53 @@ struct SignalingMessageTests {
     }
 
     @Test func decodesEndSession() throws {
-        #expect(try decode(#"{"type":"endSession","sessionId":"s1"}"#) == .endSession(sessionID: "s1"))
+        #expect(try decode(#"{"type":"endSession","sessionId":"s1"}"#) == .endSession(sessionID: "s1", reason: nil))
+    }
+
+    // MARK: - The central server's additions
+
+    /// Over the relay an `endSession` carries why. `robot_busy_local_app` and
+    /// `install_id_takeover` are different apologies, and a screen that shows one
+    /// text for both is wrong half the time.
+    @Test func decodesEndSessionReason() throws {
+        #expect(
+            try decode(#"{"type":"endSession","sessionId":"s1","reason":"local_app_started"}"#)
+                == .endSession(sessionID: "s1", reason: "local_app_started")
+        )
+    }
+
+    /// The refusal that arrives *instead of* a session. Central answers it in the
+    /// body of the POST that asked, so it never reaches the event stream.
+    @Test func decodesSessionRejected() throws {
+        #expect(
+            try decode(#"{"type":"sessionRejected","reason":"robot_busy","activeApp":"Hand Tracker"}"#)
+                == .sessionRejected(reason: "robot_busy", activeApp: "Hand Tracker")
+        )
+        #expect(
+            try decode(#"{"type":"sessionRejected","reason":"robot_busy"}"#)
+                == .sessionRejected(reason: "robot_busy", activeApp: nil)
+        )
+    }
+
+    @Test func decodesSessionStateChanged() throws {
+        #expect(
+            try decode(#"{"type":"sessionStateChanged","sessionId":"s1","state":"active"}"#)
+                == .sessionStateChanged(sessionID: "s1", state: "active")
+        )
+    }
+
+    /// A producer on central carries what a producer on the robot's own socket
+    /// does not: whether it is busy, and with what.
+    @Test func decodesBusyProducer() throws {
+        let message = try decode(#"""
+        {"type":"list","producers":[
+          {"peerId":"peer-7","busy":true,"activeApp":"Hand Tracker","meta":{"name":"testbot"}}
+        ]}
+        """#)
+
+        #expect(message == .producerList([
+            .init(id: "peer-7", name: "testbot", isBusy: true, activeApp: "Hand Tracker"),
+        ]))
     }
 
     @Test func decodesError() throws {
@@ -132,7 +178,7 @@ struct SignalingMessageTests {
     }
 
     @Test func encodesEndSession() throws {
-        let dict = try encodeToDictionary(.endSession(sessionID: "s1"))
+        let dict = try encodeToDictionary(.endSession(sessionID: "s1", reason: nil))
         #expect(dict == ["type": "endSession", "sessionId": "s1"] as NSDictionary)
     }
 }

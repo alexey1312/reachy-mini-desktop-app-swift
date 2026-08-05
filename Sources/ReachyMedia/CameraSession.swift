@@ -30,6 +30,14 @@ public final class CameraSession {
     public private(set) var videoTrack: RTCVideoTrack?
     public private(set) var isMicEnabled = false
 
+    /// The session's control surface. Exists from construction and stays the same
+    /// object across re-negotiations, so a `RemoteControlChannel` built on it
+    /// survives the self-healing restart that replaces the peer connection.
+    ///
+    /// Only worth driving over the relay: on the LAN the daemon's HTTP API is
+    /// right there and says more.
+    public let dataChannel = WebRTCDataChannel()
+
     /// Not `.streaming` for this long after an offer → drop and re-negotiate (upstream value).
     private static let streamTimeout: Duration = .seconds(10)
 
@@ -41,7 +49,7 @@ public final class CameraSession {
         )
     }()
 
-    private let signaling: CameraSignalingClient
+    private let signaling: any RobotSignaling
     private let connection: RobotConnection?
     private var peerConnection: RTCPeerConnection?
     private var delegateAdapter: PeerConnectionDelegateAdapter?
@@ -58,9 +66,18 @@ public final class CameraSession {
     private var pendingLocalCandidates: [LocalCandidate] = []
     private var answerSent = false
 
+    /// On the LAN: the robot's own signaling socket, and its HTTP API alongside
+    /// for the media-acquire nudge the simulator needs.
     public init(address: RobotAddress) throws {
         signaling = try CameraSignalingClient(address: address)
         connection = try? RobotConnection(address: address)
+    }
+
+    /// Anywhere else: whatever is carrying signaling — over the Hugging Face relay
+    /// there is no HTTP API to reach, and nothing to acquire.
+    public init(signaling: any RobotSignaling) {
+        self.signaling = signaling
+        connection = nil
     }
 
     public func start() {
@@ -99,7 +116,7 @@ public final class CameraSession {
 
     // MARK: - Signaling events
 
-    private func handle(_ event: CameraSignalingClient.Event) async {
+    private func handle(_ event: SignalingEvent) async {
         switch event {
         case .waitingForProducer:
             if phase != .streaming {
@@ -112,9 +129,15 @@ public final class CameraSession {
             try? await peerConnection?.add(
                 RTCIceCandidate(sdp: candidate, sdpMLineIndex: sdpMLineIndex, sdpMid: sdpMid)
             )
-        case .sessionEnded:
+        case let .sessionEnded(reason):
             teardownPeer()
-            phase = .connecting
+            // On the LAN the client re-negotiates on its own, so this is a lull
+            // rather than an ending. Over the relay central says why, and there is
+            // nothing further coming.
+            phase = reason.map { .failed(RemoteSessionEnd(reason: $0).message) } ?? .connecting
+        case let .failed(message):
+            teardownPeer()
+            phase = .failed(message)
         }
     }
 
@@ -215,9 +238,17 @@ public final class CameraSession {
         }
     }
 
+    /// The robot opens exactly one channel and labels it `"data"`; anything else
+    /// is not the daemon's control surface and is left alone.
+    func adopt(_ channel: RTCDataChannel) {
+        guard channel.label == "data" else { return }
+        dataChannel.attach(channel)
+    }
+
     private func teardownPeer() {
         watchdogTask?.cancel()
         watchdogTask = nil
+        dataChannel.detach()
         peerConnection?.close()
         peerConnection = nil
         delegateAdapter = nil
@@ -279,15 +310,22 @@ private final class PeerConnectionDelegateAdapter: NSObject, RTCPeerConnectionDe
         }
     }
 
-    // Required by the protocol; nothing to do. The "data" channel the robot
-    // opens is deliberately unused in this iteration.
+    /// The robot is the one that opens the channel, and only once negotiation is
+    /// far enough along — so this, not construction, is when the control surface
+    /// becomes usable.
+    func peerConnection(_: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
+        Task { @MainActor [owner] in
+            owner?.adopt(dataChannel)
+        }
+    }
+
+    // Required by the protocol; nothing to do.
     func peerConnection(_: RTCPeerConnection, didChange _: RTCSignalingState) {}
     func peerConnection(_: RTCPeerConnection, didAdd _: RTCMediaStream) {}
     func peerConnection(_: RTCPeerConnection, didRemove _: RTCMediaStream) {}
     func peerConnectionShouldNegotiate(_: RTCPeerConnection) {}
     func peerConnection(_: RTCPeerConnection, didChange _: RTCIceGatheringState) {}
     func peerConnection(_: RTCPeerConnection, didRemove _: [RTCIceCandidate]) {}
-    func peerConnection(_: RTCPeerConnection, didOpen _: RTCDataChannel) {}
 }
 
 #if DEBUG

@@ -1,3 +1,4 @@
+import HuggingFaceAuth
 import ReachyKit
 import SwiftUI
 
@@ -12,6 +13,12 @@ struct SettingsScreen: View {
     @State private var isRenaming = false
     @State private var renameError: String?
     @FocusState private var nameFocused: Bool
+    /// The app target's own screen, if it has one. Nothing in this package knows
+    /// what it contains.
+    @Environment(\.reachyDeveloperScreen) private var developerScreen
+    /// Optional so a preview or a host that has no Hugging Face session at all
+    /// simply renders without the card, rather than trapping.
+    @Environment(HFAccount.self) private var hfAccount: HFAccount?
 
     private var identity: RobotIdentity? {
         switch session.phase {
@@ -23,6 +30,9 @@ struct SettingsScreen: View {
     var body: some View {
         Form {
             robotSection
+            if let hfAccount {
+                HFAccountSection(session: session, model: HFSignInModel(account: hfAccount))
+            }
             if session.isBackendRunning {
                 AudioSettingsSection(session: session)
             }
@@ -49,6 +59,13 @@ struct SettingsScreen: View {
                     BLEConsoleScreen()
                 } label: {
                     Label("Recovery over Bluetooth", systemImage: "wrench.and.screwdriver")
+                }
+                if let developerScreen {
+                    NavigationLink {
+                        developerScreen()
+                    } label: {
+                        Label("Developer tools", systemImage: "stethoscope")
+                    }
                 }
             }
         } footer: {
