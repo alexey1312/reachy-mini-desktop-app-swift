@@ -75,6 +75,14 @@ private final class MovesUIClient: RobotAPIClient, @unchecked Sendable {
 @MainActor
 @Suite("MovesModel")
 struct MovesModelTests {
+    @Test("an unseen library starts in the content-loading state")
+    func initialContentLoading() {
+        let model = MovesModel()
+
+        #expect(model.isContentLoading)
+        #expect(!model.loading)
+    }
+
     @Test("load renders moves and refresh bypasses the session cache")
     func loadAndRefresh() async {
         let client = MovesUIClient()
@@ -110,9 +118,11 @@ struct MovesModelTests {
 
         model.selection = 1
         #expect(model.moves.isEmpty)
+        #expect(model.isContentLoading)
 
         await model.load(session: session)
         #expect(model.moves == ["joy"])
+        #expect(!model.isContentLoading)
         session.disconnect()
     }
 
@@ -150,6 +160,7 @@ struct MovesModelTests {
 
         await model.load(session: session)
         #expect(model.moves.isEmpty)
+        #expect(!model.isContentLoading)
         #expect(!model.loading)
         #expect(client.listCalls == 1)
 
@@ -176,6 +187,7 @@ struct MovesModelTests {
         await model.load(session: session, refresh: true)
 
         #expect(model.moves == ["dance_one"])
+        #expect(!model.isContentLoading)
         #expect(!model.loading)
         session.disconnect()
     }
@@ -195,6 +207,15 @@ struct MovesModelTests {
 
         #expect(client.listCalls == 1)
         session.disconnect()
+    }
+
+    @Test("refreshing loaded moves does not replace them with the content loader")
+    func loadedRefreshIsNonBlocking() {
+        let model = MovesModel.preview(moves: ["dance_one"], loading: true)
+
+        #expect(model.loading)
+        #expect(model.moves == ["dance_one"])
+        #expect(!model.isContentLoading)
     }
 
     @Test("play forwards the selected library and restores button state")

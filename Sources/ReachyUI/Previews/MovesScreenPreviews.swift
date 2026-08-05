@@ -6,8 +6,16 @@ import SwiftUI
     PreviewScene.movesScreen(.preview())
 }
 
-#Preview("Moves — loading") {
+#Preview("Moves — dances loading") {
     PreviewScene.movesScreen(.preview(), model: .preview(moves: [], loading: true))
+}
+
+#Preview("Moves — emotions loading") {
+    PreviewScene.movesScreen(.preview(), model: .preview(moves: [], selection: 1, loading: true))
+}
+
+#Preview("Moves — music loading") {
+    PreviewScene.movesScreen(.preview(), model: .preview(moves: [], selection: 2, loading: true))
 }
 
 #Preview("Moves — empty library") {

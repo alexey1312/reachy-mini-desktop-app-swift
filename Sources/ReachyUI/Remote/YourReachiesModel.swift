@@ -31,10 +31,18 @@ public final class YourReachiesModel {
 
     private let listing: any CentralRobotListing
     private let isSignedIn: @MainActor () -> Bool
+    private var attemptedLoad = false
 
     public init(listing: any CentralRobotListing, isSignedIn: @escaping @MainActor () -> Bool) {
         self.listing = listing
         self.isSignedIn = isSignedIn
+    }
+
+    /// The model is created as the sheet opens. A signed-in account therefore has
+    /// pending content before `.task` gets its first turn, even though `state` has not
+    /// entered `.loading` yet.
+    var isContentLoading: Bool {
+        isSignedIn() && !state.hasRobots && (state == .loading || !attemptedLoad)
     }
 
     public func load() async {
@@ -50,8 +58,10 @@ public final class YourReachiesModel {
         guard isSignedIn() else {
             state = .signedOut
             lastRefreshError = nil
+            attemptedLoad = false
             return
         }
+        attemptedLoad = true
         if showingSpinner {
             state = .loading
         }
@@ -111,10 +121,8 @@ public extension YourReachiesModel.State {
 
 #if DEBUG
     public extension YourReachiesModel {
-        /// A model that *lands on* the given state rather than one parked in it.
-        /// The screen calls `load()` when it appears, so a fixture that only set
-        /// `state` would be overwritten the moment it was rendered — and a
-        /// snapshot would catch whichever won.
+        /// A model parked in the given state. `YourReachiesScreen` suppresses its
+        /// initial load in preview mode so the first frame is already final.
         ///
         /// `refreshFailure` is the one combination `load()` cannot reach on its
         /// own: a list already on screen, and a refresh that failed over it.
@@ -124,6 +132,7 @@ public extension YourReachiesModel.State {
                 isSignedIn: { state != .signedOut }
             )
             model.state = state
+            model.attemptedLoad = state != .loading && state != .signedOut
             return model
         }
     }
@@ -146,7 +155,8 @@ public extension YourReachiesModel.State {
             case let .failed(reason):
                 throw PreviewFailure(errorDescription: reason)
             case .loading:
-                // Never answers, which is exactly what being mid-request looks like.
+                // Kept complete for callers outside `YourReachiesScreen`; previews of
+                // that screen suppress the request before it reaches this fixture.
                 try await Task.sleep(for: .seconds(3600))
                 return []
             }

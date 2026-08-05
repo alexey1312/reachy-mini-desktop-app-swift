@@ -14,6 +14,7 @@ private final class StoreRobotClient: RobotAPIClient, RobotAppsClient, @unchecke
     var lockStatus = RobotAppLockStatus(state: .free)
     var startup: String?
     var failsCatalogue = false
+    var catalogueResponse = StoreRobotClient.catalogue
 
     private var daemonState: Components.Schemas.DaemonStatus {
         let json = """
@@ -45,11 +46,11 @@ private final class StoreRobotClient: RobotAPIClient, RobotAppsClient, @unchecke
         if failsCatalogue {
             throw ReachyKitError.daemonRejected(statusCode: 503)
         }
-        return Self.catalogue
+        return catalogueResponse
     }
 
     func installedApps() async throws -> [RobotApp] {
-        Self.catalogue.filter(\.isInstalled)
+        catalogueResponse.filter(\.isInstalled)
     }
 
     func currentAppStatus() async throws -> RobotAppStatus? {
@@ -131,6 +132,14 @@ private final class StoreRobotClient: RobotAPIClient, RobotAppsClient, @unchecke
 @MainActor
 @Suite("App store model", .timeLimit(.minutes(1)))
 struct AppStoreModelTests {
+    @Test("a new store starts in the content-loading state")
+    func initialContentLoading() {
+        let model = AppStoreModel()
+
+        #expect(model.isContentLoading)
+        #expect(!model.loading)
+    }
+
     private func connected(_ client: StoreRobotClient) async -> RobotSession {
         let session = RobotSession { _ in client }
         #expect(await session.connect(to: .init(host: "127.0.0.1")))
@@ -163,6 +172,16 @@ struct AppStoreModelTests {
         model.section = .discover
 
         #expect(model.visibleApps.first?.title == "Dance Party")
+    }
+
+    @Test("a successful empty catalogue becomes an empty state, not a loader")
+    func emptyCatalogueIsAResult() async {
+        let client = StoreRobotClient()
+        client.catalogueResponse = []
+        let (model, _) = await loaded(client)
+
+        #expect(model.visibleApps.isEmpty)
+        #expect(!model.isContentLoading)
     }
 
     @Test("search matches the title, the author and the space id")
@@ -285,5 +304,30 @@ struct AppStoreModelTests {
         #expect(model.visibleApps.isEmpty)
         #expect(model.lastError?.isEmpty == false)
         #expect(model.loading == false)
+        #expect(!model.isContentLoading)
+    }
+
+    @Test("a failed refresh keeps an existing catalogue on screen")
+    func failedRefreshKeepsCatalogue() async {
+        let client = StoreRobotClient()
+        let (model, session) = await loaded(client)
+        model.section = .discover
+        let titles = model.visibleApps.map(\.title)
+        client.failsCatalogue = true
+
+        await model.load(session: session, refresh: true)
+
+        #expect(model.visibleApps.map(\.title) == titles)
+        #expect(model.lastError?.isEmpty == false)
+        #expect(!model.isContentLoading)
+    }
+
+    @Test("refreshing a loaded catalogue does not replace it with the content loader")
+    func loadedRefreshIsNonBlocking() {
+        let model = AppStoreModel.preview(catalogue: RobotApp.previewCatalogue, loading: true)
+
+        #expect(model.loading)
+        #expect(!model.visibleApps.isEmpty)
+        #expect(!model.isContentLoading)
     }
 }

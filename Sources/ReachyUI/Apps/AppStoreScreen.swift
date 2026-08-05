@@ -38,7 +38,7 @@ struct AppStoreScreen: View {
                 }
             }
 
-            if let lastError = model.lastError {
+            if let lastError = model.lastError, !model.isContentLoading {
                 Section {
                     Text(lastError)
                         .font(.caption)
@@ -47,32 +47,28 @@ struct AppStoreScreen: View {
             }
 
             Section {
-                if model.loading, model.visibleApps.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else {
-                    ForEach(model.visibleApps) { app in
-                        Button {
-                            selected = app
-                        } label: {
-                            AppStoreRow(
-                                app: app,
-                                isInstalled: model.isInstalled(app),
-                                isRunning: model.isRunning(app),
-                                hasUpdate: model.hasUpdate(app),
-                                isStartupApp: model.isStartupApp(app)
-                            )
-                        }
-                        .buttonStyle(.plain)
+                ForEach(model.visibleApps) { app in
+                    Button {
+                        selected = app
+                    } label: {
+                        AppStoreRow(
+                            app: app,
+                            isInstalled: model.isInstalled(app),
+                            isRunning: model.isRunning(app),
+                            hasUpdate: model.hasUpdate(app),
+                            isStartupApp: model.isStartupApp(app)
+                        )
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
         .overlay {
-            if model.visibleApps.isEmpty, !model.loading {
+            if model.visibleApps.isEmpty, !model.isContentLoading {
                 emptyState
             }
         }
+        .contentLoading(isPresented: model.isContentLoading, title: "Browsing the robot app aisle…")
         .navigationTitle("Apps")
         .searchable(text: $model.searchText, prompt: "Search apps")
         .minimizedSearchToolbar()
@@ -95,7 +91,7 @@ struct AppStoreScreen: View {
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .disabled(model.loading)
+            .disabled(model.loading || model.isContentLoading)
         }
         .sheet(item: $selected) { app in
             NavigationStack {
