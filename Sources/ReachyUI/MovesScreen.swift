@@ -34,24 +34,25 @@ struct MovesScreen: View {
                     ProgressView()
                 } else if model.moves.isEmpty {
                     Text("No moves").foregroundStyle(.secondary)
-                }
-                ForEach(model.moves, id: \.self) { move in
-                    Button {
-                        Task { await model.play(move, session: session) }
-                    } label: {
-                        HStack {
-                            Text(MovesModel.displayName(move))
-                            Spacer()
-                            if session.currentMove?.move == move {
-                                Image(systemName: "waveform")
-                                    .symbolEffect(.variableColor.iterative)
-                            } else {
-                                Image(systemName: "play.circle")
+                } else {
+                    ForEach(model.moves, id: \.self) { move in
+                        Button {
+                            Task { await model.play(move, session: session) }
+                        } label: {
+                            HStack {
+                                Text(MovesModel.displayName(move))
+                                Spacer()
+                                if session.currentMove?.move == move {
+                                    Image(systemName: "waveform")
+                                        .symbolEffect(.variableColor.iterative)
+                                } else {
+                                    Image(systemName: "play.circle")
+                                }
                             }
                         }
+                        // Browsing the library stays available; only playback needs a woken robot.
+                        .disabled(model.startingMove || session.isStoppingMove || !session.isAwake)
                     }
-                    // Browsing the library stays available; only playback needs a woken robot.
-                    .disabled(model.startingMove || session.isStoppingMove || !session.isAwake)
                 }
             }
             if let lastError = session.lastError {
