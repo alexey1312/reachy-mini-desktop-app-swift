@@ -38,6 +38,10 @@ final class AppStoreModel {
     private(set) var loading = false
     private(set) var busy = false
     private(set) var lastError: String?
+    /// A successful answer, including `[]`, is different from never having received
+    /// the catalogue. That distinction keeps empty and loading states honest.
+    private var hasCatalogueResult = false
+    private var attemptedCatalogueLoad = false
 
     /// Coalesces overlapping loads: a slow catalogue must not overwrite the result
     /// of a refresh the user asked for afterwards (`MovesModel`'s pattern).
@@ -52,6 +56,12 @@ final class AppStoreModel {
     /// screen acted and the other did not hear about it.
     var runningApp: RobotAppStatus? {
         session.runningApp
+    }
+
+    /// Initial load and a retry without data replace the empty content area. Refreshing
+    /// a catalogue already on screen does not.
+    var isContentLoading: Bool {
+        !hasCatalogueResult && (loading || !attemptedCatalogueLoad)
     }
 
     var visibleApps: [RobotApp] {
@@ -121,11 +131,12 @@ final class AppStoreModel {
             guard loadID == requestID, !Task.isCancelled else { return }
             catalogue = apps.filter { !$0.isInstalled }
             installed = apps.filter(\.isInstalled)
+            hasCatalogueResult = true
+            attemptedCatalogueLoad = true
             lastError = nil
         } catch {
             guard loadID == requestID, !Task.isCancelled else { return }
-            catalogue = []
-            installed = []
+            attemptedCatalogueLoad = true
             lastError = Self.describe(error)
             return
         }
@@ -202,6 +213,7 @@ private extension RobotApp {
         /// A store parked in one state. Lives here rather than in `Previews/`:
         /// everything it writes is `private(set)`, which `@testable` does not reach
         /// from another module.
+        ///
         /// The running app is **not** a parameter here any more — it lives on the
         /// session, which the dock reads too. Park it with
         /// `RobotSession.preview(runningApp:)` and hand that same session in, or the
@@ -228,6 +240,8 @@ private extension RobotApp {
             model.lock = lock
             model.loading = loading
             model.lastError = error
+            model.hasCatalogueResult = !catalogue.isEmpty || !installed.isEmpty || (!loading && error == nil)
+            model.attemptedCatalogueLoad = !loading || model.hasCatalogueResult
             if hasUpdate, let first = installed.first {
                 model.updates = .preview(appName: first.name)
             }
