@@ -97,4 +97,26 @@ struct RobotSessionSnapshotTests {
 
         #expect(store.current == earlier)
     }
+
+    @Test("connecting another robot does not inherit the previous robot's app")
+    func dropsAnotherRobotsRunningApp() async throws {
+        let store = try store()
+        let earlier = RobotSnapshot(
+            robotID: "another-robot",
+            robotName: "office",
+            isAwake: true,
+            runningApp: "Dance Party",
+            runningAppName: "dance_party",
+            runningAppTakenAt: Date(),
+            takenAt: Date()
+        )
+        store.write(earlier)
+
+        await session(Client(), store).connect(to: RobotAddress(host: "127.0.0.1"))
+
+        let current = try #require(store.current)
+        #expect(current.robotID == "hw-widget")
+        #expect(current.runningApp == nil)
+        #expect(current.runningAppName == nil)
+    }
 }

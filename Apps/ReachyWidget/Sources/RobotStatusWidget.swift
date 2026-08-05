@@ -29,6 +29,15 @@ struct RobotStatusProvider: TimelineProvider {
         let now = Date.now
         var entries = [entry(at: now)]
         if case let .fresh(snapshot) = RobotSnapshotStore().state(at: now) {
+            if snapshot.runningAppName(at: now) != nil,
+               let appExpiry = snapshot.runningAppExpiresAt?.addingTimeInterval(0.001),
+               appExpiry > now
+            {
+                entries.append(RobotStatusEntry(
+                    date: appExpiry,
+                    content: RobotWidgetContent(state: .fresh(snapshot), at: appExpiry)
+                ))
+            }
             let expiry = snapshot.takenAt.addingTimeInterval(RobotSnapshotStore.freshness)
             if expiry > now {
                 entries.append(RobotStatusEntry(
@@ -37,6 +46,7 @@ struct RobotStatusProvider: TimelineProvider {
                 ))
             }
         }
+        entries.sort { $0.date < $1.date }
         // The app reloads timelines when it learns something, so this is only the
         // floor for a phone that never opens it.
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(60 * 60))))

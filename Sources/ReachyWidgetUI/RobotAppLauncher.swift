@@ -93,6 +93,7 @@ public struct RobotAppLauncher: Sendable {
             try await power.wake()
         }
 
+        try Task.checkCancellation()
         let started = try await apps.startApp(named: name)
         return .started(name: name, title: started.app.title)
     }

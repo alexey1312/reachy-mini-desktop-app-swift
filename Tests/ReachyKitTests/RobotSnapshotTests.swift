@@ -16,6 +16,7 @@ struct RobotSnapshotTests {
     }
 
     private func snapshot(
+        robotID: String? = "robot-a",
         name: String? = "kitchen",
         isAwake: Bool = true,
         runningApp: String? = nil,
@@ -23,6 +24,7 @@ struct RobotSnapshotTests {
         takenAt: Date? = nil
     ) -> RobotSnapshot {
         RobotSnapshot(
+            robotID: robotID,
             robotName: name,
             isAwake: isAwake,
             runningApp: runningApp,
@@ -120,6 +122,7 @@ struct RobotSnapshotTests {
         let current = try #require(RobotSnapshotStore(defaults: defaults).current)
 
         #expect(current.robotName == "kitchen")
+        #expect(current.robotID == nil)
         #expect(current.isAwake)
         #expect(current.runningApp == nil)
         #expect(current.runningAppName == nil)
@@ -140,6 +143,7 @@ struct RobotSnapshotTests {
         #expect(current.isAwake)
         #expect(current.runningApp == "Dance Party")
         #expect(current.runningAppName == "reachy_mini_dance")
+        #expect(current.runningAppTakenAt == now)
         // The caller had just spoken to the robot, so the reading is that fresh.
         #expect(current.takenAt == now)
     }
@@ -155,6 +159,7 @@ struct RobotSnapshotTests {
         let current = try #require(store.current)
         #expect(current.runningApp == nil)
         #expect(current.runningAppName == nil)
+        #expect(current.runningAppTakenAt == nil)
         #expect(current.robotName == "kitchen")
     }
 
@@ -178,5 +183,22 @@ struct RobotSnapshotTests {
         store.recordRunningApp(title: nil, name: nil, isAwake: false, at: now)
 
         #expect(store.current?.isAwake == false)
+    }
+
+    @Test("a running app expires independently of a newer daemon reading")
+    func expiresTheRunningAppIndependently() {
+        let appReading = now.addingTimeInterval(-RobotSnapshotStore.freshness - 1)
+        let snapshot = RobotSnapshot(
+            robotID: "robot-a",
+            robotName: "kitchen",
+            isAwake: true,
+            runningApp: "Dance Party",
+            runningAppName: "reachy_mini_dance",
+            runningAppTakenAt: appReading,
+            takenAt: now
+        )
+
+        #expect(snapshot.runningAppName(at: now) == nil)
+        #expect(snapshot.runningAppTitle(at: now) == nil)
     }
 }

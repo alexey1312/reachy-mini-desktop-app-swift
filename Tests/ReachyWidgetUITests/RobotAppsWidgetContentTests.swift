@@ -20,15 +20,20 @@ struct RobotAppsWidgetContentTests {
     }
 
     private func cache(_ installed: [RobotAppSummary]? = nil, takenAt: Date? = nil) -> RobotAppsCache {
-        RobotAppsCache(installed: installed ?? all, takenAt: takenAt ?? now)
+        RobotAppsCache(robotID: "robot", installed: installed ?? all, takenAt: takenAt ?? now)
     }
 
-    private func snapshot(running: RobotAppSummary?, takenAt: Date? = nil) -> RobotSnapshot {
+    private func snapshot(
+        running: RobotAppSummary?,
+        takenAt: Date? = nil,
+        runningAppTakenAt: Date? = nil
+    ) -> RobotSnapshot {
         RobotSnapshot(
             robotName: "kitchen",
             isAwake: true,
             runningApp: running?.title,
             runningAppName: running?.name,
+            runningAppTakenAt: running == nil ? nil : (runningAppTakenAt ?? takenAt ?? now),
             takenAt: takenAt ?? now
         )
     }
@@ -127,7 +132,7 @@ struct RobotAppsWidgetContentTests {
     @Test("a stale reading claims nothing is running")
     func refusesToClaimARunningAppFromAStaleReading() {
         let taken = now.addingTimeInterval(-RobotSnapshotStore.freshness - 1)
-        let stale = snapshot(running: dance, takenAt: taken)
+        let stale = snapshot(running: dance, takenAt: taken, runningAppTakenAt: now)
 
         let fresh = content(configured: all, snapshot: .fresh(stale))
         let expired = content(configured: all, snapshot: .stale(stale))
@@ -225,5 +230,55 @@ struct RobotAppsWidgetContentTests {
         #expect(old.tiles.map(\.isTappable).contains(false) == false)
         #expect(old.footnote?.isEmpty == false)
         #expect(current.footnote == nil)
+    }
+
+    @Test("a running app expires even while the daemon reading stays fresh")
+    func expiresTheRunningAppIndependently() {
+        let appReading = now.addingTimeInterval(-RobotSnapshotStore.freshness - 1)
+        let reading = RobotSnapshot(
+            robotID: "robot",
+            robotName: "kitchen",
+            isAwake: true,
+            runningApp: dance.title,
+            runningAppName: dance.name,
+            runningAppTakenAt: appReading,
+            takenAt: now
+        )
+
+        let content = content(configured: all, snapshot: .fresh(reading))
+
+        #expect(content.tiles.allSatisfy { $0.state == .idle })
+    }
+
+    @Test("timeline refreshes just after every inclusive expiry")
+    func schedulesTransientExpiries() throws {
+        let reading = snapshot(running: dance)
+        let appExpiry = try #require(reading.runningAppExpiresAt)
+        let launch = RobotAppLaunchState(
+            failure: .init(appID: dance.id, message: "Nope", at: now)
+        )
+
+        let failureDates = RobotAppsWidgetContent.refreshDates(
+            snapshot: .fresh(reading),
+            launch: launch,
+            after: now
+        )
+        let pendingDates = RobotAppsWidgetContent.refreshDates(
+            snapshot: .fresh(reading),
+            launch: RobotAppLaunchState(
+                pending: .init(appID: dance.id, isStop: false, since: now)
+            ),
+            after: now
+        )
+
+        #expect(failureDates.count == 2)
+        #expect(failureDates.contains { $0 > appExpiry })
+        #expect(failureDates.contains {
+            $0 > now.addingTimeInterval(RobotAppLaunchState.failureWindow)
+        })
+        #expect(pendingDates.count == 2)
+        #expect(pendingDates.contains {
+            $0 > now.addingTimeInterval(RobotAppLaunchState.pendingWindow)
+        })
     }
 }

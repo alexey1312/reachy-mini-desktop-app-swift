@@ -8,6 +8,7 @@ import Testing
 /// telling them.
 @Suite("Robot app query", .timeLimit(.minutes(1)))
 struct RobotAppQueryTests {
+    private let robotID = "robot-a"
     private let dance = RobotAppSummary(id: "pollen/dance", name: "dance_party", title: "Dance Party")
     private let faces = RobotAppSummary(id: "pollen/faces", name: "face_tracking", title: "Face Tracking")
 
@@ -21,7 +22,7 @@ struct RobotAppQueryTests {
         _ store: RobotAppsCacheStore,
         fetch: @escaping @Sendable () async throws -> [RobotAppSummary] = { [] }
     ) -> RobotAppQuery {
-        RobotAppQuery(cache: store, fetch: fetch)
+        RobotAppQuery(cache: store, robotID: robotID, fetch: fetch)
     }
 
     // MARK: - Resolving a saved configuration
@@ -29,7 +30,7 @@ struct RobotAppQueryTests {
     @Test("identifiers resolve from the cache, in the order they were asked for")
     func resolvesFromTheCache() async throws {
         let store = try store()
-        store.write([dance, faces])
+        store.write([dance, faces], robotID: robotID)
 
         let resolved = try await query(store).entities(for: [faces.id, dance.id])
 
@@ -44,7 +45,7 @@ struct RobotAppQueryTests {
     @Test("an unknown identifier still resolves, marked not installed")
     func neverDropsAnIdentifier() async throws {
         let store = try store()
-        store.write([dance])
+        store.write([dance], robotID: robotID)
 
         let resolved = try await query(store).entities(for: [dance.id, "pollen/chess"])
 
@@ -68,7 +69,7 @@ struct RobotAppQueryTests {
     @Test("resolving never reaches for the network")
     func resolvesWithoutTheNetwork() async throws {
         let store = try store()
-        store.write([dance])
+        store.write([dance], robotID: robotID)
         let reached = Reached()
 
         _ = try await query(store, fetch: {
@@ -84,35 +85,35 @@ struct RobotAppQueryTests {
     @Test("a live list wins, and is written through to the cache")
     func prefersALiveList() async throws {
         let store = try store()
-        store.write([dance])
+        store.write([dance], robotID: robotID)
 
         let suggested = try await query(store, fetch: { [dance, faces] }).suggestedEntities()
 
         #expect(suggested.map(\.id) == [dance.id, faces.id])
-        #expect(store.current?.installed.count == 2)
+        #expect(store.current(for: robotID)?.installed.count == 2)
     }
 
     @Test("an unreachable robot falls back to the cache instead of failing")
     func fallsBackToTheCache() async throws {
         let store = try store()
-        store.write([dance, faces])
+        store.write([dance, faces], robotID: robotID)
 
         let suggested = try await query(store, fetch: { throw URLError(.cannotConnectToHost) })
             .suggestedEntities()
 
         #expect(suggested.map(\.id) == [dance.id, faces.id])
-        #expect(store.current?.installed.count == 2)
+        #expect(store.current(for: robotID)?.installed.count == 2)
     }
 
     @Test("an empty live answer does not wipe the cache")
     func keepsTheCacheOverAnEmptyAnswer() async throws {
         let store = try store()
-        store.write([dance])
+        store.write([dance], robotID: robotID)
 
         let suggested = try await query(store, fetch: { [] }).suggestedEntities()
 
         #expect(suggested.map(\.id) == [dance.id])
-        #expect(store.current?.installed.count == 1)
+        #expect(store.current(for: robotID)?.installed.count == 1)
     }
 
     /// The fallback and the success path end in the same shape — a list of
@@ -122,7 +123,7 @@ struct RobotAppQueryTests {
     @Test("a robot that never answers does not hold the picker open")
     func doesNotWaitOutAHangingRobot() async throws {
         let store = try store()
-        store.write([dance])
+        store.write([dance], robotID: robotID)
 
         let start = ContinuousClock.now
         let suggested = try await query(store, fetch: {
@@ -133,6 +134,16 @@ struct RobotAppQueryTests {
 
         #expect(suggested.map(\.id) == [dance.id])
         #expect(elapsed < .seconds(10))
+    }
+
+    @Test("a different robot cannot resolve the previous robot's menu")
+    func refusesAnotherRobotsCache() async throws {
+        let store = try store()
+        store.write([dance], robotID: "robot-b")
+
+        let resolved = try await query(store).entities(for: [dance.id])
+
+        #expect(resolved.first?.isInstalled == false)
     }
 }
 

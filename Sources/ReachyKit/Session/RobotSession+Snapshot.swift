@@ -16,12 +16,16 @@ extension RobotSession {
         // it is not in the status the session already has. So the poll carries
         // forward what `recordRunningApp` last learned rather than blanking it:
         // this does not learn it, and therefore must not forget it.
-        let running = snapshots.current
+        let robotID = identity.deduplicationKey
+        let previous = snapshots.current
+        let running = previous?.robotID == robotID ? previous : nil
         snapshots.write(RobotSnapshot(
+            robotID: robotID,
             robotName: robotName(from: identity),
             isAwake: isAwake,
             runningApp: running?.runningApp,
             runningAppName: running?.runningAppName,
+            runningAppTakenAt: running?.runningAppTakenAt,
             takenAt: date
         ))
     }

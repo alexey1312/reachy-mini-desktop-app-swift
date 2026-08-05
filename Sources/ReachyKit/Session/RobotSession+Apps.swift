@@ -128,15 +128,30 @@ public extension RobotSession {
 /// neither of these things.
 private extension RobotSession {
     func recordInstalled(_ apps: [RobotApp]) {
-        appsCache.write(apps.map(RobotAppSummary.init))
+        // An empty list is what a daemon mid-restart reports. Keep the last
+        // identity-bound menu until a non-empty answer replaces it; otherwise a
+        // transient restart disables every configured widget tile.
+        guard !apps.isEmpty, let identity = connectedIdentity else { return }
+        appsCache.write(apps.map(RobotAppSummary.init), robotID: identity.deduplicationKey)
     }
 
     func recordRunning(_ status: RobotAppStatus?) {
+        let running = status.flatMap { $0.isBusy ? $0 : nil }
+        let identity = connectedIdentity
         snapshots.recordRunningApp(
-            title: status?.app.title,
-            name: status?.app.name,
+            title: running?.app.title,
+            name: running?.app.name,
+            robotID: identity?.deduplicationKey,
+            robotName: identity?.name,
             isAwake: isAwake
         )
+    }
+
+    var connectedIdentity: RobotIdentity? {
+        switch phase {
+        case let .connected(identity), let .unreachable(identity): identity
+        case .idle, .connecting: nil
+        }
     }
 }
 

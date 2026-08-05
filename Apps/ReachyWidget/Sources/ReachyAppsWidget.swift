@@ -57,25 +57,23 @@ struct ReachyAppsProvider: AppIntentTimelineProvider {
 
     /// The moments something on screen stops being true, in order.
     private func expiries(after now: Date) -> [Date] {
-        var moments: [Date] = []
-        if let pending = RobotAppLaunchStateStore().current?.pending(at: now) {
-            moments.append(pending.since.addingTimeInterval(RobotAppLaunchState.pendingWindow))
-        }
-        if case let .fresh(reading) = RobotSnapshotStore().state(at: now), reading.runningAppName != nil {
-            moments.append(reading.takenAt.addingTimeInterval(RobotSnapshotStore.freshness))
-        }
-        return moments.filter { $0 > now }.sorted()
+        RobotAppsWidgetContent.refreshDates(
+            snapshot: RobotSnapshotStore().state(at: now),
+            launch: RobotAppLaunchStateStore().current,
+            after: now
+        )
     }
 
     private func entry(at date: Date, apps: [RobotAppEntity]?, limit: Int) -> ReachyAppsEntry {
+        let robot = RobotIntentTarget.knownRobot
         ReachyAppsEntry(
             date: date,
             content: RobotAppsWidgetContent(
                 configured: (apps ?? []).map(\.summary),
-                cache: RobotAppsCacheStore().current,
+                cache: robot.flatMap { RobotAppsCacheStore().current(for: $0.key) },
                 snapshot: RobotSnapshotStore().state(at: date),
                 launch: RobotAppLaunchStateStore().current,
-                hasKnownRobot: KnownRobots.lastAddress != nil,
+                hasKnownRobot: robot != nil,
                 limit: limit,
                 at: date
             )

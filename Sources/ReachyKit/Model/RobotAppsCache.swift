@@ -41,10 +41,15 @@ public struct RobotAppsCache: Codable, Sendable, Equatable {
     /// was taken.
     public static let freshness: TimeInterval = 24 * 60 * 60
 
+    /// The stable identity established by the handshake that produced this list.
+    /// The address is deliberately absent: it can change, and another robot can
+    /// later receive it.
+    public let robotID: String
     public let installed: [RobotAppSummary]
     public let takenAt: Date
 
-    public init(installed: [RobotAppSummary], takenAt: Date) {
+    public init(robotID: String, installed: [RobotAppSummary], takenAt: Date) {
+        self.robotID = robotID
         self.installed = installed
         self.takenAt = takenAt
     }
@@ -62,10 +67,10 @@ public struct RobotAppsCache: Codable, Sendable, Equatable {
 
 /// The cache, in storage both processes can reach.
 ///
-/// **Not keyed by robot.** Someone with two robots keeps the list of whichever was
-/// connected last, while an intent targets `KnownRobots.lastAddress` — in practice
-/// the two move together, because one connected session writes both. Keying this
-/// by hardware id is the fix if that ever bites.
+/// Only the most recently listed menu is stored, but it is bound to the hardware
+/// identity that produced it. Connecting to another robot therefore reads no menu
+/// until that robot has supplied one; it can never render or launch the previous
+/// robot's entries by accident.
 ///
 /// `@unchecked Sendable`, unlike `RobotSnapshotStore`, because an `EntityQuery`
 /// requires it and this holds nothing but a `UserDefaults` — thread-safe by
@@ -81,13 +86,18 @@ public struct RobotAppsCacheStore: @unchecked Sendable {
         self.defaults = defaults
     }
 
-    public var current: RobotAppsCache? {
+    private var stored: RobotAppsCache? {
         guard let data = defaults.data(forKey: Self.key) else { return nil }
         return try? JSONDecoder().decode(RobotAppsCache.self, from: data)
     }
 
-    public func write(_ installed: [RobotAppSummary], at date: Date = Date()) {
-        let cache = RobotAppsCache(installed: installed, takenAt: date)
+    public func current(for robotID: String) -> RobotAppsCache? {
+        guard let stored, stored.robotID == robotID else { return nil }
+        return stored
+    }
+
+    public func write(_ installed: [RobotAppSummary], robotID: String, at date: Date = Date()) {
+        let cache = RobotAppsCache(robotID: robotID, installed: installed, takenAt: date)
         guard let data = try? JSONEncoder().encode(cache) else { return }
         defaults.set(data, forKey: Self.key)
     }

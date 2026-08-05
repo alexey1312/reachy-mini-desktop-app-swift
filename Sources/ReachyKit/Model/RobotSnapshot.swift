@@ -7,6 +7,9 @@ import Foundation
 /// wrote the last time it was connected — and `takenAt` is what keeps that
 /// honest rather than merely confident.
 public struct RobotSnapshot: Codable, Sendable, Equatable {
+    /// Stable identity of the robot that produced this reading. Optional only so
+    /// snapshots written before identity was persisted still decode.
+    public let robotID: String?
     /// Nil for a robot whose daemon never answered a name — the same daemons
     /// that cannot be renamed at all.
     public let robotName: String?
@@ -21,21 +24,51 @@ public struct RobotSnapshot: Codable, Sendable, Equatable {
     /// Defaulted so a blob written before this field existed decodes as a robot
     /// running nothing identifiable rather than failing.
     public let runningAppName: String?
+    /// When the running app itself was checked. Status polling refreshes
+    /// `takenAt`, but cannot refresh this without another robot round trip.
+    public let runningAppTakenAt: Date?
     /// When the app saw this. Not decoration: everything below turns on it.
     public let takenAt: Date
 
     public init(
+        robotID: String? = nil,
         robotName: String?,
         isAwake: Bool,
         runningApp: String?,
         runningAppName: String? = nil,
+        runningAppTakenAt: Date? = nil,
         takenAt: Date
     ) {
+        self.robotID = robotID
         self.robotName = robotName
         self.isAwake = isAwake
         self.runningApp = runningApp
         self.runningAppName = runningAppName
+        self.runningAppTakenAt = runningAppTakenAt
         self.takenAt = takenAt
+    }
+
+    /// The app observation expires independently of the daemon status. For a
+    /// legacy snapshot without its own date, the snapshot date is the safest
+    /// compatible approximation.
+    public func runningAppName(at date: Date) -> String? {
+        guard runningAppIsFresh(at: date) else { return nil }
+        return runningAppName
+    }
+
+    public func runningAppTitle(at date: Date) -> String? {
+        guard runningAppIsFresh(at: date) else { return nil }
+        return runningApp ?? runningAppName
+    }
+
+    public var runningAppExpiresAt: Date? {
+        guard runningApp != nil || runningAppName != nil else { return nil }
+        return (runningAppTakenAt ?? takenAt).addingTimeInterval(RobotSnapshotStore.freshness)
+    }
+
+    private func runningAppIsFresh(at date: Date) -> Bool {
+        guard let expiry = runningAppExpiresAt else { return false }
+        return date <= expiry
     }
 }
 
@@ -110,14 +143,22 @@ public struct RobotSnapshotStore {
     public func recordRunningApp(
         title: String?,
         name: String?,
+        robotID: String? = nil,
+        robotName: String? = nil,
         isAwake: Bool? = nil,
         at date: Date = Date()
     ) {
+        let previous = current
+        let resolvedID = robotID ?? previous?.robotID
+        let sameRobot = robotID == nil || previous?.robotID == robotID
+        let hasRunningApp = title != nil || name != nil
         write(RobotSnapshot(
-            robotName: current?.robotName,
-            isAwake: isAwake ?? current?.isAwake ?? true,
+            robotID: resolvedID,
+            robotName: robotName ?? (sameRobot ? previous?.robotName : nil),
+            isAwake: isAwake ?? (sameRobot ? previous?.isAwake : nil) ?? true,
             runningApp: title,
             runningAppName: name,
+            runningAppTakenAt: hasRunningApp ? date : nil,
             takenAt: date
         ))
     }

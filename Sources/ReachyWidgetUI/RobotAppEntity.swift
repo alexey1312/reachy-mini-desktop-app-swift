@@ -56,26 +56,48 @@ public struct RobotAppQuery: EntityQuery {
     static let refreshTimeout: TimeInterval = 2
 
     private let cache: RobotAppsCacheStore
-    private let fetch: @Sendable () async throws -> [RobotAppSummary]
+    private let robotID: @Sendable () -> String?
+    private let fetch: @Sendable () async throws -> RobotAppsCache
 
     public init() {
         self.init(
             cache: RobotAppsCacheStore(),
+            robotID: { RobotIntentTarget.knownRobot?.key },
             fetch: {
-                try await RobotIntentTarget
-                    .connection(timeout: RobotAppQuery.refreshTimeout)
-                    .installedApps()
-                    .map(RobotAppSummary.init)
+                let target = try await RobotIntentTarget.connection(timeout: RobotAppQuery.refreshTimeout)
+                let installed = try await target.client.installedApps()
+                return RobotAppsCache(
+                    robotID: target.robot.key,
+                    installed: installed.map(RobotAppSummary.init),
+                    takenAt: Date()
+                )
             }
         )
     }
 
-    init(
+    private init(
         cache: RobotAppsCacheStore,
-        fetch: @escaping @Sendable () async throws -> [RobotAppSummary]
+        robotID: @escaping @Sendable () -> String?,
+        fetch: @escaping @Sendable () async throws -> RobotAppsCache
     ) {
         self.cache = cache
+        self.robotID = robotID
         self.fetch = fetch
+    }
+
+    init(
+        cache: RobotAppsCacheStore,
+        robotID: String,
+        fetch: @escaping @Sendable () async throws -> [RobotAppSummary]
+    ) {
+        self.init(
+            cache: cache,
+            robotID: { robotID },
+            fetch: {
+                let installed = try await fetch()
+                return RobotAppsCache(robotID: robotID, installed: installed, takenAt: Date())
+            }
+        )
     }
 
     /// Resolving a saved configuration. **Never touches the network and never
@@ -88,7 +110,7 @@ public struct RobotAppQuery: EntityQuery {
     /// itself, marked not installed; the tile renders dimmed and the configuration
     /// survives.
     public func entities(for identifiers: [String]) async throws -> [RobotAppEntity] {
-        let installed = cache.current?.installed ?? []
+        let installed = robotID().flatMap { cache.current(for: $0)?.installed } ?? []
         return identifiers.map { id in
             if let known = installed.first(where: { $0.id == id }) {
                 return RobotAppEntity(known, isInstalled: true)
@@ -104,12 +126,13 @@ public struct RobotAppQuery: EntityQuery {
     /// robot mid-restart reports, and wiping a configured widget's menu on the
     /// strength of it would be the expensive way to be right occasionally.
     public func suggestedEntities() async throws -> [RobotAppEntity] {
-        let cached = cache.current?.installed ?? []
-        guard let fresh = await refreshed(), !fresh.isEmpty else {
+        guard let robotID = robotID() else { return [] }
+        let cached = cache.current(for: robotID)?.installed ?? []
+        guard let fresh = await refreshed(), fresh.robotID == robotID, !fresh.installed.isEmpty else {
             return cached.map { RobotAppEntity($0, isInstalled: true) }
         }
-        cache.write(fresh)
-        return fresh.map { RobotAppEntity($0, isInstalled: true) }
+        cache.write(fresh.installed, robotID: robotID, at: fresh.takenAt)
+        return fresh.installed.map { RobotAppEntity($0, isInstalled: true) }
     }
 
     /// The budget that actually ends the wait.
@@ -118,8 +141,8 @@ public struct RobotAppQuery: EntityQuery {
     /// that accepts the connection and then dribbles bytes can hold a request far
     /// past it. Racing the whole fetch is what keeps the picker from sitting empty
     /// while the system waits.
-    private func refreshed() async -> [RobotAppSummary]? {
-        await withTaskGroup(of: [RobotAppSummary]?.self) { group in
+    private func refreshed() async -> RobotAppsCache? {
+        await withTaskGroup(of: RobotAppsCache?.self) { group in
             group.addTask { try? await fetch() }
             group.addTask {
                 try? await Task.sleep(for: .seconds(Self.refreshTimeout))

@@ -124,4 +124,60 @@ struct RobotAppLauncherTests {
         #expect(RobotSession.Configuration.widgetIntent.moveCompletionTimeout
             < RobotSession.Configuration().moveCompletionTimeout)
     }
+
+    @Test("an intent refuses an address now occupied by another robot")
+    func verifiesTheRememberedIdentity() async throws {
+        let client = StubAppsClient()
+        let base = try await client.handshake()
+        let expected = KnownRobot(
+            key: "expected-hardware",
+            name: "kitchen",
+            address: .init(host: "127.0.0.1"),
+            lastConnected: Date()
+        )
+        let handshake = RobotConnection.Handshake(
+            identity: .init(hardwareID: "different-hardware", name: "office", daemonVersion: "1.9.0"),
+            status: base.status
+        )
+
+        #expect(throws: RobotIntentError.wrongRobot) {
+            try RobotIntentTarget.validate(handshake, expected: expected)
+        }
+    }
+
+    @Test("an intent refuses an unsupported daemon before commands")
+    func verifiesDaemonCompatibility() async throws {
+        let client = StubAppsClient()
+        let base = try await client.handshake()
+        let expected = KnownRobot(
+            key: "expected-hardware",
+            name: "kitchen",
+            address: .init(host: "127.0.0.1"),
+            lastConnected: Date()
+        )
+        let handshake = RobotConnection.Handshake(
+            identity: .init(hardwareID: expected.key, name: "kitchen", daemonVersion: "1.8.0"),
+            status: base.status
+        )
+
+        #expect(throws: RobotIntentError.unsupportedDaemon(
+            "Daemon 1.8.0 is unsupported; version 1.9.0 is required."
+        )) {
+            try RobotIntentTarget.validate(handshake, expected: expected)
+        }
+    }
+
+    @Test("the whole intent sequence has one deadline")
+    func boundsTheWholeIntent() async {
+        let start = ContinuousClock.now
+
+        await #expect(throws: RobotIntentError.timedOut) {
+            try await RobotIntentTarget.withTimeout(.milliseconds(50)) {
+                try await Task.sleep(for: .seconds(30))
+                return true
+            }
+        }
+
+        #expect(ContinuousClock.now - start < .seconds(2))
+    }
 }

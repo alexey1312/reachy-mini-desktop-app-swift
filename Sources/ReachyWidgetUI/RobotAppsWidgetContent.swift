@@ -122,7 +122,7 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         }
 
         let installed = cache?.installed ?? []
-        let running = Self.runningName(in: snapshot)
+        let running = Self.runningName(in: snapshot, at: date)
         let pending = launch?.pending(at: date)
 
         let tiles = source.prefix(limit).map { summary in
@@ -157,14 +157,14 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
     /// Only a fresh reading may name a running app. A stale one is a memory, and
     /// dimming five tiles on the strength of a memory is how a widget stops
     /// working for no visible reason.
-    private static func runningName(in snapshot: RobotSnapshotState) -> String? {
+    private static func runningName(in snapshot: RobotSnapshotState, at date: Date) -> String? {
         guard case let .fresh(reading) = snapshot else { return nil }
-        return reading.runningAppName
+        return reading.runningAppName(at: date)
     }
 
-    private static func runningTitle(in snapshot: RobotSnapshotState) -> String? {
+    private static func runningTitle(in snapshot: RobotSnapshotState, at date: Date) -> String? {
         guard case let .fresh(reading) = snapshot else { return nil }
-        return reading.runningApp ?? reading.runningAppName
+        return reading.runningAppTitle(at: date)
     }
 
     private static func state(
@@ -199,7 +199,7 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         // Only when the culprit is off-screen: a running tile with a stop badge
         // already says why its neighbours are dimmed.
         if let running, !tiles.contains(where: { $0.name == running }) {
-            return .busy(runningTitle(in: snapshot) ?? running)
+            return .busy(runningTitle(in: snapshot, at: date) ?? running)
         }
         return .none
     }
@@ -209,5 +209,36 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return "App list from \(formatter.localizedString(for: cache.takenAt, relativeTo: date))"
+    }
+
+    /// Dates at which a timeline must rebuild because a transient statement stops
+    /// being true. One millisecond past the inclusive boundary makes the entry
+    /// unambiguously expired when WidgetKit renders it with that exact date.
+    public static func refreshDates(
+        snapshot: RobotSnapshotState,
+        launch: RobotAppLaunchState?,
+        after now: Date
+    ) -> [Date] {
+        let afterBoundary: (Date) -> Date = { $0.addingTimeInterval(0.001) }
+        var moments: [Date] = []
+
+        if let pending = launch?.pending(at: now) {
+            moments.append(afterBoundary(
+                pending.since.addingTimeInterval(RobotAppLaunchState.pendingWindow)
+            ))
+        }
+        if let failure = launch?.failure(at: now) {
+            moments.append(afterBoundary(
+                failure.at.addingTimeInterval(RobotAppLaunchState.failureWindow)
+            ))
+        }
+        if case let .fresh(reading) = snapshot,
+           reading.runningAppName(at: now) != nil,
+           let expiry = reading.runningAppExpiresAt
+        {
+            moments.append(afterBoundary(expiry))
+        }
+
+        return moments.filter { $0 > now }.sorted()
     }
 }

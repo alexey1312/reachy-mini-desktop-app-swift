@@ -8,6 +8,7 @@ import Testing
 @Suite("Robot apps cache")
 struct RobotAppsCacheTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
+    private let robotID = "robot-a"
 
     private func store() throws -> RobotAppsCacheStore {
         try RobotAppsCacheStore(
@@ -60,34 +61,34 @@ struct RobotAppsCacheTests {
         let store = try store()
         let written = RobotApp.previewInstalled.map(RobotAppSummary.init)
 
-        store.write(written, at: now)
+        store.write(written, robotID: robotID, at: now)
 
-        #expect(store.current?.installed == written)
-        #expect(store.current?.takenAt == now)
+        #expect(store.current(for: robotID)?.installed == written)
+        #expect(store.current(for: robotID)?.takenAt == now)
     }
 
     @Test("an empty store knows nothing")
     func startsEmpty() throws {
-        #expect(try store().current == nil)
+        #expect(try store().current(for: robotID) == nil)
     }
 
     @Test("a later write replaces the list")
     func replacesTheList() throws {
         let store = try store()
-        store.write(RobotApp.previewInstalled.map(RobotAppSummary.init), at: now)
+        store.write(RobotApp.previewInstalled.map(RobotAppSummary.init), robotID: robotID, at: now)
 
         let one = [RobotAppSummary(id: "a", name: "a", title: "A")]
-        store.write(one, at: now.addingTimeInterval(60))
+        store.write(one, robotID: robotID, at: now.addingTimeInterval(60))
 
-        #expect(store.current?.installed == one)
+        #expect(store.current(for: robotID)?.installed == one)
     }
 
     @Test("an id is looked up, and an unknown one is not invented")
     func looksUpAnID() throws {
         let store = try store()
         let installed = RobotApp.previewInstalled.map(RobotAppSummary.init)
-        store.write(installed, at: now)
-        let cache = try #require(store.current)
+        store.write(installed, robotID: robotID, at: now)
+        let cache = try #require(store.current(for: robotID))
 
         #expect(cache.summary(id: installed[0].id) == installed[0])
         #expect(cache.summary(id: "never-installed") == nil)
@@ -95,7 +96,7 @@ struct RobotAppsCacheTests {
 
     @Test("a list past the freshness window is stale")
     func reportsStale() {
-        let cache = RobotAppsCache(installed: [], takenAt: now)
+        let cache = RobotAppsCache(robotID: robotID, installed: [], takenAt: now)
 
         #expect(cache.isStale(at: now.addingTimeInterval(RobotAppsCache.freshness)) == false)
         #expect(cache.isStale(at: now.addingTimeInterval(RobotAppsCache.freshness + 1)))
@@ -104,7 +105,7 @@ struct RobotAppsCacheTests {
     /// A clock that went backwards is not a list from the future gone old.
     @Test("a list dated in the future is not stale")
     func toleratesAClockGoingBackwards() {
-        let cache = RobotAppsCache(installed: [], takenAt: now)
+        let cache = RobotAppsCache(robotID: robotID, installed: [], takenAt: now)
 
         #expect(cache.isStale(at: now.addingTimeInterval(-3600)) == false)
     }
@@ -114,5 +115,14 @@ struct RobotAppsCacheTests {
     @Test("the menu outlives a reading by a long way")
     func outlivesASnapshot() {
         #expect(RobotAppsCache.freshness > RobotSnapshotStore.freshness)
+    }
+
+    @Test("a menu is visible only to the robot that produced it")
+    func bindsTheMenuToRobotIdentity() throws {
+        let store = try store()
+        store.write(RobotApp.previewInstalled.map(RobotAppSummary.init), robotID: robotID, at: now)
+
+        #expect(store.current(for: robotID) != nil)
+        #expect(store.current(for: "robot-b") == nil)
     }
 }

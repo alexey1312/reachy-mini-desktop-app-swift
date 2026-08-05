@@ -11,6 +11,7 @@ private final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked
     private(set) var removed: [String] = []
     private(set) var running: RobotAppStatus?
     var failsCatalogue = false
+    var returnsEmptyInstalled = false
 
     private var status: Components.Schemas.DaemonStatus {
         let json = """
@@ -51,6 +52,9 @@ private final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked
 
     func installedApps() async throws -> [RobotApp] {
         lock.withLock { installedCalls += 1 }
+        if returnsEmptyInstalled {
+            return []
+        }
         return [Self.app(name: "dance_party", kind: "installed")]
     }
 
@@ -73,10 +77,14 @@ private final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked
         lock.withLock { running = nil }
     }
 
-    static func status(name: String) -> RobotAppStatus {
+    func setRunning(_ status: RobotAppStatus?) {
+        lock.withLock { running = status }
+    }
+
+    static func status(name: String, state: String = "running") -> RobotAppStatus {
         // swiftlint:disable:next force_try
         try! JSONDecoder().decode(RobotAppStatus.self, from: Data(#"""
-        {"info": {"name": "\#(name)", "source_kind": "installed", "extra": {}}, "state": "running"}
+        {"info": {"name": "\#(name)", "source_kind": "installed", "extra": {}}, "state": "\#(state)"}
         """#.utf8))
     }
 
@@ -235,7 +243,7 @@ struct RobotSessionAppsTests {
 
         _ = try await session.appCatalogue()
 
-        #expect(stores.apps.current?.installed.map(\.name) == ["dance_party"])
+        #expect(stores.apps.current(for: "hw")?.installed.map(\.name) == ["dance_party"])
     }
 
     @Test("listing the installed apps leaves the same menu behind")
@@ -245,7 +253,7 @@ struct RobotSessionAppsTests {
 
         _ = try await session.installedApps()
 
-        #expect(stores.apps.current?.installed.map(\.name) == ["dance_party"])
+        #expect(stores.apps.current(for: "hw")?.installed.map(\.name) == ["dance_party"])
     }
 
     @Test("starting an app names it in the snapshot, and stopping clears it")
@@ -272,6 +280,33 @@ struct RobotSessionAppsTests {
         #expect(stores.snapshots.current?.runningAppName == "dance_party")
     }
 
+    @Test("a terminal current-app status clears the running app")
+    func clearsTerminalCurrentAppStatuses() async throws {
+        let stores = try makeStores()
+        let client = AppsRobotClient()
+        let session = try await connected(client, stores: stores)
+        _ = try await session.startApp(named: "dance_party")
+        client.setRunning(AppsRobotClient.status(name: "dance_party", state: "done"))
+
+        _ = try await session.currentApp()
+
+        #expect(stores.snapshots.current?.runningAppName == nil)
+        #expect(stores.snapshots.current?.runningAppTakenAt == nil)
+    }
+
+    @Test("an empty installed response keeps the last widget menu")
+    func preservesTheMenuOverAnEmptyResponse() async throws {
+        let stores = try makeStores()
+        let client = AppsRobotClient()
+        let session = try await connected(client, stores: stores)
+        _ = try await session.installedApps()
+        client.returnsEmptyInstalled = true
+
+        _ = try await session.installedApps(refresh: true)
+
+        #expect(stores.apps.current(for: "hw")?.installed.map(\.name) == ["dance_party"])
+    }
+
     /// The three-second status poll does not learn what the robot is running —
     /// naming it would cost a round trip of its own. So it must carry the last
     /// answer forward rather than blank it, or the widget's running app survives
@@ -282,9 +317,16 @@ struct RobotSessionAppsTests {
         let session = try await connected(AppsRobotClient(), stores: stores)
         _ = try await session.startApp(named: "dance_party")
 
-        session.recordSnapshot(identity: .init(hardwareID: "hw", name: "testbot", daemonVersion: "1.9.0"))
+        let appReading = try #require(stores.snapshots.current?.runningAppTakenAt)
+        let pollDate = appReading.addingTimeInterval(60)
+        session.recordSnapshot(
+            identity: .init(hardwareID: "hw", name: "testbot", daemonVersion: "1.9.0"),
+            at: pollDate
+        )
 
         #expect(stores.snapshots.current?.runningAppName == "dance_party")
+        #expect(stores.snapshots.current?.runningAppTakenAt == appReading)
+        #expect(stores.snapshots.current?.takenAt == pollDate)
         #expect(stores.snapshots.current?.robotName == "testbot")
     }
 }

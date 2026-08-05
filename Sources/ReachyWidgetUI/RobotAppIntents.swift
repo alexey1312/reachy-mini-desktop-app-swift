@@ -20,6 +20,7 @@ public struct ToggleRobotAppIntent: AppIntent {
         "Starts an app on your robot, or stops it if it is already running."
     )
     public static let isDiscoverable = false
+    static let executionTimeout: Duration = .seconds(15)
     // No `openAppWhenRun`: it is deprecated *and* errors when an intent runs in an
     // app extension, which is exactly where a widget button runs it. Its
     // replacement, `supportedModes`, is iOS 26 and this app deploys to 18. So the
@@ -55,15 +56,30 @@ public struct ToggleRobotAppIntent: AppIntent {
             } else {
                 nil
             }
-            let launcher = try RobotAppLauncher(
-                client: RobotIntentTarget.connection(timeout: 6),
-                assumeAwake: assumeAwake
-            )
-            switch try await launcher.toggle(name: appName) {
+            let appName = appName
+            let result = try await RobotIntentTarget.withTimeout(Self.executionTimeout) {
+                let target = try await RobotIntentTarget.connection(timeout: 6)
+                let launcher = RobotAppLauncher(client: target.client, assumeAwake: assumeAwake)
+                let outcome = try await launcher.toggle(name: appName)
+                return (target.robot, outcome)
+            }
+            switch result.1 {
             case let .started(name, title):
-                snapshots.recordRunningApp(title: title, name: name, isAwake: true)
+                snapshots.recordRunningApp(
+                    title: title,
+                    name: name,
+                    robotID: result.0.key,
+                    robotName: result.0.name,
+                    isAwake: true
+                )
             case .stopped:
-                snapshots.recordRunningApp(title: nil, name: nil, isAwake: true)
+                snapshots.recordRunningApp(
+                    title: nil,
+                    name: nil,
+                    robotID: result.0.key,
+                    robotName: result.0.name,
+                    isAwake: true
+                )
             }
             launches.succeed(appID: appID)
         } catch {
@@ -83,7 +99,7 @@ public struct ToggleRobotAppIntent: AppIntent {
     /// stale, and then the launcher corrects the outcome a second later.
     private func isStopping(named name: String, snapshots: RobotSnapshotStore) -> Bool {
         guard case let .fresh(reading) = snapshots.state() else { return false }
-        return reading.runningAppName == name
+        return reading.runningAppName(at: Date()) == name
     }
 
     /// Both widgets: a running app is also what `RobotWidgetContent` puts in front

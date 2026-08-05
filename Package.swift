@@ -72,7 +72,7 @@ let package = Package(
         .target(
             name: "ReachyWidgetUI",
             dependencies: ["ReachyKit"],
-            exclude: ["Previews"]
+            exclude: ["AGENTS.md", "CLAUDE.md", "Previews"]
         ),
         // Not a product: stubs for the test targets only, in a plain target because
         // one test target cannot import another's sources.

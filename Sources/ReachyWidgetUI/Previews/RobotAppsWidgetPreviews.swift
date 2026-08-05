@@ -42,7 +42,7 @@ enum AppsPreview {
     }
 
     static func cache(_ installed: [RobotAppSummary]? = nil, at date: Date = robotWidgetPreviewDate) -> RobotAppsCache {
-        RobotAppsCache(installed: installed ?? all, takenAt: date)
+        RobotAppsCache(robotID: "preview", installed: installed ?? all, takenAt: date)
     }
 
     static func snapshot(running: RobotAppSummary?) -> RobotSnapshotState {
