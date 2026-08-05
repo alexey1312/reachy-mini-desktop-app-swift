@@ -136,6 +136,9 @@ private extension RobotSession {
     }
 
     func recordRunning(_ status: RobotAppStatus?) {
+        runningApp = status
+        // The snapshot keeps the narrower reading: a widget offering "Stop" for an
+        // app that already died would be worse than one showing nothing.
         let running = status.flatMap { $0.isBusy ? $0 : nil }
         let identity = connectedIdentity
         snapshots.recordRunningApp(

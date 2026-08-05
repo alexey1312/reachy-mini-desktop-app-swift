@@ -28,6 +28,9 @@ public struct ReachyRootView<Developer: View>: View {
     /// launch and handed down through the environment — the account outlives any
     /// one robot connection, and several screens read it.
     @State private var hfAccount: HFAccount
+    /// The running-app dock is mounted here, below the tab bar, so it survives a
+    /// tab switch — the whole point of hoisting it out of the Apps tab.
+    @State private var runningApp: RunningAppModel
     @State private var tab: TabID = .robot
     @State private var showsSettings = false
     /// The two ways to reach a robot are two entry points to the same list, so it
@@ -69,12 +72,14 @@ public struct ReachyRootView<Developer: View>: View {
         session: RobotSession,
         viewport: ViewportModel = ViewportModel(),
         hfAccount: HFAccount? = nil,
+        runningApp: RunningAppModel? = nil,
         tab: TabID = .robot,
         remoteLink: RemoteRobotLink? = nil,
         @ViewBuilder developer: () -> Developer
     ) {
         _session = State(initialValue: session)
         _viewport = State(initialValue: viewport)
+        _runningApp = State(initialValue: runningApp ?? RunningAppModel())
         _tab = State(initialValue: tab)
         _remoteLink = State(initialValue: remoteLink)
         _hfAccount = State(
@@ -97,7 +102,11 @@ public struct ReachyRootView<Developer: View>: View {
                 appsTab
             }
         }
+        // Applied to the `TabView` itself — see `runningAppDock` for why that is the
+        // whole trick.
+        .runningAppDock(session: session, model: runningApp)
         .environment(\.reachyDeveloperScreen) { [developer] in AnyView(developer) }
+        .environment(runningApp)
         .environment(hfAccount)
         .sheet(isPresented: $showsAccount) {
             NavigationStack {
@@ -169,24 +178,7 @@ public struct ReachyRootView<Developer: View>: View {
             case .apps: tab = .apps
             }
         }
-        .onChange(of: widgetFacts) { _, _ in
-            guard !previewMode else { return }
-            // The widget cannot ask the robot anything, so the app tells it that
-            // the reading it holds has moved on. `RobotSession` has already
-            // written the snapshot by this point.
-            WidgetCenter.shared.reloadAllTimelines()
-        }
-    }
-
-    /// What a widget would show, as one comparable value: `onChange` needs a
-    /// single `Equatable`, and reloading on every unrelated status field would
-    /// wake the extension for nothing.
-    private var widgetFacts: RobotWidgetFacts {
-        RobotWidgetFacts(
-            phase: session.phase,
-            isAwake: session.isAwake,
-            runningApp: RobotSnapshotStore().current?.runningAppName
-        )
+        .widgetReload(session: session, isPreview: previewMode)
     }
 
     /// Opens the relay session first, then hands the session a client that speaks

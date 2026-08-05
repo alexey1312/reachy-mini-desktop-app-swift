@@ -117,6 +117,13 @@ public final class RobotSession {
     public internal(set) var supportsRename = true
     public internal(set) var currentMove: MovePlayback?
     public internal(set) var isStoppingMove = false
+    /// The app holding the robot, as the daemon last reported it — raw, including
+    /// the states the widget snapshot filters out. A dock has to be able to say
+    /// "stopped with an error", which is exactly what `isBusy` discards.
+    ///
+    /// Written only by `recordRunning(_:)`, which every app command already passes
+    /// through, so this and the cross-process snapshot can never disagree.
+    public internal(set) var runningApp: RobotAppStatus?
     public internal(set) var powerTransition: PowerTransition?
     /// Explicit Disconnect suppresses discovery-driven reconnect until the user connects again.
     public internal(set) var automaticConnectionAllowed = true
@@ -295,6 +302,7 @@ public final class RobotSession {
         currentMove = nil
         isStoppingMove = false
         powerTransition = nil
+        runningApp = nil
         moveCache = [:]
         appCatalogueCache = nil
         installedAppsCache = nil

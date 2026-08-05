@@ -139,7 +139,7 @@ struct AppStoreModelTests {
 
     private func loaded(_ client: StoreRobotClient = StoreRobotClient()) async -> (AppStoreModel, RobotSession) {
         let session = await connected(client)
-        let model = AppStoreModel()
+        let model = AppStoreModel(session: session)
         await model.load(session: session)
         return (model, session)
     }

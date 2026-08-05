@@ -14,14 +14,14 @@ import SwiftUI
     PreviewScene.appStore(.preview(), model: .preview(section: .installed, hasUpdate: true))
 }
 
+// The running app now lives on the session — the store row reads it through the
+// model, and the global dock reads the same value. Parking it on one session is
+// what keeps the two agreeing.
 #Preview("Apps — running") {
+    let session = RobotSession.preview(runningApp: .preview(.running))
     PreviewScene.appStore(
-        .preview(),
-        model: .preview(
-            section: .installed,
-            running: RobotAppStatus(app: RobotApp.previewInstalled[0], state: .running),
-            startupApp: "reachy_mini_dance"
-        )
+        session,
+        model: .preview(session: session, section: .installed, startupApp: "reachy_mini_dance")
     )
 }
 

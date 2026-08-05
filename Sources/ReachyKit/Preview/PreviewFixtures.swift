@@ -279,6 +279,9 @@
             compatibilityWarning: String? = nil,
             currentMove: MovePlayback? = nil,
             isStoppingMove: Bool = false,
+            // The dock is mounted on the root, so every root preview needs a way to
+            // reach a state that otherwise requires an app running on a real robot.
+            runningApp: RobotAppStatus? = nil,
             automaticConnectionAllowed: Bool = true,
             supportsRename: Bool = true,
             client: any RobotAPIClient = PreviewRobotClient()
@@ -298,6 +301,7 @@
             session.compatibilityWarning = compatibilityWarning
             session.currentMove = currentMove
             session.isStoppingMove = isStoppingMove
+            session.runningApp = runningApp
             session.automaticConnectionAllowed = automaticConnectionAllowed
             return session
         }

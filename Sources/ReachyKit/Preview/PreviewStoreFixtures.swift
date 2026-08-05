@@ -97,6 +97,23 @@ import Foundation
             .preview(name: "face_tracking", title: nil, emoji: nil, author: nil, likes: nil, installed: true),
         ]
     }
+
+    public extension RobotAppStatus {
+        /// On the status rather than on a screen's model, for the same reason
+        /// `RobotApp.preview` is: Prefire copies each preview body into a generated
+        /// file, where a leading-dot call resolves against the type expected *there*.
+        static func preview(_ state: State = .running, error: String? = nil) -> RobotAppStatus {
+            RobotAppStatus(app: RobotApp.previewInstalled[0], state: state, error: error)
+        }
+
+        /// The last ten stderr lines are all the daemon keeps, and on a robot whose
+        /// journal is not served over the network they are the only crash output
+        /// there is.
+        static let previewCrashed = RobotAppStatus.preview(
+            .error,
+            error: "ModuleNotFoundError: No module named 'cv2'"
+        )
+    }
 #endif
 
 #if DEBUG

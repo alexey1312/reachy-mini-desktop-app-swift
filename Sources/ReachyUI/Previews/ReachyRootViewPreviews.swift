@@ -53,6 +53,31 @@ import SwiftUI
     )
 }
 
+// The dock, in place. These are the captures that verify it lands *below* the tab bar and shrinks
+// the interface rather than floating over it — which no unit test can see, and which differs
+// between the two size classes: the iPhone shot has the bar above the strip, the iPad one has it
+// at the top of the window with the strip alone at the bottom.
+#Preview("Root — dock on the robot tab") {
+    PreviewScene.root(
+        .preview(runningApp: .preview(.running)),
+        viewport: .preview(sceneModel: .preview(.buildingScene))
+    )
+}
+
+// The reason the dock was hoisted out of the Apps tab: it is the same strip here, and the store
+// below it no longer carries a second copy of the same control.
+#Preview("Root — dock on the apps tab") {
+    PreviewScene.root(.preview(runningApp: .preview(.running)), tab: .apps)
+}
+
+// A crashed app keeps the strip until it has been read, and offers Dismiss rather than Stop.
+#Preview("Root — dock, crashed app") {
+    PreviewScene.root(
+        .preview(runningApp: .previewCrashed),
+        viewport: .preview(sceneModel: .preview(.buildingScene))
+    )
+}
+
 // A wired robot reports no camera; the viewport still shows the 3D model.
 #Preview("Root — no camera") {
     PreviewScene.root(
