@@ -64,6 +64,27 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
 - `GET /api/daemon/hardware-id` answers one key, `{"hardware_id": "<16 hex>"}` = `sha256(usb serial)[:16]` — the same
   string as mDNS TXT `unit_id` and BLE characteristic `…cdef7`. It is a join key: never reshape it.
 
+## Hugging Face on the robot (`/api/hf-auth/*`)
+
+The robot's **own** account, which is not this app's — read `daemon/app/routers/hf_auth.py` and
+`apps/sources/hf_auth.py` in `.venv-sim`. Linking hands the robot a copy of a token so it can register with central;
+this app keeps its own in the Keychain (ADR 0003).
+
+- `POST /save-token`, `DELETE /token`, `GET /status` → `{is_logged_in, username}`.
+- `GET /relay-status` → `{state, message, is_connected}`. A Lite robot answers `state: "unavailable"` with
+  "Coming soon to Lite version" — a state the relay's own enum does not contain, so decode it tolerantly.
+- `POST /refresh-relay`, `GET /central-robot-status`.
+- **No route ever returns the token.** `/status` answers a boolean and a username; the OAuth flow below answers a
+  status and a username. Delegating sign-in to the robot therefore cannot give this app a token of its own — that was
+  checked before building on it.
+- OAuth on the robot: `GET /oauth/configured|start|begin|status/{session_id}|callback`, `DELETE /oauth/session/{id}`.
+  `start` returns `{auth_url, session_id}` to poll; `begin` 302s straight to Hugging Face for a phone that can only
+  open one URL. The default client id is Pollen's own (`71146982-…`, `HF_OAUTH_CLIENT_ID` to override) and its
+  redirects point at the **robot** (`http://reachy-mini.local:8000/api/hf-auth/oauth/callback`, or localhost for Lite),
+  so it cannot be reused by a client with a custom scheme.
+- Daemon 1.9.0 does not mount `hf-auth/oauth/device/*` even though the committed spec has it (see the spec-ahead-of-
+  firmware trap above).
+
 ## Bluetooth service
 
 Read `services/bluetooth/bluetooth_service.py` in `.venv-sim` — the dispatch table is one `if/elif` chain and settles

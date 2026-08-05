@@ -131,12 +131,15 @@ destination and outlives a reboot, so without it whoever last switched that devi
 Run `test:snapshots` before `test:snapshots:record` — it names every reference that moved, which `record` then
 overwrites blind. If _every_ reference moved, suspect the environment rather than the code: check one nothing could
 have affected (`JoystickPad`) against HEAD with `git show HEAD:<png> | git lfs smudge > /tmp/old.png`.
-**Adding previews moves references belonging to screens you did not touch.** Every preview holding an indeterminate
-`ProgressView` — anything named _loading_, _scanning_, _connecting_, _waking up_, _building_ — captures that spinner at
-whatever phase it reached, and the phase depends on where in the run the test lands. Add fourteen previews and roughly
-twenty unrelated references move, deterministically, in every run. It is not flakiness and not the environment: the
-same suite on a clean HEAD passes, and re-recording settles it. Diff one to confirm nothing but the spinner moved
-before accepting a sweep that wide. Reference images are
+**Adding previews can move references belonging to screens you did not touch — but not in proportion to how many.**
+Every preview holding an indeterminate `ProgressView` — anything named _loading_, _scanning_, _connecting_,
+_waking up_, _building_ — captures that spinner at whatever phase it reached, and the phase depends on where in the
+run the test lands, so what actually moves things is a shift in the run's timing rather than the act of adding a
+preview. One session added fourteen previews and roughly twenty unrelated references moved in every run; three later
+additions (eight previews, then one, then six — one of them carrying a spinner) moved none at all. So treat a wide
+sweep as something to explain rather than to expect: it is not flakiness and not the environment — the same suite on a
+clean HEAD passes, and re-recording settles it. Diff one to confirm nothing but the spinner moved before accepting it.
+Reference images are
 **Git LFS**; `bootstrap.sh` enables the filter, and without it they check out as text stubs. LFS uploads objects from
 a `pre-push` hook, and `core.hooksPath` makes git ignore `.git/hooks` — so its four hooks are tracked in `.githooks/`
 alongside the hand-written ones. Drop them and `git push` sends pointers with no data behind them.
