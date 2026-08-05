@@ -78,7 +78,7 @@ jobs:
   # one, so nothing but SwiftLint ever looked at it. This job is the only thing that
   # compiles the app shell and the Tuist manifest that generates it.
   app-build:
-    name: App Build (ReachySpike, macOS)
+    name: App Build (ReachySpike, macOS + iOS)
     runs-on: macos-15
     needs: lint
     timeout-minutes: 60
@@ -102,3 +102,9 @@ jobs:
       # the server project, so there is no binary cache to pull either.
       - name: Build ReachySpike
         run: mise run build:app
+
+      # The macOS destination leaves ReachyWidget out entirely (iOS-only extension,
+      # embedded under `condition: .when([.ios])`), so until this step the widget's
+      # sources were compiled by nothing at all.
+      - name: Build ReachySpike + widget (iOS)
+        run: mise run build:app:ios

@@ -74,6 +74,23 @@ xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike \
   build 2>&1 | xcsift
 '''
 
+# The macOS build above cannot see ReachyWidget: the extension is iOS-only and
+# Project.swift embeds it with `condition: .when([.ios])`, so under `platform=macOS`
+# it is not built at all. `generic/platform=iOS` compiles it without needing a
+# device, a simulator or a signing identity.
+[tasks."build:app:ios"]
+description = "Build the ReachySpike app and its widget extension (iOS, unsigned)"
+depends = ["project"]
+run = '''
+set -o pipefail
+xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachySpike \
+  -destination 'generic/platform=iOS' -configuration Debug \
+  -derivedDataPath Apps/DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  -skipPackagePluginValidation -skipMacroValidation \
+  build 2>&1 | xcsift
+'''
+
 [tasks.test]
 description = "Run all tests (parallel)"
 # --skip-build against a separate build step: building and testing at once hangs.

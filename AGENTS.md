@@ -46,6 +46,7 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 ```bash
 ./bin/mise run build          # Debug build (piped through xcsift)
 ./bin/mise run build:app      # Build the ReachySpike app target (generates first)
+./bin/mise run build:app:ios  # Same, for iOS — the only task that compiles the widget
 ./bin/mise run test           # All tests, parallel
 ./bin/mise run test:filter T  # Filter tests
 ./bin/mise run lint           # SwiftLint --strict + actionlint + hk lockstep
@@ -63,6 +64,11 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 
 `build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Use `build:app` for that; CI runs it as a
 separate job, so app-target breakage no longer reaches `main` unnoticed.
+**`build:app` builds for macOS, where `ReachyWidget` does not exist** — the extension is `destinations: [.iPhone,
+.iPad]` and `Project.swift` embeds it behind `condition: .when([.ios])`, so a macOS destination compiles none of its
+sources and reports success over a widget that does not build. That is how `missing return` in
+`ReachyAppsWidget.swift` reached `main` in #7. `build:app:ios` (`-destination 'generic/platform=iOS'`, unsigned) is
+what covers it, and CI runs both.
 `test:filter` matches type names (`RobotSessionAudioTests`), not `@Suite` display names.
 `SimulatorIntegrationTests` is gated on `REACHY_SIM_HOST`, so plain `test` **skips it silently and reports green** —
 run `test:sim` against a live `sim-daemon` to exercise it.
