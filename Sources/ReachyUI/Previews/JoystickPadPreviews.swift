@@ -14,3 +14,9 @@ import SwiftUI
     JoystickPad { _ in }
         .padding()
 }
+
+// The lit arc has no gesture behind it in a snapshot, so the deflection is injected.
+#Preview("Joystick — turning", traits: .sizeThatFitsLayout) {
+    JoystickPad(deflection: .init(x: 0.95, y: -0.2)) { _ in }
+        .padding()
+}
