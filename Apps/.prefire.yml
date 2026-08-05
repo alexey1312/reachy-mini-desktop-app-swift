@@ -7,6 +7,7 @@ test_configuration:
     - ${PROJECT_DIR}/ReachySpike/Previews
   testable_imports:
     - ReachyKit
+    - ReachyMedia
     - ReachyWidgetUI
   snapshot_devices:
     - iPhone 16 Pro
@@ -22,4 +23,5 @@ playbook_configuration:
   testable_imports:
     - ReachyUI
     - ReachyKit
+    - ReachyMedia
     - ReachyWidgetUI

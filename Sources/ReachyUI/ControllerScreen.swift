@@ -5,21 +5,18 @@ import SwiftUI
 /// Targets stream over `ws/set_target`; the daemon clamps safety limits.
 struct ControllerScreen: View {
     let session: RobotSession
-    let address: RobotAddress
 
-    @State private var client: SetTargetClient?
-    @State private var target: SetTargetClient.Target
+    @State private var client: (any TeleopChannel)?
+    @State private var target: TeleopTarget
     @State private var setupError: String?
     @Environment(\.reachyPreviewMode) private var previewMode
 
     init(
         session: RobotSession,
-        address: RobotAddress,
-        target: SetTargetClient.Target = SetTargetClient.Target(),
+        target: TeleopTarget = TeleopTarget(),
         setupError: String? = nil
     ) {
         self.session = session
-        self.address = address
         _target = State(initialValue: target)
         _setupError = State(initialValue: setupError)
     }
@@ -128,11 +125,11 @@ struct ControllerScreen: View {
     private func start() {
         guard !previewMode else { return }
         do {
-            let client = try SetTargetClient(address: address)
+            let client = try session.makeTeleop()
             self.client = client
             Task { await client.connect() }
         } catch {
-            setupError = "\(error)"
+            setupError = RobotSession.describe(error)
         }
     }
 

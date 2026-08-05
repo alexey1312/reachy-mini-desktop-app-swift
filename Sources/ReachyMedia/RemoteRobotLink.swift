@@ -24,17 +24,20 @@ public final class RemoteRobotLink {
     /// Hand this to `RobotSession.connect(using:)`.
     public let client: RemoteRobotConnection
 
-    public init(robot: CentralRobot, relay: CentralRelayClient) {
-        let camera = CameraSession(
-            signaling: CentralSignalingTransport(relay: relay, robotPeerID: robot.peerID)
-        )
-        self.camera = camera
-        client = RemoteRobotConnection(
-            channel: camera.dataChannel,
+    public convenience init(robot: CentralRobot, relay: CentralRelayClient) {
+        self.init(
+            camera: CameraSession(
+                signaling: CentralSignalingTransport(relay: relay, robotPeerID: robot.peerID)
+            ),
             // Central knows the robot's name and the channel does not, so the
             // listing the user picked from is where it comes from.
             robotName: robot.displayName
         )
+    }
+
+    private init(camera: CameraSession, robotName: String?) {
+        self.camera = camera
+        client = RemoteRobotConnection(channel: camera.dataChannel, robotName: robotName)
     }
 
     /// Opens the relay stream and asks central for a session. Nothing reaches the
@@ -48,3 +51,18 @@ public final class RemoteRobotLink {
         camera.stop()
     }
 }
+
+#if DEBUG
+    public extension RemoteRobotLink {
+        /// A link around a camera that is already in some phase, for the one state
+        /// only a live relay session can otherwise reach: the root view holds this
+        /// as `@State`, so without a seam every preview of a remote robot renders
+        /// "No live view" — the very bug this was written to fix.
+        ///
+        /// Inert, like `CameraSession.preview`: nothing is negotiated until
+        /// `start()`, which no preview calls.
+        static func preview(camera: CameraSession = .preview(.waitingForProducer)) -> RemoteRobotLink {
+            RemoteRobotLink(camera: camera, robotName: "Reachy Mini")
+        }
+    }
+#endif

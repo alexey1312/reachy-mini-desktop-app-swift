@@ -44,8 +44,32 @@ public extension RobotSession {
 
     /// A wired unit has no camera at all, so the UI hides video rather than
     /// offering something that can only fail.
+    ///
+    /// Over the relay the question is already settled: the peer connection that
+    /// carries the commands is the one carrying the video, so there is a camera
+    /// by construction. `wirelessVersion` cannot answer it there — it is reported
+    /// `false` on purpose, to keep `/wifi/*` and `/update/*` closed.
     var hasCamera: Bool {
-        lastStatus?.wirelessVersion == true || lastStatus?.simulationEnabled == true
+        isRemote || lastStatus?.wirelessVersion == true || lastStatus?.simulationEnabled == true
+    }
+
+    /// The 3D model is built from URDF and STL served over `/api/kinematics/*`,
+    /// which is exactly what a relay session cannot reach — the one feature ADR
+    /// 0003 gives up outright.
+    var canRenderScene: Bool {
+        address != nil
+    }
+
+    /// Recorded moves are `/api/move/play/*` and the dataset index beside them,
+    /// both HTTP-only. The data channel can play an *uploaded* move and nothing
+    /// from the robot's own library.
+    ///
+    /// Derived from the link rather than probed with `client is any MovesClient`
+    /// because `listMoves` and friends still live on `RobotAPIClient` behind
+    /// throwing defaults; lifting them onto a sub-protocol touches every test
+    /// double and belongs in its own change.
+    var canPlayMoves: Bool {
+        address != nil
     }
 
     /// `/wifi/*` and `/update/*` are mounted only under `--wireless-version`, so a

@@ -40,6 +40,10 @@ public struct ReachyRootView<Developer: View>: View {
     /// The two ways to reach a robot are two entry points to the same list, so it
     /// is presented from here rather than owned by either screen that offers it.
     @State private var showsRemoteRobots = false
+    /// The account button sits in every tab's bar and they all open the same
+    /// sheet, so the state is here and the sheet is mounted once — the same shape
+    /// `showsRemoteRobots` already has.
+    @State private var showsAccount = false
     /// Held for as long as the remote session is: dropping it would close the
     /// peer connection the session is talking over.
     @State private var remoteLink: RemoteRobotLink?
@@ -73,11 +77,13 @@ public struct ReachyRootView<Developer: View>: View {
         viewport: ViewportModel = ViewportModel(),
         hfAccount: HFAccount? = nil,
         tab: TabID = .robot,
+        remoteLink: RemoteRobotLink? = nil,
         @ViewBuilder developer: () -> Developer
     ) {
         _session = State(initialValue: session)
         _viewport = State(initialValue: viewport)
         _tab = State(initialValue: tab)
+        _remoteLink = State(initialValue: remoteLink)
         _hfAccount = State(
             initialValue: hfAccount ?? HFAccount(store: KeychainHFTokenStore())
         )
@@ -100,6 +106,16 @@ public struct ReachyRootView<Developer: View>: View {
         }
         .environment(\.reachyDeveloperScreen) { [developer] in AnyView(developer) }
         .environment(hfAccount)
+        .sheet(isPresented: $showsAccount) {
+            NavigationStack {
+                HFSignInScreen(session: session, model: HFSignInModel(account: hfAccount))
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showsAccount = false }
+                        }
+                    }
+            }
+        }
         .sheet(isPresented: $showsRemoteRobots) {
             NavigationStack {
                 YourReachiesScreen(
@@ -128,10 +144,10 @@ public struct ReachyRootView<Developer: View>: View {
             guard !previewMode else { return }
             hfAccount.restore()
         }
-        .task(id: viewportAddress) {
+        .task(id: viewportTarget) {
             guard !previewMode else { return }
-            if let viewportAddress {
-                viewport.attach(to: viewportAddress)
+            if let viewportTarget {
+                viewport.attach(to: viewportTarget)
             } else {
                 viewport.detach()
             }
@@ -196,10 +212,21 @@ public struct ReachyRootView<Developer: View>: View {
     private var robotTab: some View {
         switch session.phase {
         case .idle, .connecting:
-            ConnectionScreen(session: session, showRemoteRobots: { showsRemoteRobots = true })
+            // Wrapped only so it has a bar to put the account button in. This is
+            // where signing in matters most: the remote list below is empty until
+            // it happens, and there is no robot yet to reach Settings through.
+            NavigationStack {
+                ConnectionScreen(session: session, showRemoteRobots: { showsRemoteRobots = true })
+                    .navigationTitle("Connect")
+                    .columnTitleStyle()
+                    .hfAccountToolbar(isPresented: $showsAccount)
+            }
         case .connected, .unreachable:
             if isCompact {
-                NavigationStack { RobotScreen(session: session) }
+                NavigationStack {
+                    RobotScreen(session: session)
+                        .hfAccountToolbar(isPresented: $showsAccount)
+                }
             } else {
                 HStack(spacing: 0) {
                     wideViewport
@@ -207,6 +234,7 @@ public struct ReachyRootView<Developer: View>: View {
                     NavigationStack {
                         RobotScreen(session: session)
                             .columnTitleStyle()
+                            .hfAccountToolbar(isPresented: $showsAccount)
                     }
                     .frame(minWidth: 320, idealWidth: 380, maxWidth: 420)
                 }
@@ -218,29 +246,20 @@ public struct ReachyRootView<Developer: View>: View {
     /// it is somewhere a user goes back to, and a widget can open it directly.
     private var appsTab: some View {
         NavigationStack {
-            if session.canManageApps {
-                AppStoreScreen(session: session)
-            } else {
-                // The catalogue is served by the daemon, not by the Hub — the robot
-                // fetches it — so there is genuinely nothing to show without one.
-                // Both ways to get one are offered, because "not on this network"
-                // stopped meaning "out of reach".
-                ContentUnavailableView {
-                    Label("No robot connected", systemImage: "square.grid.2x2")
-                } description: {
-                    Text("Apps are installed on the robot, so this needs one connected.")
-                } actions: {
-                    Button("Find one nearby") { tab = .robot }
-                    Button("Your Reachies") { showsRemoteRobots = true }
+            Group {
+                if session.canManageApps {
+                    AppStoreScreen(session: session)
+                } else {
+                    AppsUnavailableView(isRemote: session.isRemote) { tab = .robot }
                 }
-                .navigationTitle("Apps")
             }
+            .hfAccountToolbar(isPresented: $showsAccount)
         }
     }
 
     @ViewBuilder
     private var wideViewport: some View {
-        if viewportAddress == nil {
+        if viewportTarget == nil {
             ContentUnavailableView(
                 "No live view",
                 systemImage: "cube.transparent",
@@ -248,7 +267,7 @@ public struct ReachyRootView<Developer: View>: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if session.isAwake {
-            ViewportView(model: viewport, offersCamera: session.hasCamera)
+            ViewportView(model: viewport, offersCamera: session.hasCamera, makeTeleop: makeTeleop)
         } else {
             asleepViewport
         }
@@ -261,6 +280,7 @@ public struct ReachyRootView<Developer: View>: View {
             // bar and clipped.
             liveContent
                 .navigationTitle("Live")
+                .hfAccountToolbar(isPresented: $showsAccount)
                 .toolbar {
                     ToolbarItem {
                         Button {
@@ -293,7 +313,7 @@ public struct ReachyRootView<Developer: View>: View {
     @ViewBuilder
     private var liveContent: some View {
         if session.isAwake {
-            ViewportView(model: viewport, offersCamera: session.hasCamera)
+            ViewportView(model: viewport, offersCamera: session.hasCamera, makeTeleop: makeTeleop)
         } else {
             asleepViewport
         }
@@ -311,21 +331,38 @@ public struct ReachyRootView<Developer: View>: View {
     /// Only on iPhone: where there is room, the viewport sits beside the controls
     /// instead of behind a tab.
     private var offersLiveTab: Bool {
-        isCompact && viewportAddress != nil
+        isCompact && viewportTarget != nil
     }
 
-    /// Both the geometry and the state routes sit behind the backend, so an
-    /// address alone is not enough to show anything.
-    private var viewportAddress: RobotAddress? {
-        session.isBackendRunning ? session.address : nil
+    /// Both the geometry and the state routes sit behind the backend, so a link
+    /// alone is not enough to show anything.
+    ///
+    /// Over the relay the camera is the peer connection `RemoteRobotLink` already
+    /// holds — the same one carrying the commands — rather than one this view
+    /// would dial. Reading `session.address` here is what used to make the Live
+    /// tab impossible to reach from outside the robot's network.
+    private var viewportTarget: ViewportModel.Source? {
+        guard session.isBackendRunning else { return nil }
+        switch session.link {
+        case let .lan(address): return .lan(address)
+        case .remote: return remoteLink.map { .remote($0.camera) }
+        case .none: return nil
+        }
     }
 
     /// The single lever for battery: nothing streams unless the viewport is the
     /// thing the user is actually looking at — and a sleeping robot is never that,
     /// however visible the tab is.
     private var viewportIsOnScreen: Bool {
-        guard scenePhase == .active, viewportAddress != nil, session.isAwake else { return false }
+        guard scenePhase == .active, viewportTarget != nil, session.isAwake else { return false }
         return isCompact ? tab == .live : tab == .robot
+    }
+
+    /// Absent where this connection carries no teleop, so the joystick is not
+    /// offered rather than offered inert.
+    private var makeTeleop: TeleopFactory? {
+        guard session.canTeleoperate else { return nil }
+        return { [session] in try session.makeTeleop() }
     }
 }
 

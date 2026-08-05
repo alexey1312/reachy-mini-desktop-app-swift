@@ -28,3 +28,17 @@ import SwiftUI
 #Preview("Viewport — camera waiting") {
     PreviewScene.viewport(.preview(content: .camera, cameraSession: .preview(.waitingForProducer)))
 }
+
+// Over the relay the URDF and its meshes are out of reach, so the 3D pane says so once instead of
+// spinning on a download that is never going to start.
+#Preview("Viewport — no 3D over the relay") {
+    PreviewScene.viewport(.preview(source: .remote(.preview(.waitingForProducer))))
+}
+
+// And with only the camera to show, the switcher is gone rather than offering a dead segment.
+#Preview("Viewport — remote camera") {
+    let camera = CameraSession.preview(.waitingForProducer)
+    return PreviewScene.viewport(
+        .preview(content: .camera, cameraSession: camera, source: .remote(camera))
+    )
+}

@@ -1,4 +1,5 @@
 import ReachyKit
+import ReachyMedia
 @testable import ReachyUI
 import Testing
 
@@ -7,11 +8,15 @@ import Testing
 struct ViewportModelTests {
     private let address = RobotAddress(host: "127.0.0.1")
 
+    private var lan: ViewportModel.Source {
+        .lan(address)
+    }
+
     /// Attaching alone starts nothing — the viewport has to be on screen first.
     @Test("nothing runs until the viewport is active")
     func inactiveStartsNothing() {
         let model = ViewportModel()
-        model.attach(to: address)
+        model.attach(to: lan)
         #expect(model.sceneModel == nil)
         #expect(model.cameraSession == nil)
         model.detach()
@@ -21,13 +26,13 @@ struct ViewportModelTests {
     func attachIsIdempotent() throws {
         let model = ViewportModel()
         model.setActive(true)
-        model.attach(to: address)
+        model.attach(to: lan)
         let scene = try #require(model.sceneModel)
 
-        model.attach(to: address)
+        model.attach(to: lan)
         #expect(model.sceneModel === scene)
 
-        model.attach(to: RobotAddress(host: "127.0.0.2"))
+        model.attach(to: .lan(RobotAddress(host: "127.0.0.2")))
         #expect(model.sceneModel !== scene)
         model.detach()
     }
@@ -36,7 +41,7 @@ struct ViewportModelTests {
     func switchingKeepsScene() throws {
         let model = ViewportModel()
         model.setActive(true)
-        model.attach(to: address)
+        model.attach(to: lan)
         let scene = try #require(model.sceneModel)
 
         model.setContent(.camera)
@@ -55,7 +60,7 @@ struct ViewportModelTests {
     func suspendDropsCameraOnly() throws {
         let model = ViewportModel()
         model.setActive(true)
-        model.attach(to: address)
+        model.attach(to: lan)
         model.setContent(.camera)
         let scene = try #require(model.sceneModel)
 
@@ -73,10 +78,103 @@ struct ViewportModelTests {
     func detachIsIdempotent() {
         let model = ViewportModel()
         model.setActive(true)
-        model.attach(to: address)
+        model.attach(to: lan)
         model.detach()
         model.detach()
         #expect(model.sceneModel == nil)
         #expect(model.cameraSession == nil)
+    }
+
+    // MARK: A borrowed camera
+
+    /// The riskiest thing in the whole change. Over the relay this camera is the
+    /// peer connection the robot's *commands* ride on, so the battery-saving
+    /// teardown that is correct for a camera we dialled would disconnect the robot.
+    ///
+    /// `CameraSession.stop()` returns the phase to `.connecting`, so a session
+    /// still reading `.streaming` afterwards is proof nothing stopped it.
+    @Test("suspending does not stop a borrowed camera")
+    func suspendKeepsABorrowedCamera() {
+        let camera = CameraSession.preview(.streaming)
+        let model = ViewportModel()
+        model.setActive(true)
+        model.attach(to: .remote(camera))
+
+        model.setActive(false)
+
+        #expect(camera.phase == .streaming)
+    }
+
+    /// Same for leaving the robot screen altogether: the session outlives the
+    /// viewport, and `RemoteRobotLink` is what ends it.
+    @Test("detaching does not stop a borrowed camera")
+    func detachKeepsABorrowedCamera() {
+        let camera = CameraSession.preview(.streaming)
+        let model = ViewportModel()
+        model.setActive(true)
+        model.attach(to: .remote(camera))
+
+        model.detach()
+
+        #expect(camera.phase == .streaming)
+        #expect(model.cameraSession == nil)
+    }
+
+    /// A borrowed camera is adopted rather than built, so it is on screen from the
+    /// first frame instead of renegotiating a connection that is already up.
+    @Test("a remote source shows the camera it was handed")
+    func adoptsTheBorrowedCamera() {
+        let camera = CameraSession.preview(.streaming)
+        let model = ViewportModel()
+        model.setActive(true)
+
+        model.attach(to: .remote(camera))
+
+        #expect(model.cameraSession === camera)
+        #expect(model.content == .camera)
+    }
+
+    /// The URDF and the STL meshes are HTTP-only, so there is no 3D model to switch
+    /// to — and the switcher must not offer one.
+    @Test("a remote source offers no scene")
+    func remoteOffersNoScene() {
+        let model = ViewportModel()
+        model.setActive(true)
+        model.attach(to: .remote(.preview(.streaming)))
+
+        #expect(!model.offersScene)
+        #expect(model.sceneUnavailableReason != nil)
+
+        model.setContent(.scene)
+
+        #expect(model.content == .camera)
+        #expect(model.sceneModel == nil)
+    }
+
+    @Test("a local source offers the scene and names no reason not to")
+    func localOffersTheScene() {
+        let model = ViewportModel()
+        model.setActive(true)
+        model.attach(to: lan)
+
+        #expect(model.offersScene)
+        #expect(model.sceneUnavailableReason == nil)
+        model.detach()
+    }
+
+    /// Swapping a borrowed camera for a dialled one must not stop the borrowed one
+    /// on the way out.
+    @Test("moving from a remote source to a local one leaves the borrowed camera running")
+    func handsBackTheBorrowedCamera() {
+        let camera = CameraSession.preview(.streaming)
+        let model = ViewportModel()
+        model.setActive(true)
+        model.attach(to: .remote(camera))
+
+        model.attach(to: lan)
+
+        #expect(camera.phase == .streaming)
+        #expect(model.offersScene)
+        model.detach()
     }
 }

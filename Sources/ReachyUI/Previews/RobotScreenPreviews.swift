@@ -39,7 +39,18 @@ import SwiftUI
 }
 
 // Every identity field is optional and the daemon may report none of them; the screen falls back
-// to em dashes and drops the navigation links it has no address for.
+// to em dashes and drops the links whose transport it does not have.
 #Preview("Robot — nothing reported") {
     PreviewScene.robotScreen(.preview(phase: .connected(RobotIdentity()), status: nil, address: nil))
+}
+
+// Over the relay the connection is named rather than addressed, and only the moves are gone: the
+// recorded-move library is HTTP-only, while the joystick and the journal both ride the data
+// channel. Before this, all three vanished together for want of an address.
+#Preview("Robot — over the relay") {
+    PreviewScene.robotScreen(.preview(
+        address: nil,
+        link: .remote,
+        client: PreviewRemoteRobotClient()
+    ))
 }

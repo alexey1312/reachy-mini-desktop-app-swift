@@ -30,6 +30,13 @@ public enum ReachyKitError: Error, Sendable, Equatable {
     case hfAuthUnavailable
     /// Any other status the daemon rejected the call with.
     case daemonRejected(statusCode: Int)
+    /// This connection cannot tail the robot's journal. Appended rather than
+    /// slotted in beside its siblings: a bare enum reaches a screenshot as
+    /// `error <declaration index>`, so inserting a case renumbers every one after
+    /// it and silently rewrites what a past bug report was naming.
+    case daemonLogsUnavailable
+    /// This connection cannot stream teleop targets.
+    case teleopUnavailable
 
     /// Maps a daemon HTTP status onto the cases callers can act on.
     static func fromStatusCode(_ statusCode: Int) -> ReachyKitError {
@@ -64,6 +71,10 @@ extension ReachyKitError: LocalizedError {
             "This robot's Hugging Face account cannot be reached over this connection"
         case let .daemonRejected(statusCode):
             "The daemon rejected the request (HTTP \(statusCode))"
+        case .daemonLogsUnavailable:
+            "The daemon's logs cannot be read over this connection"
+        case .teleopUnavailable:
+            "The robot cannot be driven over this connection"
         }
     }
 }

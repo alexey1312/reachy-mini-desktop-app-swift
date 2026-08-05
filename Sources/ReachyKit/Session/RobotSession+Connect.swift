@@ -11,16 +11,16 @@ public extension RobotSession {
             automaticConnectionAllowed = true
         }
 
-        let attemptID = beginAttempt(at: address)
+        let attemptID = beginAttempt(over: .lan(address))
         let client: any RobotAPIClient
         do {
             client = try makeClient(address)
         } catch {
-            return failAttempt(.connect, error: error, address: address, automatically: automatically)
+            return failAttempt(.connect, error: error, link: .lan(address), automatically: automatically)
         }
         return await settle(
             client: client,
-            address: address,
+            link: .lan(address),
             attemptID: attemptID,
             automatically: automatically
         )
@@ -35,15 +35,15 @@ public extension RobotSession {
     func connect(using client: any RobotAPIClient) async -> Bool {
         // Picking a robot off the remote list is as explicit as typing an address.
         automaticConnectionAllowed = true
-        let attemptID = beginAttempt(at: nil)
-        return await settle(client: client, address: nil, attemptID: attemptID, automatically: false)
+        let attemptID = beginAttempt(over: .remote)
+        return await settle(client: client, link: .remote, attemptID: attemptID, automatically: false)
     }
 
-    private func beginAttempt(at address: RobotAddress?) -> UUID {
+    private func beginAttempt(over link: Link) -> UUID {
         let attemptID = UUID()
         connectionAttemptID = attemptID
         resetConnectionState()
-        self.address = address
+        self.link = link
         phase = .connecting(.handshaking)
         lastError = nil
         return attemptID
@@ -54,7 +54,7 @@ public extension RobotSession {
     /// how its client reaches the robot.
     private func settle(
         client: any RobotAPIClient,
-        address: RobotAddress?,
+        link: Link,
         attemptID: UUID,
         automatically: Bool
     ) async -> Bool {
@@ -75,7 +75,7 @@ public extension RobotSession {
             // A property of the daemon, not of how it was reached, so it is set for
             // a remote session too — where the answer is simply always no.
             supportsRename = handshake.supportsRename
-            if let address {
+            if case let .lan(address) = link {
                 KnownRobots.lastAddress = address
                 KnownRobots.remember(identity: handshake.identity, address: address)
                 // A robot set up over Bluetooth has arrived under its own identity. This is
@@ -109,7 +109,7 @@ public extension RobotSession {
                 resetConnectionState()
                 return false
             }
-            return failAttempt(.connect, error: error, address: address, automatically: automatically)
+            return failAttempt(.connect, error: error, link: link, automatically: automatically)
         }
     }
 
@@ -200,7 +200,7 @@ extension RobotSession {
             case .backendDown:
                 return haltOnUnavailableBackend(identity: identity)
             case let .failed(error):
-                return failAttempt(.backend, error: error, address: address, automatically: automatically)
+                return failAttempt(.backend, error: error, link: link, automatically: automatically)
             case .keepWaiting:
                 guard ContinuousClock.now < deadline else {
                     return haltOnUnavailableBackend(identity: identity)
@@ -253,17 +253,18 @@ extension RobotSession {
     func failAttempt(
         _ stage: ConnectionStage,
         error: Error,
-        address: RobotAddress?,
+        link: Link,
         automatically: Bool
     ) -> Bool {
         let message = Self.describe(error)
         resetConnectionState()
         lastError = message
         guard !automatically else { return false }
+        // Restored after the reset so the failure names what was being reached.
         // A remote attempt has no address and still has to show its failure: the
         // user picked that robot off a list, and gating the report on an address
         // would swallow every remote failure there is.
-        self.address = address
+        self.link = link
         phase = .connecting(.failed(stage, message: message))
         return false
     }

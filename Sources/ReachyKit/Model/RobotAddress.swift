@@ -45,6 +45,16 @@ public struct RobotAddress: Hashable, Sendable, Codable {
         }
     }
 
+    /// How an address is written for a user: brackets around an IPv6 literal, and
+    /// the port only when it is not the default one.
+    ///
+    /// Lives here rather than beside a screen because `RobotSession.Link` has to
+    /// name itself too, and that is a decision about the model, not about a view.
+    public var displayString: String {
+        let hostPart = host.contains(":") ? "[\(host)]" : host
+        return port == Self.defaultPort ? hostPart : "\(hostPart):\(port)"
+    }
+
     /// Root URL of the daemon, e.g. `http://reachy-mini.local:8000`.
     /// Generated OpenAPI operation paths already include the `/api` prefix.
     public var rootURL: URL? {

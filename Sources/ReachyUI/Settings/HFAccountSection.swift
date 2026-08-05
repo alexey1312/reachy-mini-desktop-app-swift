@@ -81,37 +81,13 @@ struct HFAccountSection: View {
 
     private func accountLabel(username: String, caption: String) -> some View {
         HStack(spacing: 10) {
-            avatar(for: username)
+            HFAvatar(username: username)
             VStack(alignment: .leading, spacing: 1) {
                 Text(username)
                 Text(caption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        }
-    }
-
-    /// The Hub serves an avatar per username. A snapshot must not go to the
-    /// network, so previews stop at the monogram the placeholder already draws.
-    @ViewBuilder
-    private func avatar(for username: String) -> some View {
-        let monogram = Circle()
-            .fill(.tint.opacity(0.2))
-            .overlay { Text(username.prefix(1).uppercased()).font(.headline) }
-            .frame(width: 32, height: 32)
-
-        if previewMode {
-            monogram
-        } else if let url = URL(string: "https://huggingface.co/api/users/\(username)/avatar") {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                monogram
-            }
-            .frame(width: 32, height: 32)
-            .clipShape(.circle)
-        } else {
-            monogram
         }
     }
 

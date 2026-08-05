@@ -3,14 +3,14 @@ import SwiftUI
 
 /// Live daemon log console (journalctl tail over WebSocket).
 struct LogConsoleScreen: View {
-    let address: RobotAddress
+    let session: RobotSession
 
     @State private var model: LogConsoleModel
     @State private var setupError: String?
     @Environment(\.reachyPreviewMode) private var previewMode
 
-    init(address: RobotAddress, model: LogConsoleModel = LogConsoleModel(), setupError: String? = nil) {
-        self.address = address
+    init(session: RobotSession, model: LogConsoleModel = LogConsoleModel(), setupError: String? = nil) {
+        self.session = session
         _model = State(initialValue: model)
         _setupError = State(initialValue: setupError)
     }
@@ -18,24 +18,33 @@ struct LogConsoleScreen: View {
     var body: some View {
         LogConsoleView(
             model: model,
-            source: address.displayString,
-            emptyDescription: "Daemon logs come from journalctl on the robot — the local simulator has none.",
+            source: session.link.displayString,
+            emptyDescription: emptyDescription,
             failure: setupError
         )
         .navigationTitle("Daemon logs")
         .task { await stream() }
     }
 
+    /// The two transports go quiet for different reasons, and naming the wrong one
+    /// sends the reader looking for a problem they do not have. The LAN route needs
+    /// `--wireless-version` and the simulator refuses the upgrade outright; the
+    /// channel reaches every robot but still needs a journal at the other end.
+    private var emptyDescription: String {
+        session.isRemote
+            ? "Daemon logs come from journalctl on the robot, which a development host may not have."
+            : "Daemon logs come from journalctl on the robot — the local simulator has none."
+    }
+
     /// `.task` cancels the stream when the screen goes away — no manual task handle.
     private func stream() async {
         guard !previewMode else { return }
         do {
-            let client = try LogStreamClient(address: address)
-            for await chunk in client.lines() {
+            for await chunk in try session.daemonLogLines() {
                 model.ingest(chunk)
             }
         } catch {
-            setupError = "\(error)"
+            setupError = RobotSession.describe(error)
         }
     }
 }

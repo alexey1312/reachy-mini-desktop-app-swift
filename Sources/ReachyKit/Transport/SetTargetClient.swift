@@ -9,29 +9,10 @@ import Foundation
 public actor SetTargetClient {
     public static let path = "/api/move/ws/set_target"
 
-    public struct Target: Sendable, Equatable {
-        /// Head pose offsets from neutral, meters / radians.
-        public var x, y, z, roll, pitch, yaw: Double
-        public var bodyYaw: Double
-        public var antennaLeft: Double
-        public var antennaRight: Double
-
-        public init(
-            x: Double = 0, y: Double = 0, z: Double = 0,
-            roll: Double = 0, pitch: Double = 0, yaw: Double = 0,
-            bodyYaw: Double = 0, antennaLeft: Double = 0, antennaRight: Double = 0
-        ) {
-            self.x = x
-            self.y = y
-            self.z = z
-            self.roll = roll
-            self.pitch = pitch
-            self.yaw = yaw
-            self.bodyYaw = bodyYaw
-            self.antennaLeft = antennaLeft
-            self.antennaRight = antennaRight
-        }
-    }
+    /// The target moved to `TeleopTarget` when the data channel grew a second way
+    /// to send one. Kept as a name so the screens and tests that spell it this way
+    /// are unchanged.
+    public typealias Target = TeleopTarget
 
     public private(set) var lastServerError: String?
 
@@ -108,5 +89,15 @@ public actor SetTargetClient {
         // head-pose payload encodes asymmetrically; a flat dict is the wire truth
         // swiftlint:disable:next force_try
         return try! JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+    }
+}
+
+/// Every requirement is already satisfied verbatim — an actor's isolated method
+/// meets an `async` one.
+extension SetTargetClient: TeleopChannel {}
+
+extension RobotConnection: TeleopClient {
+    public nonisolated func makeTeleop() throws -> any TeleopChannel {
+        try SetTargetClient(address: address)
     }
 }

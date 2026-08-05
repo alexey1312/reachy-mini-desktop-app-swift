@@ -1,8 +1,18 @@
+import ReachyKit
 @testable import ReachyUI
 import SwiftUI
 
 #Preview("Log console — streaming") {
     PreviewScene.logConsole()
+}
+
+// The journal reaches this console over the relay too — `subscribe_logs` on the data channel,
+// where the LAN route needs `--wireless-version` and a simulator refuses it outright. The source
+// label names the transport rather than an address it does not have.
+#Preview("Log console — over the relay") {
+    PreviewScene.logConsole(
+        session: .preview(address: nil, link: .remote, client: PreviewRemoteRobotClient())
+    )
 }
 
 #Preview("Log console — waiting for logs") {

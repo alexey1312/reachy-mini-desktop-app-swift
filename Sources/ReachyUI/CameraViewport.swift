@@ -8,10 +8,12 @@ import SwiftUI
 /// around without leaving the video.
 struct CameraViewport: View {
     let session: CameraSession
-    let address: RobotAddress
+    /// `nil` hides the joystick outright rather than showing one that cannot move
+    /// anything.
+    var makeTeleop: TeleopFactory?
 
-    @State private var teleop: SetTargetClient?
-    @State private var target = SetTargetClient.Target()
+    @State private var teleop: (any TeleopChannel)?
+    @State private var target = TeleopTarget()
     @Environment(\.reachyPreviewMode) private var previewMode
 
     /// Same comfortable head range as `ControllerScreen`; the daemon clamps anyway.
@@ -53,7 +55,7 @@ struct CameraViewport: View {
 
     @ViewBuilder
     private var joystick: some View {
-        if session.phase == .streaming {
+        if session.phase == .streaming, makeTeleop != nil {
             JoystickPad { x, y in
                 target.yaw = -x * headAngle
                 target.pitch = y * headAngle
@@ -67,7 +69,7 @@ struct CameraViewport: View {
 
     private func connectTeleop() {
         guard !previewMode else { return }
-        guard teleop == nil, let client = try? SetTargetClient(address: address) else { return }
+        guard teleop == nil, let client = try? makeTeleop?() else { return }
         teleop = client
         Task { await client.connect() }
     }
