@@ -16,15 +16,19 @@ struct RobotSnapshotTests {
     }
 
     private func snapshot(
+        robotID: String? = "robot-a",
         name: String? = "kitchen",
         isAwake: Bool = true,
         runningApp: String? = nil,
+        runningAppName: String? = nil,
         takenAt: Date? = nil
     ) -> RobotSnapshot {
         RobotSnapshot(
+            robotID: robotID,
             robotName: name,
             isAwake: isAwake,
             runningApp: runningApp,
+            runningAppName: runningAppName,
             takenAt: takenAt ?? now
         )
     }
@@ -102,5 +106,99 @@ struct RobotSnapshotTests {
 
         #expect(store.current == nil)
         #expect(store.state(at: now) == .unknown)
+    }
+
+    /// A reading written by a build that predates `runningAppName` must survive an
+    /// update, not throw. A literal blob rather than a re-encode: encoding with
+    /// today's type would put the field back and prove nothing.
+    @Test("a snapshot written before the running app had a name still decodes")
+    func decodesABlobWithoutTheName() throws {
+        let defaults = try #require(UserDefaults(suiteName: "RobotSnapshotTests.\(UUID().uuidString)"))
+        let legacy = """
+        {"robotName":"kitchen","isAwake":true,"takenAt":\(now.timeIntervalSinceReferenceDate)}
+        """
+        defaults.set(Data(legacy.utf8), forKey: RobotSnapshotStore.key)
+
+        let current = try #require(RobotSnapshotStore(defaults: defaults).current)
+
+        #expect(current.robotName == "kitchen")
+        #expect(current.robotID == nil)
+        #expect(current.isAwake)
+        #expect(current.runningApp == nil)
+        #expect(current.runningAppName == nil)
+        #expect(current.takenAt == now)
+    }
+
+    /// Whoever learned this only re-checked one field, so the rest of the reading
+    /// has to survive.
+    @Test("recording a running app keeps the rest of the reading")
+    func recordsARunningApp() throws {
+        let store = try store()
+        store.write(snapshot(takenAt: now.addingTimeInterval(-300)))
+
+        store.recordRunningApp(title: "Dance Party", name: "reachy_mini_dance", at: now)
+
+        let current = try #require(store.current)
+        #expect(current.robotName == "kitchen")
+        #expect(current.isAwake)
+        #expect(current.runningApp == "Dance Party")
+        #expect(current.runningAppName == "reachy_mini_dance")
+        #expect(current.runningAppTakenAt == now)
+        // The caller had just spoken to the robot, so the reading is that fresh.
+        #expect(current.takenAt == now)
+    }
+
+    /// Nothing running is a fact, not an absence of one.
+    @Test("recording no running app clears the last one")
+    func clearsARunningApp() throws {
+        let store = try store()
+        store.write(snapshot(runningApp: "Dance Party", runningAppName: "reachy_mini_dance"))
+
+        store.recordRunningApp(title: nil, name: nil, at: now)
+
+        let current = try #require(store.current)
+        #expect(current.runningApp == nil)
+        #expect(current.runningAppName == nil)
+        #expect(current.runningAppTakenAt == nil)
+        #expect(current.robotName == "kitchen")
+    }
+
+    @Test("recording a running app with nothing to merge into still writes one")
+    func recordsWithoutAPriorReading() throws {
+        let store = try store()
+
+        store.recordRunningApp(title: "Dance Party", name: "reachy_mini_dance", at: now)
+
+        let current = try #require(store.current)
+        #expect(current.robotName == nil)
+        #expect(current.runningApp == "Dance Party")
+        #expect(store.state(at: now) == .fresh(current))
+    }
+
+    @Test("a caller that learned the motor state passes it through")
+    func recordsAwakeness() throws {
+        let store = try store()
+        store.write(snapshot(isAwake: true))
+
+        store.recordRunningApp(title: nil, name: nil, isAwake: false, at: now)
+
+        #expect(store.current?.isAwake == false)
+    }
+
+    @Test("a running app expires independently of a newer daemon reading")
+    func expiresTheRunningAppIndependently() {
+        let appReading = now.addingTimeInterval(-RobotSnapshotStore.freshness - 1)
+        let snapshot = RobotSnapshot(
+            robotID: "robot-a",
+            robotName: "kitchen",
+            isAwake: true,
+            runningApp: "Dance Party",
+            runningAppName: "reachy_mini_dance",
+            runningAppTakenAt: appReading,
+            takenAt: now
+        )
+
+        #expect(snapshot.runningAppName(at: now) == nil)
+        #expect(snapshot.runningAppTitle(at: now) == nil)
     }
 }
