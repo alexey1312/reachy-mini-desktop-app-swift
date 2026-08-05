@@ -94,6 +94,14 @@ is Linux/BlueZ, so nothing simulates it.
 `.venv-sim` does hold the daemon's own source (`lib/python3.12/site-packages/reachy_mini/`) — read
 `daemon/app/routers/*.py` and `daemon/app/services/` there rather than inferring a route's shape. Still a
 specification (rule 1), never code to port.
+It is 1.4 GB, gitignored and **per-worktree**, so a fresh worktree spends 10–15 minutes in pip (mujoco, GStreamer)
+before the daemon starts — it is installing, not hung; watch `.venv-sim` growing rather than the port. A warm pip
+cache cuts the next one to a couple of minutes. **Do not move it out of the worktree to share it between them.**
+Both a relocated copy and a clean install into `~/.cache` leave the daemon stuck before it binds :8000, logging
+`External plugin loader failed` — while the same venv under the worktree serves in four seconds. The cause is not
+the scanner binary (it executes fine from either path) and was not identified; the shared-cache experiment is a
+dead end, not an unfinished idea. Probe readiness on `/api/daemon/status` — **there is no `/api/status`**, so a
+poll for it reports a healthy daemon as down.
 
 **An App Group is not a wildcard capability.** `iOS Team Provisioning Profile: *` cannot carry one, so every target
 that declares it — the app and each extension separately, each with its own App ID — needs it added once through
@@ -105,6 +113,8 @@ Snapshots live in `Apps/` as an Xcode target because they need an iOS simulator,
 `mise run project` writes the storybook playbook before calling tuist: `Apps/ReachyStorybook/Generated` is gitignored
 and `Project.swift` globs it unconditionally, so generation — and with it `build:app` and every snapshot task — failed
 outright on a fresh clone and in CI until the generator ran. Do not drop that step.
+`Apps/<App>/Previews/**` is in the storybook and snapshot targets' `sources` but **not** in the app target's
+(`ReachySpike/Sources/**` only), so a helper the app itself must see belongs in `Sources/`.
 **Previews compile only in the Xcode targets, so `swift build` cannot vet them** — and Prefire copies each preview
 body into a generated file, where a leading-dot call resolves against the type expected _there_. A `static func`
 helper for an element type therefore belongs on that element (`KnownRobotsModel.Entry.preview`), not on its owner:
@@ -148,6 +158,9 @@ the pre-commit hook only re-stages what it reformatted (`*.swift`, `*.md`) — n
 There is no CI job yet: local Xcode and the CI pin differ, so references recorded on one fail on the other.
 `test:snapshots` compares the images either side of the run and fails if any had to be written — Prefire generates
 `record: .missing`, so a reference that does not exist yet is created rather than compared.
+**`Root-connected`, `Root-no-camera` and `Root-unreachable` are byte-identical on iPhone**: the compact connected
+root captures as a near-blank ghost, so those three verify nothing and a change to that layout passes untested.
+Their iPad captures are the ones carrying the layout — check a compact change against a preview that renders.
 `Apps/.prefire.yml` carries no comments on purpose: Prefire's hand-rolled YAML parser reads a comment line ending in
 `:` as a config key, warns, and moves on — a helpful comment silently becomes an unknown setting.
 **Macros that ship with Xcode rather than with the toolchain break `swift build`.** The pinned swift.org toolchain has

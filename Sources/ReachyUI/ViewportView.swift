@@ -10,22 +10,10 @@ struct ViewportView: View {
     /// The robot reports no camera at all on a wired unit — then there is nothing
     /// to switch between and the control is hidden rather than disabled.
     let offersCamera: Bool
-    /// Which safe-area insets the backdrop may bleed into. The floating tab bar is
-    /// glass and renders whatever lies under it, so the inset it occupies — bottom
-    /// on iPhone, top on iPad — has to stay unpainted, or the bar goes dark on this
-    /// tab alone, a frame behind the switch. Sideways is always safe; upwards only
-    /// where a bar pinned to match is waiting for the black.
-    var backdropEdges: Edge.Set = .horizontal
 
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // One backdrop for both contents, so the chrome above has a single thing to
-            // be legible against. The camera already letterboxes onto black; the 3D scene
-            // otherwise takes the system background and turns white in the light
-            // appearance, which is what left the title unreadable.
-            // `background(_:)` would otherwise default to `ignoresSafeAreaEdges: .all`.
-            .background(Color.black, ignoresSafeAreaEdges: backdropEdges)
             .overlay(alignment: .topLeading) { chrome }
     }
 

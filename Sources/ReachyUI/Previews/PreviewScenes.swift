@@ -133,8 +133,12 @@ enum PreviewScene {
         .preview()
     }
 
-    static func root(_ session: RobotSession, viewport: ViewportModel? = nil) -> some View {
-        ReachyRootView(session: session, viewport: viewport ?? .preview()) {
+    static func root(
+        _ session: RobotSession,
+        viewport: ViewportModel? = nil,
+        tab: ReachyRootView<Text>.TabID = .robot
+    ) -> some View {
+        ReachyRootView(session: session, viewport: viewport ?? .preview(), tab: tab) {
             Text("Developer tools")
         }
         .preview()

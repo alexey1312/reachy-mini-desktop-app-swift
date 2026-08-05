@@ -86,6 +86,42 @@ struct OrbitCameraTests {
         #expect(simd_distance(afterFirst, afterSecond) > 0.01)
     }
 
+    /// Switching the viewport to the camera and back tears the `RealityView` down and
+    /// builds a new one. Carrying one `PerspectiveCamera` across that leaves the new
+    /// scene with no active camera: the robot, its lighting and the right scene are all
+    /// present and nothing whatever is drawn. So each view gets its own camera — which
+    /// has to arrive already holding the angle the user dragged to, or every switch
+    /// would snap the view back to the default three-quarters.
+    @Test("each view gets a fresh camera, at the angle the last one had")
+    func makeEntityIsFreshAndKeepsTheViewpoint() {
+        let camera = OrbitCamera()
+        camera.frame(robotBounds)
+        camera.drag(translation: SIMD2(90, 0))
+        camera.endGesture()
+        let first = camera.entity
+        let viewpoint = first.position(relativeTo: nil)
+
+        let second = camera.makeEntity()
+        #expect(second !== first)
+        #expect(camera.entity === second)
+        #expect(simd_distance(second.position(relativeTo: nil), viewpoint) < 1e-5)
+    }
+
+    /// The controller has to write to whichever camera is in the scene now; driving the
+    /// discarded one would leave the view frozen after a switch.
+    @Test("gestures drive the newest camera, not the discarded one")
+    func gesturesFollowTheNewestCamera() {
+        let camera = OrbitCamera()
+        camera.frame(robotBounds)
+        let discarded = camera.entity
+        let current = camera.makeEntity()
+        let before = discarded.position(relativeTo: nil)
+
+        camera.drag(translation: SIMD2(120, 0))
+        #expect(simd_distance(current.position(relativeTo: nil), before) > 0.01)
+        #expect(simd_distance(discarded.position(relativeTo: nil), before) < 1e-5)
+    }
+
     @Test("zooming cannot pass through the model or fly away")
     func zoomIsBounded() {
         let camera = OrbitCamera()
