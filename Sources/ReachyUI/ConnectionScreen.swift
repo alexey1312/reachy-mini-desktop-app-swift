@@ -83,6 +83,7 @@ struct ConnectionScreen: View {
             progress.observe(phase)
         }
         .onDisappear {
+            guard !previewMode else { return }
             sweep?.stop()
             browser.stop()
             knownRobots?.stop()

@@ -90,7 +90,7 @@ public final class CameraSession {
         guard eventsTask == nil else { return }
         // Read before anyone can tap, so a mic already refused in Settings shows as
         // refused rather than as an ordinary muted button waiting to be pressed.
-        micPermission = MicrophonePermission.current
+        refreshMicPermission()
         configureAudioSession()
         eventsTask = Task { [signaling, connection] in
             // Sim registers no producer until media is acquired; harmless elsewhere.
@@ -123,6 +123,17 @@ public final class CameraSession {
             isMicEnabled = true
             micTrack?.isEnabled = true
         }
+    }
+
+    /// Re-reads the non-prompting authorization status after the app returns from
+    /// Settings. A session survives that round trip, so the value captured by
+    /// `start()` would otherwise leave a newly granted microphone looking blocked
+    /// until the whole camera session was rebuilt.
+    public func refreshMicPermission() {
+        micPermission = MicrophonePermission.current
+        guard micPermission != .granted else { return }
+        isMicEnabled = false
+        micTrack?.isEnabled = false
     }
 
     // MARK: - Signaling events
@@ -287,7 +298,6 @@ public final class CameraSession {
             try? session.setActive(true)
         #endif
     }
-
 }
 
 /// Bridges nonisolated WebRTC delegate callbacks onto the MainActor session.

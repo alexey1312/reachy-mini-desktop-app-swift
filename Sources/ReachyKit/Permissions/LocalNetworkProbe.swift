@@ -62,7 +62,9 @@ public enum LocalNetworkProbe {
         await withTaskGroup(of: PermissionState?.self) { group in
             group.addTask {
                 for await event in events() {
-                    if let resolved = classify(event) { return resolved }
+                    if let resolved = classify(event) {
+                        return resolved
+                    }
                 }
                 return nil
             }
