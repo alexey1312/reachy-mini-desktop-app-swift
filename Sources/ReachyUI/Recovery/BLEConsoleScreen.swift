@@ -23,7 +23,7 @@ struct BLEConsoleScreen: View {
                 journal
             }
         }
-        .navigationTitle("Recovery")
+        .navigationTitle(.reachy("Recovery"))
         .onAppear {
             guard !previewMode else { return }
             model.startScan()
@@ -44,7 +44,7 @@ struct BLEConsoleScreen: View {
                     if model.discovered.isEmpty {
                         HStack(spacing: 10) {
                             ProgressView()
-                            Text("Searching over Bluetooth…").foregroundStyle(.secondary)
+                            Text(.reachy("Searching over Bluetooth…")).foregroundStyle(.secondary)
                         }
                     }
                     ForEach(model.discovered) { robot in
@@ -52,22 +52,25 @@ struct BLEConsoleScreen: View {
                             Task { await model.connect(to: robot.id) }
                         } label: {
                             LabeledContent(robot.name) {
-                                Text("\(robot.rssi) dBm").font(.caption.monospaced())
+                                Text(.reachy("\(robot.rssi) dBm")).font(.caption.monospaced())
                             }
                         }
                         .disabled(model.isBusy)
                     }
                 case .poweredOff:
-                    Label("Bluetooth is switched off.", systemImage: "antenna.radiowaves.left.and.right.slash")
+                    Label(.reachy("Bluetooth is switched off"), systemImage: "antenna.radiowaves.left.and.right.slash")
                 case .unauthorized:
-                    Label("This app can't use Bluetooth.", systemImage: "hand.raised")
+                    Label(.reachy("This app can't use Bluetooth"), systemImage: "hand.raised")
                 case .unsupported:
-                    Label("This device has no Bluetooth.", systemImage: "antenna.radiowaves.left.and.right.slash")
+                    Label(
+                        .reachy("This device has no Bluetooth"),
+                        systemImage: "antenna.radiowaves.left.and.right.slash"
+                    )
                 }
             } header: {
-                Text("Robot")
+                Text(.reachy("Robot"))
             } footer: {
-                Text("Robots all advertise the same name, so they are listed by signal strength.")
+                Text(.reachy("Robots all advertise the same name, so they are listed by signal strength."))
             }
             if let error = model.errorMessage {
                 Section {
@@ -87,8 +90,8 @@ struct BLEConsoleScreen: View {
         LogConsoleView(
             model: model.log,
             source: model.hardwareID ?? "bluetooth",
-            emptyDescription: "The robot only logs when something happens. A quiet robot "
-                + "sends nothing, and this stays empty."
+            emptyDescription: String(localized: .reachy("The robot only logs when something happens. A quiet robot "))
+                + String(localized: .reachy("sends nothing, and this stays empty."))
         )
         .safeAreaInset(edge: .top) { notices }
         .toolbar {
@@ -96,7 +99,7 @@ struct BLEConsoleScreen: View {
                 Button {
                     showsCommands = true
                 } label: {
-                    Label("Commands", systemImage: "wrench.and.screwdriver")
+                    Label(.reachy("Commands"), systemImage: "wrench.and.screwdriver")
                 }
             }
         }
@@ -105,7 +108,7 @@ struct BLEConsoleScreen: View {
                 BLERecoveryCommandsSheet(model: model)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { showsCommands = false }
+                            Button(.reachy("Done")) { showsCommands = false }
                         }
                     }
             }
@@ -118,8 +121,10 @@ struct BLEConsoleScreen: View {
             // read can carry and throws away what it handed over, so lines genuinely
             // disappear here and nowhere else.
             Label(
-                "Bluetooth drops journal lines when the robot logs faster than this can read. "
-                    + "Once the robot is on the network, the Diagnostics console is the complete one.",
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "Bluetooth drops journal lines when the robot logs faster than this can read. Once the robot is on the network, the Diagnostics console is the complete one."
+                ),
                 systemImage: "exclamationmark.triangle"
             )
             .font(.caption)
@@ -140,11 +145,11 @@ struct BLEConsoleScreen: View {
     /// read the daemon — so say what happened and offer the one thing that helps.
     private var journalStopped: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("The robot stopped sending its log.")
+            Text(.reachy("The robot stopped sending its log."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 8)
-            Button("Start again") {
+            Button(.reachy("Start again")) {
                 model.restartJournal()
             }
             .font(.caption)

@@ -15,7 +15,7 @@ import SwiftUI
 struct ConnectOrientation: View {
     var body: some View {
         Section {
-            Text("Your Reachy Mini appears below once it is powered on and joined to this Wi-Fi network.")
+            Text(.reachy("Your Reachy Mini appears below once it is powered on and joined to this Wi-Fi network."))
                 .font(Typography.detail)
                 .foregroundStyle(Tone.quiet.style)
                 .listRowBackground(Color.clear)

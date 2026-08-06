@@ -48,14 +48,20 @@ enum RunningAppCaption {
 
     /// The state in one phrase, with no failure detail. What the sheet puts in a
     /// `LabeledContent`, where the traceback gets a row of its own.
+    ///
+    /// A resolved `String` rather than a `LocalizedStringResource`, and that is
+    /// forced rather than chosen: `.unknown(state)` carries the daemon's own word
+    /// for a state this build has never heard of, and `description(of:)` below
+    /// substitutes a traceback. A slot that has to hold a runtime string alongside
+    /// a translated phrase resolves the phrase; it cannot stay a resource.
     static func title(of status: RobotAppStatus, isReachable: Bool = true) -> String {
-        guard isReachable else { return "Robot unreachable" }
+        guard isReachable else { return String(localized: .reachy("Robot unreachable")) }
         return switch status.state {
-        case .starting: "Starting…"
-        case .running: "Running"
-        case .stopping: "Stopping…"
-        case .done: "Finished"
-        case .error: "Stopped with an error"
+        case .starting: String(localized: .reachy("Starting…"))
+        case .running: String(localized: .reachy("Running"))
+        case .stopping: String(localized: .reachy("Stopping…"))
+        case .done: String(localized: .reachy("Finished"))
+        case .error: String(localized: .reachy("Stopped with an error"))
         // Carried through rather than replaced with "Unknown": a later daemon's
         // own word for the state is more use than ours (project rule 3).
         case let .unknown(state): state

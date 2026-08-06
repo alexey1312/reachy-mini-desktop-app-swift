@@ -1,4 +1,5 @@
 import HuggingFaceAuth
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -19,7 +20,7 @@ struct RootSheets: ViewModifier {
                     HFSignInScreen(session: session, model: HFSignInModel(account: hfAccount))
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
-                                Button("Done") { router.showsAccount = false }
+                                Button(.reachy("Done")) { router.showsAccount = false }
                             }
                         }
                 }

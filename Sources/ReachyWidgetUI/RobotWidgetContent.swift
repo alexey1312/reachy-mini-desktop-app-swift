@@ -1,4 +1,5 @@
 import Foundation
+import ReachyDesign
 import ReachyKit
 
 /// What the widget puts on screen, worked out from a snapshot before any view is
@@ -28,8 +29,8 @@ public struct RobotWidgetContent: Equatable, Sendable {
         switch state {
         case .unknown:
             self.init(
-                title: "No robot",
-                detail: "Open the app to connect",
+                title: String(localized: .reachy("No robot")),
+                detail: String(localized: .reachy("Open the app to connect")),
                 symbolName: "questionmark.circle",
                 isStale: false
             )
@@ -43,7 +44,7 @@ public struct RobotWidgetContent: Equatable, Sendable {
         case let .stale(snapshot):
             self.init(
                 title: Self.name(of: snapshot),
-                detail: "Last seen \(Self.age(of: snapshot, at: date))",
+                detail: String(localized: .reachy("Last seen \(Self.age(of: snapshot, at: date))")),
                 symbolName: "clock.arrow.circlepath",
                 isStale: true
             )
@@ -54,7 +55,7 @@ public struct RobotWidgetContent: Equatable, Sendable {
     /// without one is ordinary rather than exceptional — it still needs calling
     /// something.
     private static func name(of snapshot: RobotSnapshot) -> String {
-        snapshot.robotName ?? "Reachy Mini"
+        snapshot.robotName ?? String(localized: .reachy("Reachy Mini"))
     }
 
     /// A running app is the most useful thing there is to say, so it displaces
@@ -66,7 +67,7 @@ public struct RobotWidgetContent: Equatable, Sendable {
             return runningApp
         }
         if let failed = snapshot.failedApp(at: date) {
-            return "\(failed.title ?? failed.name) stopped"
+            return String(localized: .reachy("\(failed.title ?? failed.name) stopped"))
         }
         return snapshot.isAwake ? "Awake" : "Asleep"
     }

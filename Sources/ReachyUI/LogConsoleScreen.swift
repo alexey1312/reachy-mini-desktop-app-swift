@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -22,7 +23,7 @@ struct LogConsoleScreen: View {
             emptyDescription: emptyDescription,
             failure: setupError
         )
-        .navigationTitle("Daemon logs")
+        .navigationTitle(.reachy("Daemon logs"))
         .task { await stream() }
     }
 
@@ -32,8 +33,16 @@ struct LogConsoleScreen: View {
     /// channel reaches every robot but still needs a journal at the other end.
     private var emptyDescription: String {
         session.isRemote
-            ? "Daemon logs come from journalctl on the robot, which a development host may not have."
-            : "Daemon logs come from journalctl on the robot — the local simulator has none."
+            ?
+            String(
+                localized: .reachy(
+                    "Daemon logs come from journalctl on the robot, which a development host may not have."
+                )
+            )
+            :
+            String(
+                localized: .reachy("Daemon logs come from journalctl on the robot — the local simulator has none.")
+            )
     }
 
     /// `.task` cancels the stream when the screen goes away — no manual task handle.

@@ -13,37 +13,41 @@ struct OnboardingHandoffStep: View {
 
     var body: some View {
         OnboardingStepScaffold(
-            title: "All set",
-            message: "Bluetooth's job is done. The app will pick the robot up on the network from here."
+            title: String(localized: .reachy("All set")),
+            message: String(
+                localized: .reachy("Bluetooth's job is done. The app will pick the robot up on the network from here.")
+            )
         ) {
             if let hardwareID = model.session?.hardwareID {
-                LabeledContent("Hardware ID") {
+                LabeledContent(.reachy("Hardware ID")) {
                     Text(hardwareID)
                         .font(.caption.monospaced())
                 }
             }
             if let address = model.session?.robotAddress {
-                LabeledContent("Address") {
+                LabeledContent(.reachy("Address")) {
                     Text(address)
                         .font(.caption.monospaced())
                 }
             }
             Label(
-                "If this phone is on the robot's own reachy-mini-ap network, switch it back to your home Wi-Fi now.",
+                .reachy(
+                    "If this phone is on the robot's own reachy-mini-ap network, switch it back to your home Wi-Fi now."
+                ),
                 systemImage: "wifi.router"
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
             Label(
-                "You can give the robot a name in Settings once it is connected.",
+                .reachy("You can give the robot a name in Settings once it is connected."),
                 systemImage: "tag"
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         } actions: {
-            Button("Done") {
+            Button(.reachy("Done")) {
                 onFinish(model.finish())
             }
             .reachyButton(.prominent)

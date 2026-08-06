@@ -14,11 +14,11 @@ struct OnboardingPINStep: View {
 
     var body: some View {
         OnboardingStepScaffold(
-            title: "Enter the robot's code",
-            message: "The last five characters of the serial number printed on the robot. "
-                + "Capitals matter, and it is not always digits."
+            title: String(localized: .reachy("Enter the robot's code")),
+            message: String(localized: .reachy("The last five characters of the serial number printed on the robot. "))
+                + String(localized: .reachy("Capitals matter, and it is not always digits."))
         ) {
-            TextField("Code", text: Binding(get: { model.pinInput }, set: { model.pinInput = $0 }))
+            TextField(.reachy("Code"), text: Binding(get: { model.pinInput }, set: { model.pinInput = $0 }))
                 .textFieldStyle(.roundedBorder)
                 .font(.title3.monospaced())
                 .autocorrectionDisabled()
@@ -40,8 +40,10 @@ struct OnboardingPINStep: View {
 
             if let seconds = model.lockoutSeconds {
                 Label(
-                    "Too many wrong codes. The robot will accept another in \(seconds) s — "
-                        + "reconnecting does not clear this.",
+                    .reachy(
+                        // swiftlint:disable:next line_length
+                        "Too many wrong codes. The robot will accept another in \(seconds) s — reconnecting does not clear this."
+                    ),
                     systemImage: "clock"
                 )
                 .font(.callout)
@@ -49,14 +51,14 @@ struct OnboardingPINStep: View {
                 .fixedSize(horizontal: false, vertical: true)
             } else if model.attemptsBeforeLockout < BLEPinSession.freeAttempts {
                 OnboardingErrorText(message: model.errorMessage)
-                Text("\(model.attemptsBeforeLockout) attempts left before the robot starts making you wait.")
+                Text(.reachy("\(model.attemptsBeforeLockout) attempts left before the robot starts making you wait."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
                 OnboardingErrorText(message: model.errorMessage)
             }
         } actions: {
-            Button("Unlock") {
+            Button(.reachy("Unlock")) {
                 submit()
             }
             .reachyButton(.prominent)

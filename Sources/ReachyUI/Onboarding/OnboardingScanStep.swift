@@ -11,7 +11,7 @@ struct OnboardingScanStep: View {
 
     var body: some View {
         OnboardingStepScaffold(
-            title: "Find the robot",
+            title: String(localized: .reachy("Find the robot")),
             message: message
         ) {
             switch model.availability {
@@ -19,16 +19,18 @@ struct OnboardingScanStep: View {
                 results
             case .poweredOff:
                 unavailable(
-                    "Bluetooth is switched off",
-                    detail: "Turn it on in Control Centre or Settings, and this list will fill in."
+                    String(localized: .reachy("Bluetooth is switched off")),
+                    detail: String(
+                        localized: .reachy("Turn it on in Control Centre or Settings, and this list will fill in.")
+                    )
                 )
             case .unauthorized:
                 unavailable(
-                    "This app can't use Bluetooth",
-                    detail: "Allow Bluetooth for this app in Settings, then come back."
+                    String(localized: .reachy("This app can't use Bluetooth")),
+                    detail: String(localized: .reachy("Allow Bluetooth for this app in Settings, then come back."))
                 )
                 #if os(iOS)
-                    Button("Open Settings") {
+                    Button(.reachy("Open Settings")) {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
                             UIApplication.shared.open(url)
                         }
@@ -36,9 +38,18 @@ struct OnboardingScanStep: View {
                 #endif
             case .unsupported:
                 unavailable(
-                    "This device has no Bluetooth",
-                    detail: "The iOS Simulator never has any. Set the robot up from a real device, or join "
-                        + "its own reachy-mini-ap network and configure it over Wi-Fi instead."
+                    String(localized: .reachy("This device has no Bluetooth")),
+                    detail: String(
+                        localized: .reachy(
+                            "The iOS Simulator never has any. Set the robot up from a real device, or join "
+                        )
+                    )
+                        +
+                        String(
+                            localized: .reachy(
+                                "its own reachy-mini-ap network and configure it over Wi-Fi instead."
+                            )
+                        )
                 )
             }
             // Only where the panel above has not already said it. An unusable radio makes
@@ -49,7 +60,7 @@ struct OnboardingScanStep: View {
             }
         } actions: {
             if let only = model.discovered.first, model.discovered.count == 1 {
-                Button("Connect to this robot") {
+                Button(.reachy("Connect to this robot")) {
                     Task { await model.connect(to: only.id) }
                 }
                 .reachyButton(.prominent)
@@ -67,10 +78,14 @@ struct OnboardingScanStep: View {
     private var message: String {
         switch model.availability {
         case .ready, .unknown:
-            "Robots all advertise the same name, so they are listed by signal strength. "
-                + "The nearest one is at the top."
+            String(
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "Robots all advertise the same name, so they are listed by signal strength. The nearest one is at the top."
+                )
+            )
         default:
-            "Setting a robot up needs Bluetooth."
+            String(localized: .reachy("Setting a robot up needs Bluetooth."))
         }
     }
 
@@ -79,7 +94,7 @@ struct OnboardingScanStep: View {
         if model.discovered.isEmpty {
             HStack(spacing: 10) {
                 ProgressView()
-                Text("Searching…")
+                Text(.reachy("Searching…"))
                     .foregroundStyle(.secondary)
             }
         }
@@ -91,7 +106,7 @@ struct OnboardingScanStep: View {
                     if model.isBusy {
                         ProgressView()
                     } else {
-                        Text("\(robot.rssi) dBm")
+                        Text(.reachy("\(robot.rssi) dBm"))
                             .font(.caption.monospaced())
                     }
                 } label: {

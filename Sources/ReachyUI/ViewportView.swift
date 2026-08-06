@@ -63,7 +63,7 @@ struct ViewportView: View {
     private var content: some View {
         if let setupError = model.setupError {
             ContentUnavailableView(
-                "Viewport unavailable",
+                .reachy("Viewport unavailable"),
                 systemImage: "exclamationmark.triangle",
                 description: Text(setupError)
             )
@@ -74,7 +74,7 @@ struct ViewportView: View {
                     // A reason, not a wait: nothing is coming, so a spinner here
                     // would never resolve.
                     ContentUnavailableView(
-                        "No 3D model",
+                        .reachy("No 3D model"),
                         systemImage: "cube.transparent",
                         description: Text(reason)
                     )
@@ -103,7 +103,7 @@ struct ViewportView: View {
     @ViewBuilder
     private var switcher: some View {
         if options.count > 1 {
-            Picker("Viewport", selection: Binding(
+            Picker(.reachy("Viewport"), selection: Binding(
                 get: { model.content },
                 set: { model.setContent($0) }
             )) {

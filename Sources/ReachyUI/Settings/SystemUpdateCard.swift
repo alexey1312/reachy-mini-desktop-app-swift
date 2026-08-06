@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -21,16 +22,16 @@ struct SystemUpdateCard: View {
     var body: some View {
         Section {
             statusRow
-            Toggle("Include pre-release versions", isOn: $preRelease)
+            Toggle(.reachy("Include pre-release versions"), isOn: $preRelease)
                 .disabled(model?.isBusy ?? true)
                 .onChange(of: preRelease) { _, newValue in
                     Task { await model?.check(preRelease: newValue) }
                 }
             actions
         } header: {
-            Text("System update")
+            Text(.reachy("System update"))
         } footer: {
-            Text("The robot downloads updates itself and restarts when one finishes.")
+            Text(.reachy("The robot downloads updates itself and restarts when one finishes."))
         }
         .task {
             guard model == nil else { return }
@@ -42,12 +43,12 @@ struct SystemUpdateCard: View {
                     LogConsoleView(
                         model: model.log,
                         source: session.address?.displayString ?? "robot",
-                        emptyDescription: "The robot has not sent any installer output yet."
+                        emptyDescription: String(localized: .reachy("The robot has not sent any installer output yet."))
                     )
-                    .navigationTitle("Update log")
+                    .navigationTitle(.reachy("Update log"))
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { showsLog = false }
+                            Button(.reachy("Done")) { showsLog = false }
                         }
                     }
                 }
@@ -59,23 +60,23 @@ struct SystemUpdateCard: View {
     private var statusRow: some View {
         switch model?.state ?? .idle {
         case .idle:
-            LabeledContent("Installed", value: session.lastStatus?.version ?? "—")
+            LabeledContent(.reachy("Installed"), value: session.lastStatus?.version ?? "—")
         case .checking:
-            Label("Checking for updates…", systemImage: "arrow.triangle.2.circlepath")
+            Label(.reachy("Checking for updates…"), systemImage: "arrow.triangle.2.circlepath")
         case let .upToDate(current):
-            Label("Up to date — \(current)", systemImage: "checkmark.circle")
+            Label(.reachy("Up to date — \(current)"), systemImage: "checkmark.circle")
                 .foregroundStyle(.green)
         case let .robotOffline(current):
-            Label("\(current) — the robot can't reach the internet", systemImage: "wifi.exclamationmark")
+            Label(.reachy("\(current) — the robot can't reach the internet"), systemImage: "wifi.exclamationmark")
                 .foregroundStyle(.orange)
         case let .available(current, latest):
-            LabeledContent("Update available") { Text("\(current) → \(latest)").monospaced() }
+            LabeledContent(.reachy("Update available")) { Text(.reachy("\(current) → \(latest)")).monospaced() }
         case .installing:
-            Label("Installing — this takes a minute or two…", systemImage: "arrow.down.circle")
+            Label(.reachy("Installing — this takes a minute or two…"), systemImage: "arrow.down.circle")
         case .restarting:
-            Label("The robot is restarting…", systemImage: "arrow.clockwise")
+            Label(.reachy("The robot is restarting…"), systemImage: "arrow.clockwise")
         case let .finished(version):
-            Label("Updated to \(version).", systemImage: "checkmark.circle")
+            Label(.reachy("Updated to \(version)."), systemImage: "checkmark.circle")
                 .foregroundStyle(.green)
         case let .failed(message):
             Label(message, systemImage: "xmark.octagon")
@@ -86,16 +87,16 @@ struct SystemUpdateCard: View {
     @ViewBuilder
     private var actions: some View {
         if case .available = model?.state {
-            Button("Update now") {
+            Button(.reachy("Update now")) {
                 Task { await model?.install(preRelease: preRelease) }
             }
         } else if !(model?.isBusy ?? true) {
-            Button("Check for updates") {
+            Button(.reachy("Check for updates")) {
                 Task { await model?.check(preRelease: preRelease) }
             }
         }
         if model?.log.entries.isEmpty == false {
-            Button("Show installer log") { showsLog = true }
+            Button(.reachy("Show installer log")) { showsLog = true }
         }
     }
 }

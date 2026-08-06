@@ -1,0 +1,1011 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "3D model": {
+      "extractionState": "manual"
+    },
+    "A new enough release may not be published yet.": {
+      "extractionState": "manual"
+    },
+    "A new robot has no network yet, so the first conversation happens over Bluetooth. ": {
+      "extractionState": "manual"
+    },
+    "About": {
+      "extractionState": "manual"
+    },
+    "Account": {
+      "extractionState": "manual"
+    },
+    "Address": {
+      "extractionState": "manual"
+    },
+    "All": {
+      "extractionState": "manual"
+    },
+    "All set": {
+      "extractionState": "manual"
+    },
+    "Allow Bluetooth for this app in Settings, then come back.": {
+      "extractionState": "manual"
+    },
+    "Antennas": {
+      "extractionState": "manual"
+    },
+    "Apps": {
+      "extractionState": "manual"
+    },
+    "Apps are installed on the robot, so this needs one connected.": {
+      "extractionState": "manual"
+    },
+    "Apps need the local network": {
+      "extractionState": "manual"
+    },
+    "Automatic reconnect paused": {
+      "extractionState": "manual"
+    },
+    "Available": {
+      "extractionState": "manual"
+    },
+    "Back": {
+      "extractionState": "manual"
+    },
+    "Backend stopped": {
+      "extractionState": "manual"
+    },
+    "Before you start": {
+      "extractionState": "manual"
+    },
+    "Bluetooth": {
+      "extractionState": "manual"
+    },
+    "Bluetooth is only here to get it that far.": {
+      "extractionState": "manual"
+    },
+    "Bluetooth is switched off": {
+      "extractionState": "manual"
+    },
+    "Bluetooth's job is done. The app will pick the robot up on the network from here.": {
+      "extractionState": "manual"
+    },
+    "Body": {
+      "extractionState": "manual"
+    },
+    "Body yaw": {
+      "extractionState": "manual"
+    },
+    "Browse Discover to install one from Hugging Face.": {
+      "extractionState": "manual"
+    },
+    "Browsing the robot app aisle…": {
+      "extractionState": "manual"
+    },
+    "Buffer": {
+      "extractionState": "manual"
+    },
+    "Building the scene…": {
+      "extractionState": "manual"
+    },
+    "Calibrating robot feelings…": {
+      "extractionState": "manual"
+    },
+    "Calling your Reachies home…": {
+      "extractionState": "manual"
+    },
+    "Camera unavailable": {
+      "extractionState": "manual"
+    },
+    "Cancel": {
+      "extractionState": "manual"
+    },
+    "Capitals matter, and it is not always digits.": {
+      "extractionState": "manual"
+    },
+    "Check again": {
+      "extractionState": "manual"
+    },
+    "Check for updates": {
+      "extractionState": "manual"
+    },
+    "Checking for updates…": {
+      "extractionState": "manual"
+    },
+    "Choose a network": {
+      "extractionState": "manual"
+    },
+    "Clear": {
+      "extractionState": "manual"
+    },
+    "Clear this error": {
+      "extractionState": "manual"
+    },
+    "Code": {
+      "extractionState": "manual"
+    },
+    "Commands": {
+      "extractionState": "manual"
+    },
+    "Confirm it is you": {
+      "extractionState": "manual"
+    },
+    "Confirm the robot": {
+      "extractionState": "manual"
+    },
+    "Connect": {
+      "extractionState": "manual"
+    },
+    "Connect (handshake)": {
+      "extractionState": "manual"
+    },
+    "Connect it to the official desktop app over USB to update it.": {
+      "extractionState": "manual"
+    },
+    "Connect now": {
+      "extractionState": "manual"
+    },
+    "Connect on the same network as the robot to install and start apps.": {
+      "extractionState": "manual"
+    },
+    "Connect on the same network as the robot to play its recorded moves.": {
+      "extractionState": "manual"
+    },
+    "Connect to daemon": {
+      "extractionState": "manual"
+    },
+    "Connect to this robot": {
+      "extractionState": "manual"
+    },
+    "Connected": {
+      "extractionState": "manual"
+    },
+    "Connecting…": {
+      "extractionState": "manual"
+    },
+    "Connection": {
+      "extractionState": "manual"
+    },
+    "Continue": {
+      "extractionState": "manual"
+    },
+    "Continue anyway": {
+      "extractionState": "manual"
+    },
+    "Control": {
+      "extractionState": "manual"
+    },
+    "Controller": {
+      "extractionState": "manual"
+    },
+    "Copies the factory set back from the robot's own restore directory.": {
+      "extractionState": "manual"
+    },
+    "Copy all": {
+      "extractionState": "manual"
+    },
+    "Copy line": {
+      "extractionState": "manual"
+    },
+    "Could not load the model": {
+      "extractionState": "manual"
+    },
+    "Could not reach Hugging Face": {
+      "extractionState": "manual"
+    },
+    "Daemon": {
+      "extractionState": "manual"
+    },
+    "Daemon logs": {
+      "extractionState": "manual"
+    },
+    "Daemon logs come from journalctl on the robot — the local simulator has none.": {
+      "extractionState": "manual"
+    },
+    "Daemon state": {
+      "extractionState": "manual"
+    },
+    "Daemon version": {
+      "extractionState": "manual"
+    },
+    "Dances": {
+      "extractionState": "manual"
+    },
+    "Deletes the robot's Python environments outright.": {
+      "extractionState": "manual"
+    },
+    "Destructive recovery": {
+      "extractionState": "manual"
+    },
+    "Developer tools": {
+      "extractionState": "manual"
+    },
+    "Disconnect": {
+      "extractionState": "manual"
+    },
+    "Discovery (Bonjour)": {
+      "extractionState": "manual"
+    },
+    "Dismiss": {
+      "extractionState": "manual"
+    },
+    "Done": {
+      "extractionState": "manual"
+    },
+    "Emotions": {
+      "extractionState": "manual"
+    },
+    "Enter the code above to run any of these.": {
+      "extractionState": "manual"
+    },
+    "Enter the robot's code": {
+      "extractionState": "manual"
+    },
+    "Erase and restore": {
+      "extractionState": "manual"
+    },
+    "Erase the robot's software?": {
+      "extractionState": "manual"
+    },
+    "Errors": {
+      "extractionState": "manual"
+    },
+    "Every app you installed, and everything those apps stored, is gone.": {
+      "extractionState": "manual"
+    },
+    "Export": {
+      "extractionState": "manual"
+    },
+    "Failed": {
+      "extractionState": "manual"
+    },
+    "Filter log": {
+      "extractionState": "manual"
+    },
+    "Find it on this network": {
+      "extractionState": "manual"
+    },
+    "Find one nearby": {
+      "extractionState": "manual"
+    },
+    "Find the robot": {
+      "extractionState": "manual"
+    },
+    "Finished": {
+      "extractionState": "manual"
+    },
+    "Five-character code": {
+      "extractionState": "manual"
+    },
+    "For a robot that has dropped off the network. It needs to be within Bluetooth range.": {
+      "extractionState": "manual"
+    },
+    "Forget": {
+      "extractionState": "manual"
+    },
+    "Frames": {
+      "extractionState": "manual"
+    },
+    "Give it about a minute after switching on before it starts advertising.": {
+      "extractionState": "manual"
+    },
+    "Go to sleep": {
+      "extractionState": "manual"
+    },
+    "Going to sleep…": {
+      "extractionState": "manual"
+    },
+    "Hardware ID": {
+      "extractionState": "manual"
+    },
+    "Head": {
+      "extractionState": "manual"
+    },
+    "Head — drag: yaw / pitch, hold sideways: turn the body": {
+      "extractionState": "manual"
+    },
+    "Host (IP or name.local)": {
+      "extractionState": "manual"
+    },
+    "Hugging Face": {
+      "extractionState": "manual"
+    },
+    "Hugging Face refused this session.": {
+      "extractionState": "manual"
+    },
+    "Hugging Face refused this session. Signing in again fixes it.": {
+      "extractionState": "manual"
+    },
+    "Hugging Face session expired": {
+      "extractionState": "manual"
+    },
+    "I understand every installed app will be erased": {
+      "extractionState": "manual"
+    },
+    "In use": {
+      "extractionState": "manual"
+    },
+    "In use remotely": {
+      "extractionState": "manual"
+    },
+    "Include pre-release versions": {
+      "extractionState": "manual"
+    },
+    "Info and above": {
+      "extractionState": "manual"
+    },
+    "Install": {
+      "extractionState": "manual"
+    },
+    "Installed": {
+      "extractionState": "manual"
+    },
+    "Installing — this takes a minute or two…": {
+      "extractionState": "manual"
+    },
+    "It is encrypted for the robot before it leaves this device.": {
+      "extractionState": "manual"
+    },
+    "It may have finished — check the installed list.": {
+      "extractionState": "manual"
+    },
+    "It never got as far as trying the network.": {
+      "extractionState": "manual"
+    },
+    "It restarts when the update finishes.": {
+      "extractionState": "manual"
+    },
+    "It takes a couple of minutes.": {
+      "extractionState": "manual"
+    },
+    "It takes about five minutes. Do not power the robot off during it.": {
+      "extractionState": "manual"
+    },
+    "It will answer on the network from here on, and Bluetooth is no longer needed.": {
+      "extractionState": "manual"
+    },
+    "Its own hotspot": {
+      "extractionState": "manual"
+    },
+    "Joining the network": {
+      "extractionState": "manual"
+    },
+    "Jump to latest": {
+      "extractionState": "manual"
+    },
+    "Keep it there and finish": {
+      "extractionState": "manual"
+    },
+    "Last output": {
+      "extractionState": "manual"
+    },
+    "Level": {
+      "extractionState": "manual"
+    },
+    "Library": {
+      "extractionState": "manual"
+    },
+    "Link": {
+      "extractionState": "manual"
+    },
+    "Link this robot": {
+      "extractionState": "manual"
+    },
+    "Live": {
+      "extractionState": "manual"
+    },
+    "Local Network permission denied": {
+      "extractionState": "manual"
+    },
+    "Log stream failed": {
+      "extractionState": "manual"
+    },
+    "Manual address": {
+      "extractionState": "manual"
+    },
+    "Minimize": {
+      "extractionState": "manual"
+    },
+    "Mode": {
+      "extractionState": "manual"
+    },
+    "More": {
+      "extractionState": "manual"
+    },
+    "Motion, teleop and the state stream stay unavailable until it starts.": {
+      "extractionState": "manual"
+    },
+    "Motors": {
+      "extractionState": "manual"
+    },
+    "Moves": {
+      "extractionState": "manual"
+    },
+    "Moves need the local network": {
+      "extractionState": "manual"
+    },
+    "Music": {
+      "extractionState": "manual"
+    },
+    "Mute microphone": {
+      "extractionState": "manual"
+    },
+    "Name": {
+      "extractionState": "manual"
+    },
+    "Network": {
+      "extractionState": "manual"
+    },
+    "Network name": {
+      "extractionState": "manual"
+    },
+    "No 3D model": {
+      "extractionState": "manual"
+    },
+    "No Reachy online": {
+      "extractionState": "manual"
+    },
+    "No apps installed": {
+      "extractionState": "manual"
+    },
+    "No apps yet. Open Reachy Mini to load your robot's apps.": {
+      "extractionState": "manual"
+    },
+    "No live view": {
+      "extractionState": "manual"
+    },
+    "No moves": {
+      "extractionState": "manual"
+    },
+    "No robot": {
+      "extractionState": "manual"
+    },
+    "No robot connected": {
+      "extractionState": "manual"
+    },
+    "No robot. Open Reachy Mini to connect.": {
+      "extractionState": "manual"
+    },
+    "No robots found": {
+      "extractionState": "manual"
+    },
+    "None linked to your Hugging Face account are online.": {
+      "extractionState": "manual"
+    },
+    "Not available on this robot": {
+      "extractionState": "manual"
+    },
+    "Not connected": {
+      "extractionState": "manual"
+    },
+    "Not installed": {
+      "extractionState": "manual"
+    },
+    "Not linked": {
+      "extractionState": "manual"
+    },
+    "Not responding": {
+      "extractionState": "manual"
+    },
+    "Not signed in": {
+      "extractionState": "manual"
+    },
+    "Not started": {
+      "extractionState": "manual"
+    },
+    "Nothing to show": {
+      "extractionState": "manual"
+    },
+    "Official": {
+      "extractionState": "manual"
+    },
+    "On a network": {
+      "extractionState": "manual"
+    },
+    "On the network": {
+      "extractionState": "manual"
+    },
+    "One-tap sign-in is not available in this build. Create an access token at ": {
+      "extractionState": "manual"
+    },
+    "Online · wired": {
+      "extractionState": "manual"
+    },
+    "Open Settings": {
+      "extractionState": "manual"
+    },
+    "Open the app to connect": {
+      "extractionState": "manual"
+    },
+    "Opens the running app": {
+      "extractionState": "manual"
+    },
+    "Options": {
+      "extractionState": "manual"
+    },
+    "Other network…": {
+      "extractionState": "manual"
+    },
+    "Place head from pose": {
+      "extractionState": "manual"
+    },
+    "Private": {
+      "extractionState": "manual"
+    },
+    "Progress": {
+      "extractionState": "manual"
+    },
+    "Rate": {
+      "extractionState": "manual"
+    },
+    "Reached through Hugging Face, so these work from anywhere.": {
+      "extractionState": "manual"
+    },
+    "Reachy Mini": {
+      "extractionState": "manual"
+    },
+    "Reading the robot's description…": {
+      "extractionState": "manual"
+    },
+    "Recovery": {
+      "extractionState": "manual"
+    },
+    "Recovery over Bluetooth": {
+      "extractionState": "manual"
+    },
+    "Refresh": {
+      "extractionState": "manual"
+    },
+    "Remote access": {
+      "extractionState": "manual"
+    },
+    "Remove": {
+      "extractionState": "manual"
+    },
+    "Reset to neutral": {
+      "extractionState": "manual"
+    },
+    "Reset view": {
+      "extractionState": "manual"
+    },
+    "Restart": {
+      "extractionState": "manual"
+    },
+    "Restart discovery": {
+      "extractionState": "manual"
+    },
+    "Restoring": {
+      "extractionState": "manual"
+    },
+    "Robot": {
+      "extractionState": "manual"
+    },
+    "Robot account": {
+      "extractionState": "manual"
+    },
+    "Robot backend": {
+      "extractionState": "manual"
+    },
+    "Robot backend is stopped": {
+      "extractionState": "manual"
+    },
+    "Robot is asleep": {
+      "extractionState": "manual"
+    },
+    "Robot runs": {
+      "extractionState": "manual"
+    },
+    "Robot unreachable": {
+      "extractionState": "manual"
+    },
+    "Robot update": {
+      "extractionState": "manual"
+    },
+    "Robot's code": {
+      "extractionState": "manual"
+    },
+    "Robots all advertise the same name, so they are listed by signal strength.": {
+      "extractionState": "manual"
+    },
+    "Robots all advertise the same name, so they are listed by signal strength. The nearest one is at the top.": {
+      "extractionState": "manual"
+    },
+    "Robots linked to your Hugging Face account, wherever they are.": {
+      "extractionState": "manual"
+    },
+    "Robots on this network": {
+      "extractionState": "manual"
+    },
+    "Running": {
+      "extractionState": "manual"
+    },
+    "Save": {
+      "extractionState": "manual"
+    },
+    "Scan again": {
+      "extractionState": "manual"
+    },
+    "Search apps": {
+      "extractionState": "manual"
+    },
+    "Searching over Bluetooth…": {
+      "extractionState": "manual"
+    },
+    "Searching…": {
+      "extractionState": "manual"
+    },
+    "Section": {
+      "extractionState": "manual"
+    },
+    "Send to the robot": {
+      "extractionState": "manual"
+    },
+    "Session expired": {
+      "extractionState": "manual"
+    },
+    "Set up a new robot over Bluetooth": {
+      "extractionState": "manual"
+    },
+    "Set up a robot": {
+      "extractionState": "manual"
+    },
+    "Setting a robot up needs Bluetooth.": {
+      "extractionState": "manual"
+    },
+    "Settings": {
+      "extractionState": "manual"
+    },
+    "Show installer log": {
+      "extractionState": "manual"
+    },
+    "Shutting down": {
+      "extractionState": "manual"
+    },
+    "Sign in": {
+      "extractionState": "manual"
+    },
+    "Sign in again": {
+      "extractionState": "manual"
+    },
+    "Sign in to Hugging Face": {
+      "extractionState": "manual"
+    },
+    "Sign in to Hugging Face to reach robots linked to your account.": {
+      "extractionState": "manual"
+    },
+    "Sign in to Hugging Face to see your robots.": {
+      "extractionState": "manual"
+    },
+    "Sign in with Hugging Face": {
+      "extractionState": "manual"
+    },
+    "Sign in with this token": {
+      "extractionState": "manual"
+    },
+    "Sign out": {
+      "extractionState": "manual"
+    },
+    "Signed in": {
+      "extractionState": "manual"
+    },
+    "Signing in to Hugging Face": {
+      "extractionState": "manual"
+    },
+    "Sleep": {
+      "extractionState": "manual"
+    },
+    "Solve Stewart linkage": {
+      "extractionState": "manual"
+    },
+    "Someone is driving this robot over Hugging Face right now.": {
+      "extractionState": "manual"
+    },
+    "Someone is driving this robot over Hugging Face.": {
+      "extractionState": "manual"
+    },
+    "Start": {
+      "extractionState": "manual"
+    },
+    "Start again": {
+      "extractionState": "manual"
+    },
+    "Start on wake-up": {
+      "extractionState": "manual"
+    },
+    "Start robot backend": {
+      "extractionState": "manual"
+    },
+    "Start stream": {
+      "extractionState": "manual"
+    },
+    "Start the robot backend to see the model and the camera.": {
+      "extractionState": "manual"
+    },
+    "Starting the robot backend… this can take a minute": {
+      "extractionState": "manual"
+    },
+    "Starting up": {
+      "extractionState": "manual"
+    },
+    "Starting…": {
+      "extractionState": "manual"
+    },
+    "Starts on wake-up": {
+      "extractionState": "manual"
+    },
+    "State": {
+      "extractionState": "manual"
+    },
+    "State stream (10 Hz by default)": {
+      "extractionState": "manual"
+    },
+    "Status": {
+      "extractionState": "manual"
+    },
+    "Stop": {
+      "extractionState": "manual"
+    },
+    "Stop stream": {
+      "extractionState": "manual"
+    },
+    "Stopped": {
+      "extractionState": "manual"
+    },
+    "Stopped with an error": {
+      "extractionState": "manual"
+    },
+    "Stopping…": {
+      "extractionState": "manual"
+    },
+    "Store unavailable": {
+      "extractionState": "manual"
+    },
+    "System update": {
+      "extractionState": "manual"
+    },
+    "Teaching the servos new steps…": {
+      "extractionState": "manual"
+    },
+    "Test sound": {
+      "extractionState": "manual"
+    },
+    "The app and its Python environment are deleted from the robot.": {
+      "extractionState": "manual"
+    },
+    "The hardware ID never changes.": {
+      "extractionState": "manual"
+    },
+    "The last five characters of its serial number": {
+      "extractionState": "manual"
+    },
+    "The last five characters of the serial number printed on the robot. ": {
+      "extractionState": "manual"
+    },
+    "The motors are off, so the robot accepts commands without moving.": {
+      "extractionState": "manual"
+    },
+    "The next screen turns on Bluetooth scanning, so iOS will ask for permission.": {
+      "extractionState": "manual"
+    },
+    "The password went across encrypted. The robot is trying it now.": {
+      "extractionState": "manual"
+    },
+    "The relay carries the robot's commands and its camera, not its app store. ": {
+      "extractionState": "manual"
+    },
+    "The robot backend is not running": {
+      "extractionState": "manual"
+    },
+    "The robot could not join": {
+      "extractionState": "manual"
+    },
+    "The robot could not reach Hugging Face. Pull to refresh once it is back online.": {
+      "extractionState": "manual"
+    },
+    "The robot did not say why.": {
+      "extractionState": "manual"
+    },
+    "The robot downloads updates itself and restarts when one finishes.": {
+      "extractionState": "manual"
+    },
+    "The robot found no apps on Hugging Face.": {
+      "extractionState": "manual"
+    },
+    "The robot has not registered a video stream yet.": {
+      "extractionState": "manual"
+    },
+    "The robot has not sent any installer output yet.": {
+      "extractionState": "manual"
+    },
+    "The robot is on the network": {
+      "extractionState": "manual"
+    },
+    "The robot is restarting…": {
+      "extractionState": "manual"
+    },
+    "The robot joins this network and then talks to the app over it. ": {
+      "extractionState": "manual"
+    },
+    "The robot only logs when something happens. A quiet robot ": {
+      "extractionState": "manual"
+    },
+    "The robot refused the password": {
+      "extractionState": "manual"
+    },
+    "The robot reported that the update failed.": {
+      "extractionState": "manual"
+    },
+    "The robot restarted": {
+      "extractionState": "manual"
+    },
+    "The robot stopped sending its log.": {
+      "extractionState": "manual"
+    },
+    "The robot took too long to answer. Check the app list before trying again.": {
+      "extractionState": "manual"
+    },
+    "The robot's 3D description is served over its own network, ": {
+      "extractionState": "manual"
+    },
+    "The robot, powered on": {
+      "extractionState": "manual"
+    },
+    "This app can't use Bluetooth": {
+      "extractionState": "manual"
+    },
+    "This app has no valid token to share. Sign in again.": {
+      "extractionState": "manual"
+    },
+    "This app needs": {
+      "extractionState": "manual"
+    },
+    "This device has no Bluetooth": {
+      "extractionState": "manual"
+    },
+    "This robot": {
+      "extractionState": "manual"
+    },
+    "This robot cannot update itself over the network. ": {
+      "extractionState": "manual"
+    },
+    "This robot did not report a hardware id, so it cannot be confirmed. Do not continue.": {
+      "extractionState": "manual"
+    },
+    "This robot is already on a network.": {
+      "extractionState": "manual"
+    },
+    "This robot needs a software update": {
+      "extractionState": "manual"
+    },
+    "This robot reports no recovery scripts.": {
+      "extractionState": "manual"
+    },
+    "This takes about five minutes. Leave the robot powered on.": {
+      "extractionState": "manual"
+    },
+    "This takes up to a minute.": {
+      "extractionState": "manual"
+    },
+    "Through Hugging Face": {
+      "extractionState": "manual"
+    },
+    "Too many requests. Wait a moment before refreshing again.": {
+      "extractionState": "manual"
+    },
+    "Try again": {
+      "extractionState": "manual"
+    },
+    "Turn it on in Control Centre or Settings, and this list will fill in.": {
+      "extractionState": "manual"
+    },
+    "Unlink this robot": {
+      "extractionState": "manual"
+    },
+    "Unlock": {
+      "extractionState": "manual"
+    },
+    "Unlock the robot": {
+      "extractionState": "manual"
+    },
+    "Unmute microphone": {
+      "extractionState": "manual"
+    },
+    "Unreachable — reconnecting…": {
+      "extractionState": "manual"
+    },
+    "Update": {
+      "extractionState": "manual"
+    },
+    "Update available": {
+      "extractionState": "manual"
+    },
+    "Update log": {
+      "extractionState": "manual"
+    },
+    "Update now": {
+      "extractionState": "manual"
+    },
+    "Use an access token": {
+      "extractionState": "manual"
+    },
+    "View on Hugging Face": {
+      "extractionState": "manual"
+    },
+    "Viewport": {
+      "extractionState": "manual"
+    },
+    "Viewport unavailable": {
+      "extractionState": "manual"
+    },
+    "Waiting for a token": {
+      "extractionState": "manual"
+    },
+    "Waiting for camera": {
+      "extractionState": "manual"
+    },
+    "Waiting for logs…": {
+      "extractionState": "manual"
+    },
+    "Waiting for the robot to report progress…": {
+      "extractionState": "manual"
+    },
+    "Wake up": {
+      "extractionState": "manual"
+    },
+    "Waking up…": {
+      "extractionState": "manual"
+    },
+    "Warming up the tiny speakers…": {
+      "extractionState": "manual"
+    },
+    "Warnings and above": {
+      "extractionState": "manual"
+    },
+    "Watch the journal for what happened.": {
+      "extractionState": "manual"
+    },
+    "What this does": {
+      "extractionState": "manual"
+    },
+    "Wi-Fi password": {
+      "extractionState": "manual"
+    },
+    "You can give the robot a name in Settings once it is connected.": {
+      "extractionState": "manual"
+    },
+    "Your Reachies": {
+      "extractionState": "manual"
+    },
+    "Your Reachy Mini appears below once it is powered on and joined to this Wi-Fi network.": {
+      "extractionState": "manual"
+    },
+    "Your Wi-Fi password": {
+      "extractionState": "manual"
+    },
+    "Your account": {
+      "extractionState": "manual"
+    },
+    "answering": {
+      "extractionState": "manual"
+    },
+    "hf_…": {
+      "extractionState": "manual"
+    },
+    "host, host:port, or IP": {
+      "extractionState": "manual"
+    },
+    "huggingface.co/settings/tokens and paste it here.": {
+      "extractionState": "manual"
+    },
+    "no answer": {
+      "extractionState": "manual"
+    },
+    "sends nothing, and this stays empty.": {
+      "extractionState": "manual"
+    },
+    "this robot runs an older one": {
+      "extractionState": "manual"
+    },
+    "which a relay session cannot reach.": {
+      "extractionState": "manual"
+    }
+  },
+  "version": "1.0"
+}

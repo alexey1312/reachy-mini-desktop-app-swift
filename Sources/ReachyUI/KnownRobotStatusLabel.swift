@@ -19,9 +19,9 @@ struct KnownRobotStatusLabel: View {
         case .checking:
             ProgressView()
         case .reachable:
-            ReachyStatusLabel(text: "On the network", tone: .active)
+            ReachyStatusLabel(text: String(localized: .reachy("On the network")), tone: .active)
         case .unreachable:
-            ReachyStatusLabel(text: "Not responding", tone: .idle)
+            ReachyStatusLabel(text: String(localized: .reachy("Not responding")), tone: .idle)
         }
     }
 }

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -23,16 +24,16 @@ struct WiFiSettingsCard: View {
 
     var body: some View {
         Section {
-            LabeledContent("Mode", value: modeText)
+            LabeledContent(.reachy("Mode"), value: modeText)
             if let connected = status?.connected {
-                LabeledContent("Network", value: connected)
+                LabeledContent(.reachy("Network"), value: connected)
             }
             if let joinError {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(joinError)
                         .font(.callout)
                         .foregroundStyle(.orange)
-                    Button("Clear this error") {
+                    Button(.reachy("Clear this error")) {
                         Task { await clearError() }
                     }
                     .buttonStyle(.borderless)
@@ -40,7 +41,7 @@ struct WiFiSettingsCard: View {
             }
             ForEach(status?.known ?? [], id: \.self) { network in
                 LabeledContent(network) {
-                    Button("Forget", role: .destructive) {
+                    Button(.reachy("Forget"), role: .destructive) {
                         Task { await forget(network) }
                     }
                     .buttonStyle(.borderless)
@@ -53,10 +54,14 @@ struct WiFiSettingsCard: View {
                     .foregroundStyle(.red)
             }
         } header: {
-            Text("Network")
+            Text(.reachy("Network"))
         } footer: {
-            Text("Forgetting the network the robot is on takes it off this network at the next restart. "
-                + "The robot's own hotspot cannot be forgotten.")
+            Text(
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "Forgetting the network the robot is on takes it off this network at the next restart. The robot's own hotspot cannot be forgotten."
+                )
+            )
         }
         .task {
             guard !previewMode else { return }
@@ -66,9 +71,9 @@ struct WiFiSettingsCard: View {
 
     private var modeText: String {
         switch status?.mode {
-        case .wlan: "On a network"
-        case .hotspot: "Its own hotspot"
-        case .disconnected: "Not connected"
+        case .wlan: String(localized: .reachy("On a network"))
+        case .hotspot: String(localized: .reachy("Its own hotspot"))
+        case .disconnected: String(localized: .reachy("Not connected"))
         case .busy: "Working…"
         case nil: status == nil ? "—" : "Unknown"
         }

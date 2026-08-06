@@ -136,14 +136,14 @@ struct ConnectionScreen: View {
     private var discoverySection: some View {
         Section {
             if !session.automaticConnectionAllowed {
-                Label("Automatic reconnect paused", systemImage: "pause.circle")
+                Label(.reachy("Automatic reconnect paused"), systemImage: "pause.circle")
                     .foregroundStyle(.secondary)
             }
             if browser.permissionLooksDenied {
-                Label("Local Network permission denied", systemImage: "exclamationmark.triangle")
+                Label(.reachy("Local Network permission denied"), systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
                 #if os(iOS)
-                    Button("Open Settings") {
+                    Button(.reachy("Open Settings")) {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
                             UIApplication.shared.open(url)
                         }
@@ -151,7 +151,7 @@ struct ConnectionScreen: View {
                 #endif
             }
             if isSearching {
-                Text("Searching…")
+                Text(.reachy("Searching…"))
                     .foregroundStyle(Tone.quiet.style)
             }
             // Robots that answered a handshake before are listed whether or not Bonjour finds
@@ -166,7 +166,7 @@ struct ConnectionScreen: View {
                     }
                 }
                 .swipeActions {
-                    Button("Forget", role: .destructive) {
+                    Button(.reachy("Forget"), role: .destructive) {
                         knownRobots?.forget(entry.id)
                     }
                 }
@@ -185,15 +185,17 @@ struct ConnectionScreen: View {
                 }
             }
         } header: {
-            Text("Robots on this network")
+            Text(.reachy("Robots on this network"))
         } footer: {
             // Under the group rather than inside the card, which is how every other
             // explanation on this screen is placed. Only while the list is empty:
             // once a robot is listed this says nothing the list does not.
             if isSearching {
                 Text(
-                    "Known addresses are retried every 10 s. A robot whose daemon isn't running "
-                        + "answers nothing on the network — power it on, or enter its address below."
+                    .reachy(
+                        // swiftlint:disable:next line_length
+                        "Known addresses are retried every 10 s. A robot whose daemon isn't running answers nothing on the network — power it on, or enter its address below."
+                    )
                 )
             }
         }
@@ -226,14 +228,16 @@ struct ConnectionScreen: View {
         Section {
             if let awaitedHardwareID {
                 Label(
-                    "Waiting for the robot you just set up (\(awaitedHardwareID)). "
-                        + "If this phone is still on reachy-mini-ap, switch it back to your home Wi-Fi.",
+                    .reachy(
+                        // swiftlint:disable:next line_length
+                        "Waiting for the robot you just set up (\(awaitedHardwareID)). If this phone is still on reachy-mini-ap, switch it back to your home Wi-Fi."
+                    ),
                     systemImage: "clock.arrow.circlepath"
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-            Button("Set up a new robot over Bluetooth") {
+            Button(.reachy("Set up a new robot over Bluetooth")) {
                 showsOnboarding = true
             }
         }
@@ -251,20 +255,23 @@ struct ConnectionScreen: View {
     }
 
     private var manualSection: some View {
-        Section("Manual address") {
+        Section(.reachy("Manual address")) {
             Label(
-                "The daemon uses unencrypted HTTP without authentication. Connect only on a trusted private network.",
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "The daemon uses unencrypted HTTP without authentication. Connect only on a trusted private network."
+                ),
                 systemImage: "lock.open.trianglebadge.exclamationmark"
             )
             .font(.caption)
             .foregroundStyle(.orange)
-            TextField("host, host:port, or IP", text: $manualInput)
+            TextField(.reachy("host, host:port, or IP"), text: $manualInput)
                 .autocorrectionDisabled()
             #if os(iOS)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
             #endif
-            Button("Connect") {
+            Button(.reachy("Connect")) {
                 guard let address = RobotAddress(parsing: manualInput) else { return }
                 connectManually(to: address)
             }

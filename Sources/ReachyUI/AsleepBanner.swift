@@ -25,7 +25,7 @@ struct AsleepBanner: View {
             if session.powerTransition != nil {
                 ProgressView()
             } else {
-                Button("Wake up") {
+                Button(.reachy("Wake up")) {
                     Task { await session.wake() }
                 }
                 .reachyButton(.prominent)
@@ -34,12 +34,14 @@ struct AsleepBanner: View {
     }
 
     private var title: String {
-        session.isBackendRunning ? "Robot is asleep" : "Robot backend is stopped"
+        session
+            .isBackendRunning ? String(localized: .reachy("Robot is asleep")) :
+            String(localized: .reachy("Robot backend is stopped"))
     }
 
     private var detail: String {
         session.isBackendRunning
-            ? "The motors are off, so the robot accepts commands without moving."
-            : "Motion, teleop and the state stream stay unavailable until it starts."
+            ? String(localized: .reachy("The motors are off, so the robot accepts commands without moving."))
+            : String(localized: .reachy("Motion, teleop and the state stream stay unavailable until it starts."))
     }
 }

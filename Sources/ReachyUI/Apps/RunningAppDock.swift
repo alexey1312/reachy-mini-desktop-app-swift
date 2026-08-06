@@ -150,7 +150,7 @@ struct RunningAppDockContent: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Opens the running app")
+            .accessibilityHint(.reachy("Opens the running app"))
 
             if hasFailed {
                 dismissButton
@@ -200,7 +200,7 @@ struct RunningAppDockContent: View {
         Button {
             perform(.restart)
         } label: {
-            Label("Restart", systemImage: "arrow.clockwise")
+            Label(.reachy("Restart"), systemImage: "arrow.clockwise")
                 .labelStyle(.iconOnly)
         }
         .reachyButton()
@@ -212,7 +212,7 @@ struct RunningAppDockContent: View {
         Button {
             perform(.stop)
         } label: {
-            Label("Stop", systemImage: "stop.fill")
+            Label(.reachy("Stop"), systemImage: "stop.fill")
                 .labelStyle(.iconOnly)
         }
         .reachyButton(.prominent)
@@ -225,7 +225,7 @@ struct RunningAppDockContent: View {
         Button {
             perform(.dismiss)
         } label: {
-            Label("Dismiss", systemImage: "xmark")
+            Label(.reachy("Dismiss"), systemImage: "xmark")
                 .labelStyle(.iconOnly)
         }
         .reachyButton()

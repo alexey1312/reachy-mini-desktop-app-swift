@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyMedia
 import SwiftUI
@@ -20,7 +21,7 @@ struct LiveTab: View {
             // safe-area inset, which would then be laid out under the tab bar and
             // clipped.
             content
-                .navigationTitle("Live")
+                .navigationTitle(.reachy("Live"))
                 .hfAccountToolbar(isPresented: $router.showsAccount)
                 .toolbar {
                     if session.canTeleoperate {
@@ -28,7 +29,7 @@ struct LiveTab: View {
                             NavigationLink {
                                 ControllerScreen(session: session)
                             } label: {
-                                Label("Controller", systemImage: "gamecontroller")
+                                Label(.reachy("Controller"), systemImage: "gamecontroller")
                             }
                         }
                     }

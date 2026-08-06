@@ -1,4 +1,5 @@
 import AppIntents
+import ReachyDesign
 import ReachyWidgetUI
 import SwiftUI
 import WidgetKit
@@ -13,7 +14,7 @@ struct WakeRobotControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "WakeRobot") {
             ControlWidgetButton(action: WakeRobotIntent()) {
-                Label("Wake up", systemImage: "figure.wave")
+                Label(.reachy("Wake up"), systemImage: "figure.wave")
             }
         }
         .displayName("Wake Reachy Mini")
@@ -25,7 +26,7 @@ struct SleepRobotControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "SleepRobot") {
             ControlWidgetButton(action: SleepRobotIntent()) {
-                Label("Sleep", systemImage: "moon.zzz.fill")
+                Label(.reachy("Sleep"), systemImage: "moon.zzz.fill")
             }
         }
         .displayName("Put Reachy Mini to sleep")

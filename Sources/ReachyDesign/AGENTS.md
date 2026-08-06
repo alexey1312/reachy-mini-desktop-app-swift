@@ -72,8 +72,42 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 - **`glassEffectID` morphing between screens.** Worth having only once a layout is built around it, and there is no
   equivalent below the floor.
 - **A reduce-motion resolver.** Out of scope; do not read one into `Motion`'s names.
-- **A localization catalogue.** Planned to land here (both bundles link this target, so one catalogue serves the app
-  and the widget), but not yet present.
+- **The App Intents strings.** `RobotAppIntents`, `RobotPowerIntents`, `RobotAppsConfigurationIntent`,
+  `RobotAppEntity`, `ReachyShortcuts` and the two widget `configurationDisplayName`s stay bare
+  `LocalizedStringResource` against the main bundle. `AppIntent.title` and `DisplayRepresentation` are baked into
+  `Metadata.appintents` at build time, and `.reachy(_:)` records a _runtime_ bundle URL the metadata processor has no
+  reason to be able to follow — Siri and Shortcuts would read an unresolvable reference. Localizing them means a
+  catalogue in each executable's own bundle, which is a separate decision from this one.
+
+## The localization catalogue
+
+`Resources/Localizable.xcstrings` is the app's only catalogue, and `Localization.swift` is the only way in:
+`.reachy("Wake up")` returns a `LocalizedStringResource` bound to `Bundle.module`.
+
+It lives here because **both executables link this target**, so SwiftPM copies `ReachyMini_ReachyDesign.bundle` into
+each — verified on a device build: `en.lproj/Localizable.strings` is present in `ReachySpike.app` _and_ in
+`PlugIns/ReachyWidget.appex`. One catalogue, one hand-off to a translator, two processes served.
+
+Three things measured rather than assumed:
+
+- **`Section`, `LabeledContent`, `TextField` and `SecureField` only got their `LocalizedStringResource` initialiser in
+  iOS 26 / macOS 26.** `Text`, `Button`, `Label`, `Toggle`, `Picker`, `navigationTitle`, `alert` and the rest have had
+  one since iOS 16. `LocalizedControls.swift` backfills those four at this app's floor, forwarding to the
+  `Text`-taking form. Both are visible against the iOS 26 SDK and the SDK's carries `@_disfavoredOverload`, so ours
+  win with no ambiguity — 28 call sites that would otherwise each be a two-closure builder.
+- **The catalogue derives a Swift symbol per key, and two keys that differ only in punctuation collide** — a hard
+  build error from `xcstringstool`, not a warning. `"Bluetooth is switched off."` against `"Bluetooth is switched
+  off"` was the app saying the same sentence two ways; `"Starting…"` against `"Starting"` was not, and the daemon's
+  lifecycle took `"Starting up"` / `"Shutting down"` to clear it. Expect to be told when a new key rhymes with an old
+  one, and fix the copy rather than the tooling.
+- **`.xcstrings` compiles under the pinned swift.org toolchain**, unlike `#Preview`: SwiftPM shells out to `xcrun`
+  for `xcstringstool`, so `mise run build` and `mise run test` are unaffected.
+
+Seeding is manual. `SWIFT_EMIT_LOC_STRINGS` is not set for SwiftPM targets through Tuist, so Xcode never extracts:
+the 335 keys with no interpolation were collected from the source and written in with `extractionState: "manual"`.
+The ~50 keys that _do_ interpolate are deliberately absent — their stored form carries `%@` / `%lld` placeholders
+whose types cannot be read off the call site, and a wrong entry is worse than a missing one, which merely falls back
+to the English key.
 
 ## Applying a role — what happened
 

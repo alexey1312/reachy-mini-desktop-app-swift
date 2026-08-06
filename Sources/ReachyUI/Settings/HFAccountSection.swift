@@ -1,4 +1,5 @@
 import HuggingFaceAuth
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -47,7 +48,7 @@ struct HFAccountSection: View {
             }
             signInControls
         } header: {
-            Text("Hugging Face")
+            Text(.reachy("Hugging Face"))
         } footer: {
             Text(footerText)
         }
@@ -63,16 +64,19 @@ struct HFAccountSection: View {
     private var accountRow: some View {
         switch model.account.state {
         case .signedOut, .signingIn:
-            Label("Not signed in", systemImage: "person.crop.circle")
+            Label(.reachy("Not signed in"), systemImage: "person.crop.circle")
         case let .signedIn(username):
             LabeledContent {
-                Button("Sign out", role: .destructive) { model.signOut() }
+                Button(.reachy("Sign out"), role: .destructive) { model.signOut() }
                     .buttonStyle(.borderless)
             } label: {
-                accountLabel(username: username, caption: "Signed in")
+                accountLabel(username: username, caption: String(localized: .reachy("Signed in")))
             }
         case let .needsReauth(username):
-            accountLabel(username: username ?? "Your account", caption: "Session expired")
+            accountLabel(
+                username: username ?? String(localized: .reachy("Your account")),
+                caption: String(localized: .reachy("Session expired"))
+            )
         case let .failed(reason):
             Label(reason, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.orange)
@@ -101,19 +105,19 @@ struct HFAccountSection: View {
                 Button {
                     Task { await model.signInWithBrowser() }
                 } label: {
-                    Label("Sign in with Hugging Face", systemImage: "person.badge.key")
+                    Label(.reachy("Sign in with Hugging Face"), systemImage: "person.badge.key")
                 }
                 .disabled(model.isBusy)
             }
 
-            DisclosureGroup("Use an access token", isExpanded: $showsTokenField) {
-                SecureField("hf_…", text: $model.pastedToken)
+            DisclosureGroup(String(localized: .reachy("Use an access token")), isExpanded: $showsTokenField) {
+                SecureField(.reachy("hf_…"), text: $model.pastedToken)
                     .textContentType(.password)
                     .autocorrectionDisabled()
                 #if os(iOS)
                     .textInputAutocapitalization(.never)
                 #endif
-                Button("Sign in with this token") {
+                Button(.reachy("Sign in with this token")) {
                     Task { await model.signInWithPastedToken() }
                 }
                 .disabled(model.pastedToken.trimmingCharacters(in: .whitespaces).isEmpty || model.isBusy)
@@ -123,12 +127,16 @@ struct HFAccountSection: View {
 
     private var footerText: String {
         if model.offersBrowserSignIn {
-            "Signing in shows your private Spaces in the app store and lists your robots for remote access."
+            String(
+                localized: .reachy(
+                    "Signing in shows your private Spaces in the app store and lists your robots for remote access."
+                )
+            )
         } else {
             // Honest about the state of the build rather than showing a button
             // that would open an error page on the Hub.
-            "One-tap sign-in is not available in this build. Create an access token at "
-                + "huggingface.co/settings/tokens and paste it here."
+            String(localized: .reachy("One-tap sign-in is not available in this build. Create an access token at "))
+                + String(localized: .reachy("huggingface.co/settings/tokens and paste it here."))
         }
     }
 
@@ -136,9 +144,9 @@ struct HFAccountSection: View {
 
     private var robotSection: some View {
         Section {
-            LabeledContent("This robot", value: robotAccountText)
+            LabeledContent(.reachy("This robot"), value: robotAccountText)
             if let relay {
-                LabeledContent("Remote access", value: relayText(relay))
+                LabeledContent(.reachy("Remote access"), value: relayText(relay))
             }
             if let linkError {
                 Text(linkError)
@@ -146,7 +154,7 @@ struct HFAccountSection: View {
                     .foregroundStyle(.red)
             }
             if robotAccount?.isLoggedIn == true {
-                Button("Unlink this robot", role: .destructive) {
+                Button(.reachy("Unlink this robot"), role: .destructive) {
                     Task { await unlink() }
                 }
                 .disabled(isLinking)
@@ -157,19 +165,23 @@ struct HFAccountSection: View {
                     if isLinking {
                         ProgressView()
                     } else {
-                        Label("Link this robot", systemImage: "link")
+                        Label(.reachy("Link this robot"), systemImage: "link")
                     }
                 }
                 .disabled(isLinking)
             }
         } header: {
-            Text("Robot account")
+            Text(.reachy("Robot account"))
         } footer: {
             // The LAN hop is plain HTTP and unauthenticated (ADR 0001). Saying so
             // is the honest alternative to implying a security this transport does
             // not have.
-            Text("Linking copies your token to the robot over the local network, which is not encrypted. "
-                + "Do it on a network you trust.")
+            Text(
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "Linking copies your token to the robot over the local network, which is not encrypted. Do it on a network you trust."
+                )
+            )
         }
         .task {
             guard !previewMode else { return }
@@ -180,18 +192,18 @@ struct HFAccountSection: View {
     private var robotAccountText: String {
         guard let robotAccount else { return "…" }
         if robotAccount.isLoggedIn {
-            return robotAccount.username.map { "Linked to \($0)" } ?? "Linked"
+            return robotAccount.username.map { String(localized: .reachy("Linked to \($0)")) } ?? "Linked"
         }
-        return "Not linked"
+        return String(localized: .reachy("Not linked"))
     }
 
     private func relayText(_ relay: RelayStatus) -> String {
         switch relay.state {
         case .connected: "Online"
         case .connecting, .reconnecting: "Connecting…"
-        case .waitingForToken: "Waiting for a token"
+        case .waitingForToken: String(localized: .reachy("Waiting for a token"))
         case .stopped: "Off"
-        case .unavailable: relay.message ?? "Not available on this robot"
+        case .unavailable: relay.message ?? String(localized: .reachy("Not available on this robot"))
         case .error: relay.message ?? "Error"
         case let .unknown(state): state
         }
@@ -204,7 +216,7 @@ struct HFAccountSection: View {
 
     private func link() async {
         guard let token = await model.account.currentToken() else {
-            linkError = "This app has no valid token to share. Sign in again."
+            linkError = String(localized: .reachy("This app has no valid token to share. Sign in again."))
             return
         }
         isLinking = true

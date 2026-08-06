@@ -12,32 +12,41 @@ struct OnboardingNetworkStep: View {
 
     var body: some View {
         OnboardingStepScaffold(
-            title: "Choose a network",
-            message: "The robot joins this network and then talks to the app over it. "
-                + "Bluetooth is only here to get it that far."
+            title: String(localized: .reachy("Choose a network")),
+            message: String(localized: .reachy("The robot joins this network and then talks to the app over it. "))
+                + String(localized: .reachy("Bluetooth is only here to get it that far."))
         ) {
             if model.isAlreadyOnNetwork {
                 alreadyConnected
             }
             picker
             if model.selectedSSID == nil {
-                TextField("Network name", text: Binding(get: { model.manualSSID }, set: { model.manualSSID = $0 }))
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
+                TextField(
+                    .reachy("Network name"),
+                    text: Binding(get: { model.manualSSID }, set: { model.manualSSID = $0 })
+                )
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
                 #if os(iOS)
                     .textInputAutocapitalization(.never)
                 #endif
             }
-            SecureField("Wi-Fi password", text: Binding(get: { model.password }, set: { model.password = $0 }))
+            SecureField(.reachy("Wi-Fi password"), text: Binding(get: { model.password }, set: { model.password = $0 }))
                 .textFieldStyle(.roundedBorder)
-            Text("The robot fits only a handful of names into one Bluetooth message and cannot say how many it left "
-                + "out, so a network missing from the list is normal — type it in under \"Other network…\".")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "The robot fits only a handful of names into one Bluetooth message and cannot say how many it left out, so a network missing from the list is normal — type it in under \"Other network…\"."
+                )
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
             Label(
-                "The password is encrypted for this robot before it is sent, but someone within Bluetooth range "
-                    + "could still interfere with the exchange. Set the robot up somewhere you trust.",
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "The password is encrypted for this robot before it is sent, but someone within Bluetooth range could still interfere with the exchange. Set the robot up somewhere you trust."
+                ),
                 systemImage: "lock.trianglebadge.exclamationmark"
             )
             .font(.footnote)
@@ -45,7 +54,7 @@ struct OnboardingNetworkStep: View {
             .fixedSize(horizontal: false, vertical: true)
             OnboardingErrorText(message: model.errorMessage)
         } actions: {
-            Button("Send to the robot") {
+            Button(.reachy("Send to the robot")) {
                 Task { await model.join() }
             }
             .reachyButton(.prominent)
@@ -57,11 +66,14 @@ struct OnboardingNetworkStep: View {
 
     private var picker: some View {
         HStack {
-            Picker("Network", selection: Binding(get: { model.selectedSSID }, set: { model.selectedSSID = $0 })) {
+            Picker(
+                .reachy("Network"),
+                selection: Binding(get: { model.selectedSSID }, set: { model.selectedSSID = $0 })
+            ) {
                 ForEach(model.networks, id: \.self) { network in
                     Text(network).tag(String?.some(network))
                 }
-                Text("Other network…").tag(String?.none)
+                Text(.reachy("Other network…")).tag(String?.none)
             }
             .pickerStyle(.menu)
             Spacer()
@@ -71,7 +83,7 @@ struct OnboardingNetworkStep: View {
                 if model.isBusy {
                     ProgressView()
                 } else {
-                    Label("Scan again", systemImage: "arrow.clockwise")
+                    Label(.reachy("Scan again"), systemImage: "arrow.clockwise")
                         .labelStyle(.iconOnly)
                 }
             }
@@ -81,9 +93,9 @@ struct OnboardingNetworkStep: View {
 
     private var alreadyConnected: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("This robot is already on a network.", systemImage: "checkmark.circle")
+            Label(.reachy("This robot is already on a network."), systemImage: "checkmark.circle")
                 .foregroundStyle(.green)
-            Button("Keep it there and finish") {
+            Button(.reachy("Keep it there and finish")) {
                 model.skipNetwork()
             }
         }

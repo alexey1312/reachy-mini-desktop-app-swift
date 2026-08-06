@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -26,17 +27,22 @@ struct RunningAppSheet: View {
                 AppIdentityHeader(app: status.app)
             }
 
-            Section("Status") {
-                LabeledContent("State") {
+            Section(.reachy("Status")) {
+                LabeledContent(.reachy("State")) {
                     // `.body` and not a `Typography` role: here the state is the
                     // *value* of a form row, so it takes the size the row's own
                     // label already has.
                     RunningAppCaption.label(of: status, isReachable: isReachable, font: .body)
                 }
                 if !isReachable {
-                    Text("The robot stopped answering. The app may still be running — these controls cannot reach it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(
+                        .reachy(
+                            // swiftlint:disable:next line_length
+                            "The robot stopped answering. The app may still be running — these controls cannot reach it."
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
                 if let error = status.error {
                     failureRow(error)
@@ -50,7 +56,7 @@ struct RunningAppSheet: View {
             }
 
             if let summary = status.app.summary {
-                Section("About") {
+                Section(.reachy("About")) {
                     Text(summary)
                         .font(.subheadline)
                 }
@@ -63,7 +69,7 @@ struct RunningAppSheet: View {
         #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Minimise") { model.isExpanded = false }
+                    Button(.reachy("Minimize")) { model.isExpanded = false }
                 }
             }
     }
@@ -73,7 +79,7 @@ struct RunningAppSheet: View {
     /// is the only crash output there is.
     private func failureRow(_ error: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Last output")
+            Text(.reachy("Last output"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text(error)
@@ -85,16 +91,16 @@ struct RunningAppSheet: View {
     @ViewBuilder
     private var controls: some View {
         if status.state == .error {
-            Button("Dismiss", systemImage: "xmark") {
+            Button(.reachy("Dismiss"), systemImage: "xmark") {
                 model.dismissFailure(session)
             }
         } else {
-            Button("Restart", systemImage: "arrow.clockwise") {
+            Button(.reachy("Restart"), systemImage: "arrow.clockwise") {
                 Task { await model.restart(session: session) }
             }
             .disabled(model.busy || !isReachable)
 
-            Button("Stop", systemImage: "stop.fill", role: .destructive) {
+            Button(.reachy("Stop"), systemImage: "stop.fill", role: .destructive) {
                 Task { await model.stop(session: session) }
             }
             .disabled(model.busy || !isReachable)

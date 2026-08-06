@@ -246,6 +246,22 @@ environment keys are written out by hand — swiftformat's `environmentEntry` ru
    orders only within one — a harness holding shared global state passes until a second suite uses it
    (`StubURLProtocol` binds stubs to their session for exactly this reason). Give async transport tests
    `.timeLimit(.minutes(1))`, or one hang stalls the whole run.
+9. **Every string a user reads goes through `.reachy(_:)`.** A bare `Text("Connect")` is a bug, and a silent one:
+   inside a library target a `LocalizedStringKey` resolves against `Bundle.main`, so it renders perfectly in English
+   and can never be translated. Two spellings, and which one applies is decided by the type, not by taste:
+   - **`.reachy("…")`** wherever SwiftUI takes a `LocalizedStringResource` — `Text`, `Button`, `Label`, `Section`,
+     `LabeledContent`, `Toggle`, `Picker`, `TextField`, `ContentUnavailableView`, `navigationTitle`, `alert`,
+     `accessibilityLabel`. This is the default; reach for it first.
+   - **`String(localized: .reachy("…"))`** only where the value has to _stay_ a `String`: a model property a test
+     asserts on, or a slot that also holds runtime text the robot sent (`RunningAppCaption.description` inlines a
+     traceback, `.unknown(state)` carries the daemon's own word). Resolving early is the price of sharing the slot.
+
+   Exempt, and only these: log lines, fixtures, identifiers, format strings, and the App Intents metadata — see
+   `Sources/ReachyDesign/AGENTS.md` for why the last one is not an oversight. **Never show `String(describing:)` of a
+   domain enum**; give it a caption type beside the screen, as `DaemonStateCaption` and `RunningAppCaption` do.
+   Layout stays direction-relative too: `leading`/`trailing`, never `left`/`right`, and the mirroring SF Symbols
+   (`chevron.forward`, `arrow.up.forward.square`) rather than the absolute ones, so a right-to-left language needs no
+   second pass. `JoystickPad` keeps `.left`/`.right` on purpose — those are the robot's directions, not the reader's.
 
 ## Detailed Rules
 

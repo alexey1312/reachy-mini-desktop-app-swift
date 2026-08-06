@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import ReachyDesign
 import ReachyKit
 
 /// Drives one install, update or removal from the moment the daemon accepts the
@@ -145,11 +146,14 @@ final class AppInstallModel {
         case .succeeded:
             .succeeded(operation)
         case let .failed(reason):
-            .failed(operation, reason ?? "The robot did not say why.")
+            .failed(operation, reason ?? String(localized: .reachy("The robot did not say why.")))
         case .daemonRestarted:
             .daemonRestarted(operation)
         case .timedOut:
-            .failed(operation, "The robot took too long to answer. Check the app list before trying again.")
+            .failed(
+                operation,
+                String(localized: .reachy("The robot took too long to answer. Check the app list before trying again."))
+            )
         }
     }
 

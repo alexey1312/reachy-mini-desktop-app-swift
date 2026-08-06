@@ -29,10 +29,14 @@ struct LogConsoleView: View {
     var body: some View {
         Group {
             if let failure {
-                ContentUnavailableView("Log stream failed", systemImage: "xmark.octagon", description: Text(failure))
+                ContentUnavailableView(
+                    .reachy("Log stream failed"),
+                    systemImage: "xmark.octagon",
+                    description: Text(failure)
+                )
             } else if model.entries.isEmpty {
                 ContentUnavailableView(
-                    "Waiting for logs…",
+                    .reachy("Waiting for logs…"),
                     systemImage: "text.alignleft",
                     description: Text(emptyDescription)
                 )
@@ -43,7 +47,7 @@ struct LogConsoleView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { statusBar }
-        .searchable(text: $model.query, prompt: "Filter log")
+        .searchable(text: $model.query, prompt: String(localized: .reachy("Filter log")))
         .toolbar { toolbarContent }
         .onAppear { model.capacity = capacity }
         .onChange(of: capacity) { model.capacity = capacity }
@@ -84,7 +88,7 @@ struct LogConsoleView: View {
             Text(statusText)
             Spacer()
             if !atBottom {
-                Button("Jump to latest", systemImage: "arrow.down.to.line") { jumpToken += 1 }
+                Button(.reachy("Jump to latest"), systemImage: "arrow.down.to.line") { jumpToken += 1 }
                     .buttonStyle(.borderless)
             }
         }
@@ -98,12 +102,14 @@ struct LogConsoleView: View {
     private var statusText: String {
         var parts: [String] = []
         if model.isFiltered {
-            parts.append("\(model.visible.count) of \(model.entries.count) lines")
+            parts.append(String(localized: .reachy("\(model.visible.count) of \(model.entries.count) lines")))
         } else {
-            parts.append("\(model.entries.count) lines")
+            parts.append(String(localized: .reachy("\(model.entries.count) lines")))
         }
         if model.paused {
-            parts.append(model.pending.isEmpty ? "paused" : "paused · +\(model.pending.count) new")
+            parts
+                .append(model.pending
+                    .isEmpty ? "paused" : String(localized: .reachy("paused · +\(model.pending.count) new")))
         }
         return parts.joined(separator: " · ")
     }
@@ -120,7 +126,7 @@ struct LogConsoleView: View {
         .font(.caption2.monospaced())
         .textSelection(.enabled)
         .contextMenu {
-            Button("Copy line", systemImage: "doc.on.doc") { Clipboard.copy(entry.text) }
+            Button(.reachy("Copy line"), systemImage: "doc.on.doc") { Clipboard.copy(entry.text) }
         }
         .listRowSeparator(.hidden)
         .listRowInsets(.init(top: 1, leading: 8, bottom: 1, trailing: 8))
@@ -146,27 +152,27 @@ struct LogConsoleView: View {
         }
         ToolbarItemGroup {
             ShareLink(item: model.export(address: source), preview: SharePreview("Log")) {
-                Label("Export", systemImage: "square.and.arrow.up")
+                Label(.reachy("Export"), systemImage: "square.and.arrow.up")
             }
             .disabled(model.visible.isEmpty)
             Menu {
-                Picker("Level", selection: $model.minimumLevel) {
-                    Text("All").tag(LogLevel.debug)
-                    Text("Info and above").tag(LogLevel.info)
-                    Text("Warnings and above").tag(LogLevel.warning)
-                    Text("Errors").tag(LogLevel.error)
+                Picker(.reachy("Level"), selection: $model.minimumLevel) {
+                    Text(.reachy("All")).tag(LogLevel.debug)
+                    Text(.reachy("Info and above")).tag(LogLevel.info)
+                    Text(.reachy("Warnings and above")).tag(LogLevel.warning)
+                    Text(.reachy("Errors")).tag(LogLevel.error)
                 }
-                Picker("Buffer", selection: $capacity) {
+                Picker(.reachy("Buffer"), selection: $capacity) {
                     ForEach(LogConsoleModel.capacities, id: \.self) { size in
-                        Text("\(size) lines").tag(size)
+                        Text(.reachy("\(size) lines")).tag(size)
                     }
                 }
                 Divider()
-                Button("Copy all", systemImage: "doc.on.doc") { Clipboard.copy(model.copyText) }
+                Button(.reachy("Copy all"), systemImage: "doc.on.doc") { Clipboard.copy(model.copyText) }
                     .disabled(model.visible.isEmpty)
-                Button("Clear", systemImage: "trash", role: .destructive) { model.clear() }
+                Button(.reachy("Clear"), systemImage: "trash", role: .destructive) { model.clear() }
             } label: {
-                Label("More", systemImage: "ellipsis.circle")
+                Label(.reachy("More"), systemImage: "ellipsis.circle")
             }
         }
     }

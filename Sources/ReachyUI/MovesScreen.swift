@@ -23,7 +23,7 @@ struct MovesScreen: View {
                 }
             }
             Section {
-                Picker("Library", selection: $model.selection) {
+                Picker(.reachy("Library"), selection: $model.selection) {
                     ForEach(MovesModel.libraries.indices, id: \.self) { index in
                         Text(MovesModel.libraries[index].title).tag(index)
                     }
@@ -33,7 +33,7 @@ struct MovesScreen: View {
             if !model.isContentLoading {
                 Section {
                     if model.moves.isEmpty {
-                        Text("No moves").foregroundStyle(.secondary)
+                        Text(.reachy("No moves")).foregroundStyle(.secondary)
                     } else {
                         ForEach(model.moves, id: \.self) { move in
                             Button {
@@ -69,7 +69,7 @@ struct MovesScreen: View {
             isPresented: model.isContentLoading,
             title: model.selectedLibrary.loadingTitle
         )
-        .navigationTitle("Moves")
+        .navigationTitle(.reachy("Moves"))
         .safeAreaInset(edge: .bottom) {
             if session.currentMove != nil {
                 Button {
@@ -98,7 +98,7 @@ struct MovesScreen: View {
             Button {
                 Task { await model.load(session: session, refresh: true) }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(.reachy("Refresh"), systemImage: "arrow.clockwise")
             }
             .disabled(model.loading || model.isContentLoading)
         }

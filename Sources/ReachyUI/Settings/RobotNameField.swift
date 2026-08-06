@@ -7,15 +7,17 @@ struct RobotNameField {
     let isEditable: Bool
     let footer: String
 
-    private static let hardwareIDNote = "The hardware ID never changes."
+    private static let hardwareIDNote = String(localized: .reachy("The hardware ID never changes."))
 
     init(supportsRename: Bool, daemonVersion: String?) {
         isEditable = supportsRename
         guard !supportsRename else {
-            footer = "The name identifies this robot on the network. \(Self.hardwareIDNote)"
+            footer = String(localized: .reachy("The name identifies this robot on the network. \(Self.hardwareIDNote)"))
             return
         }
-        let running = daemonVersion.map { "this robot runs daemon \($0)" } ?? "this robot runs an older one"
-        footer = "Renaming needs newer robot software — \(running). \(Self.hardwareIDNote)"
+        let running = daemonVersion
+            .map { String(localized: .reachy("this robot runs daemon \($0)")) } ??
+            String(localized: .reachy("this robot runs an older one"))
+        footer = String(localized: .reachy("Renaming needs newer robot software — \(running). \(Self.hardwareIDNote)"))
     }
 }

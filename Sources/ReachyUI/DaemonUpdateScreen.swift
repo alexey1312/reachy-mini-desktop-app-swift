@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -28,33 +29,38 @@ struct DaemonUpdateScreen: View {
     var body: some View {
         Form {
             Section {
-                Label("This robot needs a software update", systemImage: "arrow.down.circle")
+                Label(.reachy("This robot needs a software update"), systemImage: "arrow.down.circle")
                     .font(.headline)
-                LabeledContent("Robot runs", value: requirement.reported)
-                LabeledContent("This app needs", value: requirement.minimum)
+                LabeledContent(.reachy("Robot runs"), value: requirement.reported)
+                LabeledContent(.reachy("This app needs"), value: requirement.minimum)
             } footer: {
                 Text(
                     requirement.canSelfUpdate
-                        ? "The robot downloads the update itself, so it needs internet access. "
-                        + "It restarts when the update finishes."
-                        : "This robot cannot update itself over the network. "
-                        + "Connect it to the official desktop app over USB to update it."
+                        ?
+                        String(
+                            localized: .reachy(
+                                "The robot downloads the update itself, so it needs internet access. "
+                            )
+                        )
+                        + String(localized: .reachy("It restarts when the update finishes."))
+                        : String(localized: .reachy("This robot cannot update itself over the network. "))
+                        + String(localized: .reachy("Connect it to the official desktop app over USB to update it."))
                 )
             }
 
             if requirement.canSelfUpdate {
-                Section("Update") {
+                Section(.reachy("Update")) {
                     statusRow
                     actions
                 }
             }
 
             Section {
-                Button("Disconnect", role: .destructive) { session.disconnect() }
+                Button(.reachy("Disconnect"), role: .destructive) { session.disconnect() }
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Robot update")
+        .navigationTitle(.reachy("Robot update"))
         .task {
             guard model == nil else { return }
             let model = SystemUpdateModel(session: session)
@@ -69,12 +75,12 @@ struct DaemonUpdateScreen: View {
                     LogConsoleView(
                         model: model.log,
                         source: session.address?.displayString ?? "robot",
-                        emptyDescription: "The robot has not sent any installer output yet."
+                        emptyDescription: String(localized: .reachy("The robot has not sent any installer output yet."))
                     )
-                    .navigationTitle("Update log")
+                    .navigationTitle(.reachy("Update log"))
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { showsLog = false }
+                            Button(.reachy("Done")) { showsLog = false }
                         }
                     }
                 }
@@ -86,29 +92,29 @@ struct DaemonUpdateScreen: View {
     private var statusRow: some View {
         switch state {
         case .idle, .checking:
-            Label("Checking for updates…", systemImage: "arrow.triangle.2.circlepath")
+            Label(.reachy("Checking for updates…"), systemImage: "arrow.triangle.2.circlepath")
         case let .upToDate(current):
             // Reachable when the robot is genuinely on the newest published release
             // yet still older than this app expects.
             Label(
-                "The robot is on \(current), the newest release available to it.",
+                .reachy("The robot is on \(current), the newest release available to it."),
                 systemImage: "exclamationmark.triangle"
             )
             .foregroundStyle(.orange)
         case let .robotOffline(current):
             Label(
-                "The robot (\(current)) can't reach the internet, so it can't download an update.",
+                .reachy("The robot (\(current)) can't reach the internet, so it can't download an update."),
                 systemImage: "wifi.exclamationmark"
             )
             .foregroundStyle(.orange)
         case let .available(current, latest):
-            LabeledContent("Available") { Text("\(current) → \(latest)").monospaced() }
+            LabeledContent(.reachy("Available")) { Text(.reachy("\(current) → \(latest)")).monospaced() }
         case .installing:
-            Label("Installing — this takes a minute or two…", systemImage: "arrow.down.circle")
+            Label(.reachy("Installing — this takes a minute or two…"), systemImage: "arrow.down.circle")
         case .restarting:
-            Label("The robot is restarting…", systemImage: "arrow.clockwise")
+            Label(.reachy("The robot is restarting…"), systemImage: "arrow.clockwise")
         case let .finished(version):
-            Label("Updated to \(version).", systemImage: "checkmark.circle")
+            Label(.reachy("Updated to \(version)."), systemImage: "checkmark.circle")
                 .foregroundStyle(.green)
         case let .failed(message):
             Label(message, systemImage: "xmark.octagon")
@@ -118,30 +124,30 @@ struct DaemonUpdateScreen: View {
 
     @ViewBuilder
     private var actions: some View {
-        Toggle("Include pre-release versions", isOn: $preRelease)
+        Toggle(.reachy("Include pre-release versions"), isOn: $preRelease)
             .disabled(model?.isBusy ?? true)
             .onChange(of: preRelease) { _, newValue in
                 Task { await model?.check(preRelease: newValue) }
             }
 
         if case .available = state {
-            Button("Update now") {
+            Button(.reachy("Update now")) {
                 Task { await model?.install(preRelease: preRelease) }
             }
         } else if case .finished = state {
             if let address = session.address {
-                Button("Connect now") {
+                Button(.reachy("Connect now")) {
                     Task { await session.connect(to: address) }
                 }
             }
         } else if !(model?.isBusy ?? true) {
-            Button("Check again") {
+            Button(.reachy("Check again")) {
                 Task { await model?.check(preRelease: preRelease) }
             }
         }
 
         if model?.log.entries.isEmpty == false {
-            Button("Show installer log") { showsLog = true }
+            Button(.reachy("Show installer log")) { showsLog = true }
         }
     }
 }

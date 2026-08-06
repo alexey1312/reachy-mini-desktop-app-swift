@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyWidgetUI
 import SwiftUI
@@ -24,7 +25,7 @@ struct AppStoreScreen: View {
         @Bindable var model = model
         List {
             Section {
-                Picker("Section", selection: $model.section) {
+                Picker(.reachy("Section"), selection: $model.section) {
                     ForEach(AppStoreModel.Section.allCases) { section in
                         Text(section.title).tag(section)
                     }
@@ -70,9 +71,9 @@ struct AppStoreScreen: View {
                 emptyState
             }
         }
-        .contentLoading(isPresented: model.isContentLoading, title: "Browsing the robot app aisle…")
-        .navigationTitle("Apps")
-        .searchable(text: $model.searchText, prompt: "Search apps")
+        .contentLoading(isPresented: model.isContentLoading, title: .reachy("Browsing the robot app aisle…"))
+        .navigationTitle(.reachy("Apps"))
+        .searchable(text: $model.searchText, prompt: String(localized: .reachy("Search apps")))
         // No running-app inset here any more: the dock is mounted on the root
         // `TabView`, below the tab bar, and is on screen for every tab. A second
         // copy on this one would be the same control twice.
@@ -81,7 +82,7 @@ struct AppStoreScreen: View {
             Button {
                 Task { await model.load(session: session, refresh: true) }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(.reachy("Refresh"), systemImage: "arrow.clockwise")
             }
             .disabled(model.loading || model.isContentLoading)
         }
@@ -103,23 +104,25 @@ struct AppStoreScreen: View {
             ContentUnavailableView.search(text: model.searchText)
         } else if model.lastError != nil {
             ContentUnavailableView(
-                "Store unavailable",
+                .reachy("Store unavailable"),
                 systemImage: "wifi.exclamationmark",
-                description: Text("The robot could not reach Hugging Face. Pull to refresh once it is back online.")
+                description: Text(
+                    .reachy("The robot could not reach Hugging Face. Pull to refresh once it is back online.")
+                )
             )
         } else {
             switch model.section {
             case .installed:
                 ContentUnavailableView(
-                    "No apps installed",
+                    .reachy("No apps installed"),
                     systemImage: "square.stack.3d.up.slash",
-                    description: Text("Browse Discover to install one from Hugging Face.")
+                    description: Text(.reachy("Browse Discover to install one from Hugging Face."))
                 )
             case .discover:
                 ContentUnavailableView(
-                    "Nothing to show",
+                    .reachy("Nothing to show"),
                     systemImage: "square.stack.3d.up.slash",
-                    description: Text("The robot found no apps on Hugging Face.")
+                    description: Text(.reachy("The robot found no apps on Hugging Face."))
                 )
             }
         }
@@ -130,11 +133,12 @@ struct AppStoreScreen: View {
     private var remoteSessionNotice: some View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
-                Text("In use remotely")
+                Text(.reachy("In use remotely"))
                     .font(.subheadline.weight(.semibold))
                 Text(
-                    model.lockHolder.map { "\($0) is driving this robot over Hugging Face." }
-                        ?? "Someone is driving this robot over Hugging Face."
+                    model.lockHolder
+                        .map { String(localized: .reachy("\($0) is driving this robot over Hugging Face.")) }
+                        ?? String(localized: .reachy("Someone is driving this robot over Hugging Face."))
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 
 extension RobotSession.PowerTransition {
@@ -6,9 +7,9 @@ extension RobotSession.PowerTransition {
     /// both be showing a backend start.
     var statusText: String {
         switch self {
-        case .startingBackend: "Starting the robot backend… this can take a minute"
-        case .wakingUp: "Waking up…"
-        case .goingToSleep: "Going to sleep…"
+        case .startingBackend: String(localized: .reachy("Starting the robot backend… this can take a minute"))
+        case .wakingUp: String(localized: .reachy("Waking up…"))
+        case .goingToSleep: String(localized: .reachy("Going to sleep…"))
         }
     }
 }

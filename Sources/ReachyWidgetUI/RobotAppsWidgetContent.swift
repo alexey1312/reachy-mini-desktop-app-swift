@@ -1,4 +1,5 @@
 import Foundation
+import ReachyDesign
 import ReachyKit
 
 /// What the launcher puts on screen, worked out from storage before any view is
@@ -76,9 +77,9 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         public var message: String? {
             switch self {
             case .none: nil
-            case .noRobot: "No robot. Open Reachy Mini to connect."
-            case .noApps: "No apps yet. Open Reachy Mini to load your robot's apps."
-            case let .busy(title): "“\(title)” is running."
+            case .noRobot: String(localized: .reachy("No robot. Open Reachy Mini to connect."))
+            case .noApps: String(localized: .reachy("No apps yet. Open Reachy Mini to load your robot's apps."))
+            case let .busy(title): String(localized: .reachy("“\(title)” is running."))
             case let .crashed(app, reason): Self.crashMessage(app: app, reason: reason)
             case let .failure(reason): reason
             }
@@ -101,9 +102,10 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         /// appends "Tap to open." straight after: without one the notice reads
         /// "…no module named cv2 Tap to open."
         private static func crashMessage(app: String, reason: String?) -> String {
-            guard let reason, !reason.isEmpty else { return "“\(app)” stopped with an error." }
+            guard let reason,
+                  !reason.isEmpty else { return String(localized: .reachy("“\(app)” stopped with an error.")) }
             let ends = reason.last.map { ".!?".contains($0) } ?? false
-            return "“\(app)” stopped: \(reason)\(ends ? "" : ".")"
+            return String(localized: .reachy("“\(app)” stopped: \(reason)")) + (ends ? "" : ".")
         }
     }
 
@@ -255,7 +257,9 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         guard let cache, cache.isStale(at: date) else { return nil }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
-        return "App list from \(formatter.localizedString(for: cache.takenAt, relativeTo: date))"
+        return String(
+            localized: .reachy("App list from \(formatter.localizedString(for: cache.takenAt, relativeTo: date))")
+        )
     }
 
     /// Dates at which a timeline must rebuild because a transient statement stops

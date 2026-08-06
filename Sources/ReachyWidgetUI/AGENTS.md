@@ -20,3 +20,8 @@ reverse.
   timelines rather than relying on memory.
 - On iOS 18, widget and Control Centre intents cannot open the app with `openAppWhenRun`; use `widgetURL` where an
   app-opening fallback is needed.
+- **The views localize, the intents do not — and that split is deliberate.** Everything rendered goes through
+  `.reachy(_:)` like the rest of the app, but `AppIntent.title`, `DisplayRepresentation` and the widgets'
+  `configurationDisplayName` stay bare `LocalizedStringResource` against the main bundle: that metadata is baked into
+  `Metadata.appintents` at build time, where a runtime bundle URL has nothing to resolve against. Reasoning in
+  `Sources/ReachyDesign/AGENTS.md`.

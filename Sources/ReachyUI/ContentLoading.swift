@@ -1,8 +1,9 @@
+import Foundation
 import SwiftUI
 
 private struct ContentLoadingModifier: ViewModifier {
     let isPresented: Bool
-    let title: String
+    let title: LocalizedStringResource
 
     func body(content: Content) -> some View {
         content.overlay {
@@ -22,7 +23,7 @@ private struct ContentLoadingModifier: ViewModifier {
 extension View {
     /// An initial or uncached content request, centred in the space the eventual
     /// rows will occupy. Navigation, filters and pickers remain available around it.
-    func contentLoading(isPresented: Bool, title: String) -> some View {
+    func contentLoading(isPresented: Bool, title: LocalizedStringResource) -> some View {
         modifier(ContentLoadingModifier(isPresented: isPresented, title: title))
     }
 }

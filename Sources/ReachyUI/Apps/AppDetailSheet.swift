@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyWidgetUI
 import SwiftUI
@@ -24,7 +25,7 @@ struct AppDetailSheet: View {
             }
 
             if let job = jobForThisApp {
-                Section("Progress") {
+                Section(.reachy("Progress")) {
                     JobProgressRow(state: job)
                     if install.isBusy || !install.log.entries.isEmpty {
                         LogConsoleView(
@@ -33,7 +34,7 @@ struct AppDetailSheet: View {
                             // The socket only wakes on a new line, so silence here
                             // is normal rather than a stall — `AppJobMonitor` is
                             // polling regardless.
-                            emptyDescription: "Waiting for the robot to report progress…"
+                            emptyDescription: String(localized: .reachy("Waiting for the robot to report progress…"))
                         )
                         .frame(minHeight: 160)
                     }
@@ -43,7 +44,7 @@ struct AppDetailSheet: View {
             }
 
             if let summary = app.summary {
-                Section("About") {
+                Section(.reachy("About")) {
                     Text(summary)
                         .font(.subheadline)
                 }
@@ -52,7 +53,7 @@ struct AppDetailSheet: View {
             if let spaceID = app.spaceID, let url = URL(string: "https://huggingface.co/spaces/\(spaceID)") {
                 Section {
                     Link(destination: url) {
-                        Label("View on Hugging Face", systemImage: "arrow.up.right.square")
+                        Label(.reachy("View on Hugging Face"), systemImage: "arrow.up.forward.square")
                     }
                 }
             }
@@ -64,7 +65,7 @@ struct AppDetailSheet: View {
         #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button(.reachy("Done")) {
                         install.dismiss()
                         dismiss()
                     }
@@ -73,15 +74,15 @@ struct AppDetailSheet: View {
             }
             .interactiveDismissDisabled(install.isBusy)
             .confirmationDialog(
-                "Remove \(app.title)?",
+                .reachy("Remove \(app.title)?"),
                 isPresented: $confirmingRemoval,
                 titleVisibility: .visible
             ) {
-                Button("Remove", role: .destructive) {
+                Button(.reachy("Remove"), role: .destructive) {
                     perform(.remove(installedApp ?? app))
                 }
             } message: {
-                Text("The app and its Python environment are deleted from the robot.")
+                Text(.reachy("The app and its Python environment are deleted from the robot."))
             }
     }
 
@@ -89,11 +90,11 @@ struct AppDetailSheet: View {
         Section {
             if let installed = installedApp {
                 if model.isRunning(app) {
-                    Button("Stop", systemImage: "stop.fill", role: .destructive) {
+                    Button(.reachy("Stop"), systemImage: "stop.fill", role: .destructive) {
                         Task { await model.stop(session: session) }
                     }
                 } else {
-                    Button("Start", systemImage: "play.fill") {
+                    Button(.reachy("Start"), systemImage: "play.fill") {
                         Task { await model.start(app, session: session) }
                     }
                     // Starting evicts whatever holds the robot; the daemon refuses
@@ -103,28 +104,32 @@ struct AppDetailSheet: View {
                 }
 
                 if model.hasUpdate(app) {
-                    Button("Update", systemImage: "arrow.down.circle") {
+                    Button(.reachy("Update"), systemImage: "arrow.down.circle") {
                         perform(.update(installed))
                     }
                 }
 
-                Toggle("Start on wake-up", isOn: startupBinding)
+                Toggle(.reachy("Start on wake-up"), isOn: startupBinding)
                     .disabled(model.busy)
 
-                Button("Remove", systemImage: "trash", role: .destructive) {
+                Button(.reachy("Remove"), systemImage: "trash", role: .destructive) {
                     confirmingRemoval = true
                 }
             } else {
-                Button("Install", systemImage: "arrow.down.circle.fill") {
+                Button(.reachy("Install"), systemImage: "arrow.down.circle.fill") {
                     perform(.install(app))
                 }
                 .disabled(app.isPrivate && !canInstallPrivately)
             }
         } footer: {
             if app.isPrivate, !canInstallPrivately {
-                Text("A private Space can only be installed once this robot is linked to your Hugging Face account.")
+                Text(
+                    .reachy(
+                        "A private Space can only be installed once this robot is linked to your Hugging Face account."
+                    )
+                )
             } else if model.isHeldRemotely {
-                Text("Someone is driving this robot over Hugging Face right now.")
+                Text(.reachy("Someone is driving this robot over Hugging Face right now."))
             }
         }
     }
@@ -174,18 +179,18 @@ struct JobProgressRow: View {
             EmptyView()
         case let .running(operation):
             Label {
-                Text("\(operation.title) \(operation.app.title)…")
+                Text(.reachy("\(operation.title) \(operation.app.title)…"))
             } icon: {
                 ProgressView()
                     .controlSize(.small)
             }
         case .succeeded:
-            Label("Done", systemImage: "checkmark.circle.fill")
+            Label(.reachy("Done"), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         case let .failed(_, reason):
             Label {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Failed")
+                    Text(.reachy("Failed"))
                     Text(reason)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -197,8 +202,8 @@ struct JobProgressRow: View {
         case .daemonRestarted:
             Label {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("The robot restarted")
-                    Text("It may have finished — check the installed list.")
+                    Text(.reachy("The robot restarted"))
+                    Text(.reachy("It may have finished — check the installed list."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

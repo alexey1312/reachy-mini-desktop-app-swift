@@ -9,10 +9,10 @@ import SwiftUI
 /// capsule underneath was filled with `.tint`, and in a dark appearance a light
 /// tint left white on light.
 public struct ReachyBadge: View {
-    private let text: String
+    private let text: LocalizedStringResource
     private let tone: Tone
 
-    public init(_ text: String, tone: Tone = .brand) {
+    public init(_ text: LocalizedStringResource, tone: Tone = .brand) {
         self.text = text
         self.tone = tone
     }

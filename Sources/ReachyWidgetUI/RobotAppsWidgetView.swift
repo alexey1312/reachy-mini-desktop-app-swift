@@ -62,7 +62,7 @@ public struct RobotAppsWidgetView: View {
     }
 
     private func noticeRow(_ message: String) -> some View {
-        Text(content.notice.invitesTheApp ? "\(message) Tap to open." : message)
+        Text(content.notice.invitesTheApp ? String(localized: .reachy("\(message) Tap to open.")) : message)
             .font(.caption2)
             .foregroundStyle(.secondary)
             .lineLimit(2)
@@ -135,7 +135,7 @@ struct RobotAppTileView: View {
         case .running: "Running"
         case .starting: "Starting…"
         case .stopping: "Stopping…"
-        case .notInstalled: "Not installed"
+        case .notInstalled: String(localized: .reachy("Not installed"))
         // One word, because that is all the room there is. The notice under the
         // grid carries what the daemon actually said.
         case .failed: "Failed"

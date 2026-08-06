@@ -1,4 +1,5 @@
 import Foundation
+import ReachyDesign
 import ReachyKit
 
 /// Which of this account's robots central can see right now.
@@ -96,15 +97,15 @@ public final class YourReachiesModel {
         }
         return switch failure {
         case .noToken:
-            "Sign in to Hugging Face to see your robots."
+            String(localized: .reachy("Sign in to Hugging Face to see your robots."))
         case .unauthorized:
-            "Hugging Face refused this session."
+            String(localized: .reachy("Hugging Face refused this session."))
         case .rateLimited:
             // Central allows 1200 requests a minute per token, and retrying at
             // once turns a limit into a ban.
-            "Too many requests. Wait a moment before refreshing again."
+            String(localized: .reachy("Too many requests. Wait a moment before refreshing again."))
         case let .http(code):
-            "Hugging Face answered \(code)."
+            String(localized: .reachy("Hugging Face answered \(code)."))
         }
     }
 }

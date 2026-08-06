@@ -3,6 +3,10 @@ import PackageDescription
 
 let package = Package(
     name: "ReachyMini",
+    // Required the moment a target carries a localized resource. English is the
+    // source language of `ReachyDesign/Resources/Localizable.xcstrings`, the one
+    // catalogue both executables read.
+    defaultLocalization: "en",
     platforms: [
         // RealityView (the 3D robot viewer) is iOS 18 / macOS 15.
         .macOS(.v15),
@@ -37,7 +41,8 @@ let package = Package(
         // is called from, so anything heavier here would reach the widget too.
         .target(
             name: "ReachyDesign",
-            exclude: ["AGENTS.md", "CLAUDE.md", "Previews"]
+            exclude: ["AGENTS.md", "CLAUDE.md", "Previews"],
+            resources: [.process("Resources")]
         ),
         .target(
             name: "ReachyKit",

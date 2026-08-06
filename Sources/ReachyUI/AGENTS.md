@@ -43,6 +43,20 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   `ScrollPosition`, `onScrollPhaseChange` and `onScrollGeometryChange` are available; the zero-height sentinel row in
   `LogConsoleScreen` predates the bump and is not a required pattern.
 
+## Strings
+
+Project rule 9 in the root `AGENTS.md` is the whole of it: `.reachy("…")` where SwiftUI takes a
+`LocalizedStringResource`, `String(localized: .reachy("…"))` where the value has to stay a `String`. Two things this
+target learned doing it:
+
+- **A caption type, not `String(describing:)`.** `DaemonStateCaption` maps the generated
+  `Components.Schemas.DaemonState` onto words; `RunningAppCaption` does the same for a process state. Both live here
+  rather than in `ReachyKit`, because `ReachyKit` does not link `ReachyDesign` and must not start — a caller maps its
+  own domain type onto a presentation value, never the reverse.
+- **A sentence is one key.** Prose split across `+` for the sake of the 120-column rule became one literal with
+  `// swiftlint:disable:next line_length` above it. Two half-keys cannot be reordered by a translator, and the
+  fragments collide as generated symbols with whatever else ends in the same words.
+
 ## Previews and snapshots
 
 `Previews/` sits here but is **excluded from the SwiftPM target** (`Package.swift`) and compiled only by the Xcode

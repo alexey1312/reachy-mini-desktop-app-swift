@@ -130,6 +130,10 @@ let project = Project(
             dependencies: [
                 .package(product: "ReachyKit"),
                 .package(product: "ReachyWidgetUI"),
+                // Declared even though `ReachyWidgetUI` already links it: Swift needs a
+                // direct dependency to `import` a module, and this target's controls name
+                // their titles with `.reachy(_:)`.
+                .package(product: "ReachyDesign"),
             ]
         ),
         .target(

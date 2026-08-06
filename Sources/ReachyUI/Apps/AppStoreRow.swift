@@ -22,12 +22,12 @@ struct AppStoreRow: View {
                     if app.isOfficial {
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundStyle(.tint)
-                            .accessibilityLabel("Official")
+                            .accessibilityLabel(.reachy("Official"))
                     }
                     if app.isPrivate {
                         Image(systemName: "lock.fill")
                             .foregroundStyle(.secondary)
-                            .accessibilityLabel("Private")
+                            .accessibilityLabel(.reachy("Private"))
                     }
                 }
                 .font(.caption)
@@ -63,10 +63,10 @@ struct AppStoreRow: View {
             parts.append(author)
         }
         if let likes = app.likes, likes > 0 {
-            parts.append("♥ \(likes)")
+            parts.append(String(localized: .reachy("♥ \(likes)")))
         }
         if isStartupApp {
-            parts.append("Starts on wake-up")
+            parts.append(String(localized: .reachy("Starts on wake-up")))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -74,21 +74,21 @@ struct AppStoreRow: View {
     @ViewBuilder
     private var trailing: some View {
         if isRunning {
-            Label("Running", systemImage: "waveform")
+            Label(.reachy("Running"), systemImage: "waveform")
                 .labelStyle(.iconOnly)
                 .foregroundStyle(.tint)
                 .symbolEffect(.variableColor.iterative)
-                .accessibilityLabel("Running")
+                .accessibilityLabel(.reachy("Running"))
         } else if hasUpdate {
-            ReachyBadge("Update")
+            ReachyBadge(.reachy("Update"))
         } else if isInstalled {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("Installed")
+                .accessibilityLabel(.reachy("Installed"))
         } else {
             Image(systemName: "arrow.down.circle")
                 .foregroundStyle(.tint)
-                .accessibilityLabel("Not installed")
+                .accessibilityLabel(.reachy("Not installed"))
         }
     }
 }

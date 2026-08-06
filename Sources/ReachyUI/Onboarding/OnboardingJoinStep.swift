@@ -16,16 +16,18 @@ struct OnboardingJoinStep: View {
             case .working:
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("This takes up to a minute.")
+                    Text(.reachy("This takes up to a minute."))
                         .foregroundStyle(.secondary)
                 }
             case .joined:
-                Label("Connected", systemImage: "checkmark.circle")
+                Label(.reachy("Connected"), systemImage: "checkmark.circle")
                     .foregroundStyle(.green)
             case .gaveUp:
                 Label(
-                    "The robot has put its own reachy-mini-ap network back up, so nothing is lost — "
-                        + "it is waiting to be told again.",
+                    .reachy(
+                        // swiftlint:disable:next line_length
+                        "The robot has put its own reachy-mini-ap network back up, so nothing is lost — it is waiting to be told again."
+                    ),
                     systemImage: "arrow.uturn.backward"
                 )
                 .fixedSize(horizontal: false, vertical: true)
@@ -38,13 +40,13 @@ struct OnboardingJoinStep: View {
             case .working:
                 EmptyView()
             case .joined:
-                Button("Continue") {
+                Button(.reachy("Continue")) {
                     model.continueAfterJoin()
                 }
                 .reachyButton(.prominent)
                 .frame(maxWidth: .infinity)
             case .gaveUp, .refused:
-                Button("Try again") {
+                Button(.reachy("Try again")) {
                     model.editNetwork()
                 }
                 .reachyButton(.prominent)
@@ -55,23 +57,27 @@ struct OnboardingJoinStep: View {
 
     private var title: String {
         switch model.joinState {
-        case .working: "Joining the network"
-        case .joined: "The robot is on the network"
-        case .gaveUp: "The robot could not join"
-        case .refused: "The robot refused the password"
+        case .working: String(localized: .reachy("Joining the network"))
+        case .joined: String(localized: .reachy("The robot is on the network"))
+        case .gaveUp: String(localized: .reachy("The robot could not join"))
+        case .refused: String(localized: .reachy("The robot refused the password"))
         }
     }
 
     private var message: String {
         switch model.joinState {
         case .working:
-            "The password went across encrypted. The robot is trying it now."
+            String(localized: .reachy("The password went across encrypted. The robot is trying it now."))
         case .joined:
-            "It will answer on the network from here on, and Bluetooth is no longer needed."
+            String(localized: .reachy("It will answer on the network from here on, and Bluetooth is no longer needed."))
         case .gaveUp:
-            "It tried three times and gave up, which is a wrong password far more often than anything else."
+            String(
+                localized: .reachy(
+                    "It tried three times and gave up, which is a wrong password far more often than anything else."
+                )
+            )
         case .refused:
-            "It never got as far as trying the network."
+            String(localized: .reachy("It never got as far as trying the network."))
         }
     }
 
@@ -82,10 +88,14 @@ struct OnboardingJoinStep: View {
     @ViewBuilder
     private var linkBudget: some View {
         if let session = model.session {
-            Text("Bluetooth link: \(session.singlePacketWriteLength) bytes per message, "
-                + "\(session.attributeWriteLength) before iOS splits it")
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
+            Text(
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "Bluetooth link: \(session.singlePacketWriteLength) bytes per message, \(session.attributeWriteLength) before iOS splits it"
+                )
+            )
+            .font(.caption.monospaced())
+            .foregroundStyle(.secondary)
         }
     }
 }

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -42,15 +43,15 @@ struct YourReachiesScreen<SignIn: View>: View {
                         .disabled(robot.isBusy)
                     }
                 } footer: {
-                    Text("Reached through Hugging Face, so these work from anywhere.")
+                    Text(.reachy("Reached through Hugging Face, so these work from anywhere."))
                 }
             case .loading, .signedOut, .empty, .needsSignIn, .failed:
                 EmptyView()
             }
         }
         .overlay { placeholder }
-        .contentLoading(isPresented: model.isContentLoading, title: "Calling your Reachies home…")
-        .navigationTitle("Your Reachies")
+        .contentLoading(isPresented: model.isContentLoading, title: .reachy("Calling your Reachies home…"))
+        .navigationTitle(.reachy("Your Reachies"))
         .refreshable { await model.refresh() }
         .task {
             guard !previewMode else { return }
@@ -66,39 +67,39 @@ struct YourReachiesScreen<SignIn: View>: View {
         case .signedOut:
             if !model.isContentLoading {
                 ContentUnavailableView {
-                    Label("Not signed in", systemImage: "person.crop.circle.badge.questionmark")
+                    Label(.reachy("Not signed in"), systemImage: "person.crop.circle.badge.questionmark")
                 } description: {
-                    Text("Sign in to Hugging Face to reach robots linked to your account.")
+                    Text(.reachy("Sign in to Hugging Face to reach robots linked to your account."))
                 } actions: {
-                    NavigationLink("Sign in", destination: signIn)
+                    NavigationLink(.reachy("Sign in"), destination: signIn)
                 }
             }
         case .needsSignIn:
             // Deliberately not a Retry: the same token will be refused again.
             ContentUnavailableView {
-                Label("Session expired", systemImage: "person.crop.circle.badge.exclamationmark")
+                Label(.reachy("Session expired"), systemImage: "person.crop.circle.badge.exclamationmark")
             } description: {
-                Text("Hugging Face refused this session. Signing in again fixes it.")
+                Text(.reachy("Hugging Face refused this session. Signing in again fixes it."))
             } actions: {
-                NavigationLink("Sign in again", destination: signIn)
+                NavigationLink(.reachy("Sign in again"), destination: signIn)
             }
         case .empty:
             ContentUnavailableView {
-                Label("No Reachy online", systemImage: "wifi.slash")
+                Label(.reachy("No Reachy online"), systemImage: "wifi.slash")
             } description: {
-                Text("None linked to your Hugging Face account are online.")
+                Text(.reachy("None linked to your Hugging Face account are online."))
             } actions: {
-                Button("Refresh") {
+                Button(.reachy("Refresh")) {
                     Task { await model.refresh() }
                 }
             }
         case let .failed(reason):
             ContentUnavailableView {
-                Label("Could not reach Hugging Face", systemImage: "exclamationmark.triangle")
+                Label(.reachy("Could not reach Hugging Face"), systemImage: "exclamationmark.triangle")
             } description: {
                 Text(reason)
             } actions: {
-                Button("Try again") {
+                Button(.reachy("Try again")) {
                     Task { await model.refresh() }
                 }
             }
@@ -133,7 +134,7 @@ struct RemoteRobotRow: View {
             }
             Spacer()
             if !robot.isBusy {
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
@@ -147,10 +148,11 @@ private extension RemoteRobotRow {
     /// "broken" — the user can go and close that app.
     var subtitle: String? {
         if robot.isBusy {
-            return robot.activeApp.map { "In use by \($0)" } ?? "In use"
+            return robot.activeApp
+                .map { String(localized: .reachy("In use by \($0)")) } ?? String(localized: .reachy("In use"))
         }
         return switch robot.transport {
-        case .usb: "Online · wired"
+        case .usb: String(localized: .reachy("Online · wired"))
         case .wifi, .unknown, .none: "Online"
         }
     }

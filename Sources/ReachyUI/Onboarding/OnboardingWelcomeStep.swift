@@ -8,35 +8,43 @@ struct OnboardingWelcomeStep: View {
 
     var body: some View {
         OnboardingStepScaffold(
-            title: "Before you start",
-            message: "A new robot has no network yet, so the first conversation happens over Bluetooth. "
-                + "It takes a couple of minutes."
+            title: String(localized: .reachy("Before you start")),
+            message: String(
+                localized: .reachy("A new robot has no network yet, so the first conversation happens over Bluetooth. ")
+            )
+                + String(localized: .reachy("It takes a couple of minutes."))
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 requirement(
-                    "The robot, powered on",
-                    detail: "Give it about a minute after switching on before it starts advertising.",
+                    String(localized: .reachy("The robot, powered on")),
+                    detail: String(
+                        localized: .reachy("Give it about a minute after switching on before it starts advertising.")
+                    ),
                     icon: "power"
                 )
                 requirement(
-                    "The last five characters of its serial number",
-                    detail: "The serial is printed on the robot. Capitals matter, and it is not always digits.",
+                    String(localized: .reachy("The last five characters of its serial number")),
+                    detail: String(
+                        localized: .reachy(
+                            "The serial is printed on the robot. Capitals matter, and it is not always digits."
+                        )
+                    ),
                     icon: "numbers.rectangle"
                 )
                 requirement(
-                    "Your Wi-Fi password",
-                    detail: "It is encrypted for the robot before it leaves this device.",
+                    String(localized: .reachy("Your Wi-Fi password")),
+                    detail: String(localized: .reachy("It is encrypted for the robot before it leaves this device.")),
                     icon: "wifi"
                 )
                 Label(
-                    "The next screen turns on Bluetooth scanning, so iOS will ask for permission.",
+                    .reachy("The next screen turns on Bluetooth scanning, so iOS will ask for permission."),
                     systemImage: "info.circle"
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             }
         } actions: {
-            Button("Start") {
+            Button(.reachy("Start")) {
                 model.beginScan()
             }
             .reachyButton(.prominent)

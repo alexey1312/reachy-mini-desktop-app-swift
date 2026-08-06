@@ -1,3 +1,4 @@
+import ReachyDesign
 import SwiftUI
 
 /// The move library is `/api/move/play/*` and the dataset index beside it, both
@@ -7,10 +8,10 @@ import SwiftUI
 struct MovesUnavailableView: View {
     var body: some View {
         ContentUnavailableView {
-            Label("Moves need the local network", systemImage: "music.note")
+            Label(.reachy("Moves need the local network"), systemImage: "music.note")
         } description: {
-            Text("Connect on the same network as the robot to play its recorded moves.")
+            Text(.reachy("Connect on the same network as the robot to play its recorded moves."))
         }
-        .navigationTitle("Moves")
+        .navigationTitle(.reachy("Moves"))
     }
 }

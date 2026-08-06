@@ -1,3 +1,4 @@
+import ReachyDesign
 import SwiftUI
 
 /// Why the viewport is empty. Both the geometry and the state stream sit behind
@@ -5,9 +6,9 @@ import SwiftUI
 struct LiveUnavailableView: View {
     var body: some View {
         ContentUnavailableView(
-            "No live view",
+            .reachy("No live view"),
             systemImage: "cube.transparent",
-            description: Text("Start the robot backend to see the model and the camera.")
+            description: Text(.reachy("Start the robot backend to see the model and the camera."))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

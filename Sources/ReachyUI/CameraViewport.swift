@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyMedia
 import SwiftUI
@@ -37,16 +38,16 @@ struct CameraViewport: View {
     private var status: some View {
         switch session.phase {
         case .connecting:
-            ProgressView("Connecting…")
+            ProgressView(.reachy("Connecting…"))
         case .waitingForProducer:
             ContentUnavailableView(
-                "Waiting for camera",
+                .reachy("Waiting for camera"),
                 systemImage: "video",
-                description: Text("The robot has not registered a video stream yet.")
+                description: Text(.reachy("The robot has not registered a video stream yet."))
             )
         case let .failed(message):
             ContentUnavailableView(
-                "Camera unavailable",
+                .reachy("Camera unavailable"),
                 systemImage: "video.slash",
                 description: Text(message)
             )
@@ -83,7 +84,9 @@ struct CameraMicButton: View {
             session.setMicEnabled(!session.isMicEnabled)
         } label: {
             Label(
-                session.isMicEnabled ? "Mute microphone" : "Unmute microphone",
+                session
+                    .isMicEnabled ? String(localized: .reachy("Mute microphone")) :
+                    String(localized: .reachy("Unmute microphone")),
                 systemImage: session.isMicEnabled ? "mic.fill" : "mic.slash"
             )
             .labelStyle(.iconOnly)

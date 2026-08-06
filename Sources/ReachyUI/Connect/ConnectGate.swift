@@ -27,7 +27,7 @@ struct ConnectGate: View {
                 // about the appearance — the trap `AGENTS.md` records is a *pinned*
                 // colour, and there is none here.
                 .groupedPageBackground()
-                .navigationTitle("Connect")
+                .navigationTitle(.reachy("Connect"))
                 .hfAccountToolbar(isPresented: $router.showsAccount)
         }
     }
