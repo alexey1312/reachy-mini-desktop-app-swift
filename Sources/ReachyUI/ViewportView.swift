@@ -32,15 +32,18 @@ struct ViewportView: View {
     /// Every floating control hugs the leading edge: on iPad the tab bar floats
     /// over the top centre, and anything trailing-aligned ends up underneath it.
     ///
-    /// The group is what lets two neighbouring pieces of chrome be one sheet of
-    /// glass rather than two — it costs nothing below iOS 26, where it renders its
-    /// content unchanged.
+    /// **No `ReachySurfaceGroup` here, and it is not an oversight.** A
+    /// `GlassEffectContainer` only sees a `glassEffect` applied to its own
+    /// subviews; one nested inside a `.background` — which is where every
+    /// `SurfaceRole` puts it — gets hoisted into the container's merged sheet and
+    /// composited *over* the content instead of under it. On device that blurred
+    /// the switcher's labels and this button's glyph into illegibility, and the
+    /// snapshot suite cannot see it because glass does not render headless.
+    /// `ReachyDesign/AGENTS.md` carries the measurement.
     private var chrome: some View {
-        ReachySurfaceGroup(spacing: Space.md) {
-            HStack(spacing: Space.md) {
-                switcher
-                contentControls
-            }
+        HStack(spacing: Space.md) {
+            switcher
+            contentControls
         }
         .padding(Space.md)
     }

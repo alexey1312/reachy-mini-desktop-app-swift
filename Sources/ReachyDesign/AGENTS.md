@@ -18,7 +18,7 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 | `StatusTone.swift`         | `StatusTone` + `ReachyStatusLabel`, the one shape a state caption renders in |
 | `ReachySurface.swift`      | `SurfaceRole` + `reachySurface(_:in:)`                                       |
 | `ReachyBadge.swift`        | A word in a capsule, on the `.badge` surface                                 |
-| `ReachySurfaceGroup.swift` | `GlassEffectContainer` where there is one, the content itself below          |
+| `ReachySurfaceGroup.swift` | `GlassEffectContainer` — and why it cannot hold a `reachySurface`            |
 | `ReachyButton.swift`       | `ButtonEmphasis` + `reachyButton(_:)` — and why it has no glass tier         |
 | `ReachyChrome.swift`       | The iOS 26 bar behaviours, each a no-op below the floor                      |
 
@@ -46,6 +46,25 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
      the screen, is clean. Hence `.window`, a role that is `.scrim` minus the glass.
   3. **Glass laid over a `Color.clear` does the same** — there is no backdrop to refract. It goes over the opaque
      `baseFill`, which is where `ReachySurfaceFill` puts it.
+- **`GlassEffectContainer` and `reachySurface` are mutually exclusive, and only a device says so.** A container
+  composites the `glassEffect`s it finds in its subtree into one merged sheet — but it only finds the ones applied to
+  its own subviews. One nested inside a `.background`, which is where every role puts it, is hoisted into that sheet
+  and drawn **over** the content rather than under it. The result is a crisp capsule with its own contents refracted
+  into a smear: on the Live tab the switcher's "3D model" / "Camera" labels and the options glyph were unreadable,
+  while the capsule's edge stayed sharp — which is the tell, since a low-contrast surface blurs nothing.
+  **The references did carry it, as an absence nobody read.** The hoisted sheet is the opaque light glass this file
+  already describes, so headless it covered the chrome instead of blurring it: 36 captures across `Viewport*` and
+  `Root — live tab` showed bare white where the switcher and the options button should be. White on a white viewport
+  reads as "nothing is drawn there yet", which is why it sat unnoticed. Removing the container re-recorded all 36 and
+  put "3D model | Camera" and the glyph back into them, so the fix is also a restoration of cover, not a cost to it.
+  The diagnosis came from a booted iOS 26.4 simulator instead — a four-cell isolate, `.background`-glass and
+  content-wrapping glass, each inside a container and outside one, through `simctl io booted screenshot`. Only the
+  `.background`-inside-a-container cell was broken. Reach for that harness when a reference shows an absence: it says
+  _that_ something is wrong, never _what_.
+- **Wrapping glass does _not_ eat colour on a device.** The same isolate put a `.red` glyph inside a content-wrapping
+  `glassEffect` and it stayed red. The rule above — red, orange and green rendering black — is a property of the
+  headless capture, not of glass, and the two claims are about different things. Do not cite it as a device-side
+  argument.
 - **A surface is a shape, not a `Color`.** A `Color` is flexible in both axes, so one carrying `ignoresSafeArea`
   expands to the entire safe-area container rather than to the thing it backs. Mounted under a `safeAreaInset` — which
   draws over the content — that painted whole screens in the window colour. Use `ReachySurfaceFill`, or `reachyScrim`,
