@@ -55,6 +55,22 @@ func robotWidgetPreviewCard(_ content: RobotWidgetContent) -> some View {
     ))
 }
 
+// An app that died on its own. Falling back to "Awake" here would be the widget
+// pretending nothing happened.
+#Preview("Widget — app crashed", traits: .sizeThatFitsLayout) {
+    robotWidgetPreviewCard(RobotWidgetContent(
+        state: .fresh(RobotSnapshot(
+            robotName: "kitchen",
+            isAwake: true,
+            runningApp: nil,
+            failedApp: .init(name: "hand_tracker", title: "Hand Tracker", error: "ImportError: no module named cv2"),
+            runningAppTakenAt: robotWidgetPreviewDate,
+            takenAt: robotWidgetPreviewDate
+        )),
+        at: robotWidgetPreviewDate
+    ))
+}
+
 // The state the widget spends most of its life in: nobody has opened the app for
 // a while, so it reports when it last looked instead of what the robot is doing.
 #Preview("Widget — last seen", traits: .sizeThatFitsLayout) {

@@ -7,11 +7,17 @@ import WidgetKit
 struct RobotWidgetFacts: Equatable {
     let phase: RobotSession.ConnectionPhase
     let isAwake: Bool
-    /// The launcher dims every tile but one while an app holds the robot, so
-    /// starting one from the Apps screen has to reach the widget too. Read back
-    /// out of the snapshot rather than from the session: `RobotSession+Apps` is
-    /// what learns it, and only on the calls that already ask.
-    let runningApp: String?
+    /// The whole status rather than its name: the widget dims every tile but one
+    /// while an app holds the robot, marks the one that died, and prints the
+    /// daemon's own sentence under the grid — so the state and the error are as
+    /// much a reason to rebuild a timeline as the name is.
+    ///
+    /// Read from the session, not back out of the snapshot store. `UserDefaults` is
+    /// not observable, so that reading only ever changed under a body being
+    /// re-evaluated for some other reason; this one is what `RobotSession+Apps`
+    /// assigns in the same funnel that writes the snapshot, and observing it is
+    /// what makes the reload follow the fact rather than accompany it.
+    let runningApp: RobotAppStatus?
 }
 
 /// The link owns signaling, the peer connection and potentially an open
@@ -49,7 +55,7 @@ extension View {
             of: RobotWidgetFacts(
                 phase: session.phase,
                 isAwake: session.isAwake,
-                runningApp: RobotSnapshotStore().current?.runningAppName
+                runningApp: session.runningApp
             )
         ) { _, _ in
             guard !isPreview else { return }

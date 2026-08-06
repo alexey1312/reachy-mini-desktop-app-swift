@@ -27,6 +27,15 @@ final class RunningAppModel {
         var idle: Duration = .seconds(15)
     }
 
+    /// How long a deep link asking for the running app's page waits for one to
+    /// appear.
+    ///
+    /// It has to wait at all: the tap that sends it usually launches the app from
+    /// cold, and there is no status to show until a connection and a poll have both
+    /// come back. It has to stop waiting too — a sheet opening over whatever the
+    /// user went on to do a minute later is not the page they asked for.
+    static let expansionRequestWindow: TimeInterval = 30
+
     /// Which app-and-error the user dismissed. Keyed on both: the same app failing
     /// a *second*, different way is news again.
     private struct Dismissal: Equatable {
@@ -45,6 +54,8 @@ final class RunningAppModel {
 
     private let configuration: Configuration
     private var dismissal: Dismissal?
+    /// When a deep link last asked for the page, while there was nothing to open.
+    private var requestedExpansion: Date?
 
     init(configuration: Configuration = Configuration()) {
         self.configuration = configuration
@@ -88,9 +99,35 @@ final class RunningAppModel {
         isExpanded = false
     }
 
-    func visibleStatusChanged(_ status: RobotAppStatus?) {
-        guard status == nil else { return }
-        isExpanded = false
+    /// A widget asking for the running app's page.
+    ///
+    /// Opened at once when there is something to open, held otherwise: the app is
+    /// usually launching from cold, and a sheet cannot be presented over a status
+    /// that has not arrived. `visibleStatusChanged` is what honours it when it does.
+    func requestExpansion(for session: RobotSession, at date: Date = Date()) {
+        // Dismissal suppresses an unsolicited repeat of a crash. A widget tap is
+        // an explicit request to read it again, so let the same status back into
+        // both the sheet binding and the sheet's content.
+        if let status = session.runningApp, dismissal == Dismissal(status) {
+            dismissal = nil
+        }
+        guard visibleStatus(for: session) == nil else {
+            requestedExpansion = nil
+            isExpanded = true
+            return
+        }
+        requestedExpansion = date
+    }
+
+    func visibleStatusChanged(_ status: RobotAppStatus?, at date: Date = Date()) {
+        guard status != nil else {
+            isExpanded = false
+            return
+        }
+        guard let requested = requestedExpansion else { return }
+        requestedExpansion = nil
+        guard date.timeIntervalSince(requested) <= Self.expansionRequestWindow else { return }
+        isExpanded = true
     }
 
     // MARK: - Refresh

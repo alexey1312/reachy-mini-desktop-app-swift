@@ -93,7 +93,10 @@ struct ReachyAppsWidget: Widget {
                 // Every pixel a tile's `Button` does not claim. On iOS 18 this is
                 // the *only* way a widget opens the app — an intent running in an
                 // extension cannot — so it is what every "tap to open" refers to.
-                .widgetURL(ReachyDeepLink.apps.url)
+                // Where it lands is the entry's own decision: a blocked tile, a
+                // failed one and the notice explaining either are all taps that
+                // belong on the running app's page rather than in the catalogue.
+                .widgetURL(entry.content.destination.url)
         }
         .configurationDisplayName("Reachy Apps")
         .description("Start your robot's apps from the Home Screen.")

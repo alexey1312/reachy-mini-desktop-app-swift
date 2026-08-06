@@ -22,6 +22,10 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         /// Configured once, gone from the robot since — or never resolvable. Kept
         /// visible so a configuration is not silently rewritten behind the user.
         case notInstalled
+        /// The app died on the robot. Deliberately not a button: tapping it would
+        /// start it again without ever having said what went wrong, and the tap is
+        /// worth more falling through to `destination`, where the traceback is.
+        case failed
     }
 
     public struct Tile: Equatable, Sendable, Identifiable {
@@ -51,7 +55,7 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         public var isTappable: Bool {
             switch state {
             case .idle, .running: true
-            case .starting, .stopping, .blocked, .notInstalled: false
+            case .starting, .stopping, .blocked, .notInstalled, .failed: false
             }
         }
     }
@@ -64,6 +68,9 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         /// The robot is busy with something the user did not put on this widget,
         /// so nothing on screen explains why everything is dimmed.
         case busy(String)
+        /// An app died on the robot of its own accord. A tile can say *that* it
+        /// failed in one word; only this line has room to say what the daemon said.
+        case crashed(app: String, reason: String?)
         case failure(String)
 
         public var message: String? {
@@ -72,6 +79,7 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
             case .noRobot: "No robot. Open Reachy Mini to connect."
             case .noApps: "No apps yet. Open Reachy Mini to load your robot's apps."
             case let .busy(title): "“\(title)” is running."
+            case let .crashed(app, reason): Self.crashMessage(app: app, reason: reason)
             case let .failure(reason): reason
             }
         }
@@ -81,8 +89,21 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         public var invitesTheApp: Bool {
             switch self {
             case .none, .busy: false
-            case .noRobot, .noApps, .failure: true
+            case .noRobot, .noApps, .crashed, .failure: true
             }
+        }
+
+        /// The daemon's last line is a traceback's worth of detail cut to one
+        /// sentence, and it is worth more than the word "error" — but an app that
+        /// died without one still has to be reported as having died.
+        ///
+        /// Closed off with a full stop it rarely brings itself, because the view
+        /// appends "Tap to open." straight after: without one the notice reads
+        /// "…no module named cv2 Tap to open."
+        private static func crashMessage(app: String, reason: String?) -> String {
+            guard let reason, !reason.isEmpty else { return "“\(app)” stopped with an error." }
+            let ends = reason.last.map { ".!?".contains($0) } ?? false
+            return "“\(app)” stopped: \(reason)\(ends ? "" : ".")"
         }
     }
 
@@ -91,11 +112,24 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
     /// Set only once the list is past `RobotAppsCache.freshness`. A menu going old
     /// is worth admitting, not worth refusing to serve.
     public let footnote: String?
+    /// Where a tap no tile claimed should land — the widget's own `widgetURL`, and
+    /// on iOS 18 the only way it can open the app at all.
+    ///
+    /// While an app holds the robot, or has just died on it, that app's own page
+    /// answers more than the catalogue does: it is where Stop, Restart and the
+    /// logs are. Everywhere else the catalogue is the right place to arrive.
+    public let destination: ReachyDeepLink
 
-    public init(tiles: [Tile], notice: Notice = .none, footnote: String? = nil) {
+    public init(
+        tiles: [Tile],
+        notice: Notice = .none,
+        footnote: String? = nil,
+        destination: ReachyDeepLink = .apps
+    ) {
         self.tiles = tiles
         self.notice = notice
         self.footnote = footnote
+        self.destination = destination
     }
 
     public init(
@@ -122,7 +156,7 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         }
 
         let installed = cache?.installed ?? []
-        let running = Self.runningName(in: snapshot, at: date)
+        let reading = AppReading(snapshot, at: date)
         let pending = launch?.pending(at: date)
 
         let tiles = source.prefix(limit).map { summary in
@@ -132,45 +166,48 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
                 title: summary.title,
                 emoji: summary.emoji,
                 gradient: summary.gradient,
-                state: Self.state(
-                    of: summary,
-                    installed: installed,
-                    running: running,
-                    pending: pending
-                )
+                state: Self.state(of: summary, installed: installed, reading: reading, pending: pending)
             )
         }
 
         self.init(
             tiles: Array(tiles),
-            notice: Self.notice(
-                launch: launch,
-                running: running,
-                snapshot: snapshot,
-                tiles: tiles,
-                at: date
-            ),
-            footnote: Self.footnote(for: cache, at: date)
+            notice: Self.notice(launch: launch, reading: reading, tiles: tiles, at: date),
+            footnote: Self.footnote(for: cache, at: date),
+            destination: reading.namesAnApp ? .runningApp : .apps
         )
     }
 
-    /// Only a fresh reading may name a running app. A stale one is a memory, and
-    /// dimming five tiles on the strength of a memory is how a widget stops
-    /// working for no visible reason.
-    private static func runningName(in snapshot: RobotSnapshotState, at date: Date) -> String? {
-        guard case let .fresh(reading) = snapshot else { return nil }
-        return reading.runningAppName(at: date)
-    }
+    /// What a snapshot says about apps, asked once for the tiles and the notice
+    /// alike.
+    ///
+    /// Every field is nil unless the reading is fresh *and* inside its own window —
+    /// the running app's and the crash's differ — so nothing below has to remember
+    /// to check. A stale reading is a memory, and dimming five tiles on the strength
+    /// of a memory is how a widget stops working for no visible reason.
+    private struct AppReading {
+        var running: String?
+        var runningTitle: String?
+        var failed: RobotSnapshot.FailedApp?
 
-    private static func runningTitle(in snapshot: RobotSnapshotState, at date: Date) -> String? {
-        guard case let .fresh(reading) = snapshot else { return nil }
-        return reading.runningAppTitle(at: date)
+        init(_ snapshot: RobotSnapshotState, at date: Date) {
+            guard case let .fresh(reading) = snapshot else { return }
+            running = reading.runningAppName(at: date)
+            runningTitle = reading.runningAppTitle(at: date)
+            failed = reading.failedApp(at: date)
+        }
+
+        /// Whether an app is worth taking a tap to — one holding the robot, or one
+        /// that just died on it.
+        var namesAnApp: Bool {
+            running != nil || failed != nil
+        }
     }
 
     private static func state(
         of summary: RobotAppSummary,
         installed: [RobotAppSummary],
-        running: String?,
+        reading: AppReading,
         pending: RobotAppLaunchState.Pending?
     ) -> TileState {
         if let pending, pending.appID == summary.id {
@@ -179,16 +216,20 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         guard installed.contains(where: { $0.id == summary.id }) else {
             return .notInstalled
         }
-        if let running {
+        // A live app holds the robot; a dead one does not. So running is answered
+        // first, and the two can only ever disagree here — one reading writes both.
+        if let running = reading.running {
             return running == summary.name ? .running : .blocked
+        }
+        if reading.failed?.name == summary.name {
+            return .failed
         }
         return .idle
     }
 
     private static func notice(
         launch: RobotAppLaunchState?,
-        running: String?,
-        snapshot: RobotSnapshotState,
+        reading: AppReading,
         tiles: some Collection<Tile>,
         at date: Date
     ) -> Notice {
@@ -196,10 +237,16 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         if let failure = launch?.failure(at: date), launch?.pending(at: date) == nil {
             return .failure(failure.message)
         }
+        // Said whether or not the tile is on screen, unlike `busy` below: the tile
+        // has room for the word "Failed" and for nothing else, so without this line
+        // the reason is nowhere.
+        if let failed = reading.failed {
+            return .crashed(app: failed.title ?? failed.name, reason: failed.error)
+        }
         // Only when the culprit is off-screen: a running tile with a stop badge
         // already says why its neighbours are dimmed.
-        if let running, !tiles.contains(where: { $0.name == running }) {
-            return .busy(runningTitle(in: snapshot, at: date) ?? running)
+        if let running = reading.running, !tiles.contains(where: { $0.name == running }) {
+            return .busy(reading.runningTitle ?? running)
         }
         return .none
     }
@@ -235,6 +282,12 @@ public struct RobotAppsWidgetContent: Equatable, Sendable {
         if case let .fresh(reading) = snapshot,
            reading.runningAppName(at: now) != nil,
            let expiry = reading.runningAppExpiresAt
+        {
+            moments.append(afterBoundary(expiry))
+        }
+        if case let .fresh(reading) = snapshot,
+           reading.failedApp(at: now) != nil,
+           let expiry = reading.failedAppExpiresAt
         {
             moments.append(afterBoundary(expiry))
         }

@@ -25,6 +25,7 @@ extension RobotSession {
             isAwake: isAwake,
             runningApp: running?.runningApp,
             runningAppName: running?.runningAppName,
+            failedApp: running?.failedApp,
             runningAppTakenAt: running?.runningAppTakenAt,
             takenAt: date
         ))

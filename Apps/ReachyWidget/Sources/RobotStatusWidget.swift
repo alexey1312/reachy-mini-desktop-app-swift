@@ -29,13 +29,10 @@ struct RobotStatusProvider: TimelineProvider {
         let now = Date.now
         var entries = [entry(at: now)]
         if case let .fresh(snapshot) = RobotSnapshotStore().state(at: now) {
-            if snapshot.runningAppName(at: now) != nil,
-               let appExpiry = snapshot.runningAppExpiresAt?.addingTimeInterval(0.001),
-               appExpiry > now
-            {
+            for moment in appExpiries(of: snapshot, after: now) {
                 entries.append(RobotStatusEntry(
-                    date: appExpiry,
-                    content: RobotWidgetContent(state: .fresh(snapshot), at: appExpiry)
+                    date: moment,
+                    content: RobotWidgetContent(state: .fresh(snapshot), at: moment)
                 ))
             }
             let expiry = snapshot.takenAt.addingTimeInterval(RobotSnapshotStore.freshness)
@@ -50,6 +47,21 @@ struct RobotStatusProvider: TimelineProvider {
         // The app reloads timelines when it learns something, so this is only the
         // floor for a phone that never opens it.
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(60 * 60))))
+    }
+
+    /// When the app line stops being true, which is sooner than the reading as a
+    /// whole and sooner again for a crash than for a running app. One millisecond
+    /// past the inclusive boundary, so the entry is unambiguously expired when
+    /// WidgetKit renders it at that exact date.
+    private func appExpiries(of snapshot: RobotSnapshot, after now: Date) -> [Date] {
+        var moments: [Date] = []
+        if snapshot.runningAppName(at: now) != nil, let expiry = snapshot.runningAppExpiresAt {
+            moments.append(expiry.addingTimeInterval(0.001))
+        }
+        if snapshot.failedApp(at: now) != nil, let expiry = snapshot.failedAppExpiresAt {
+            moments.append(expiry.addingTimeInterval(0.001))
+        }
+        return moments.filter { $0 > now }
     }
 
     private func entry(at date: Date) -> RobotStatusEntry {

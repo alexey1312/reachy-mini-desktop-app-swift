@@ -135,6 +135,85 @@ struct RunningAppModelTests {
         #expect(!model.isExpanded)
     }
 
+    // MARK: - A deep link asking for the page
+
+    @Test("a link that arrives with an app running opens it at once")
+    func expandsImmediately() {
+        let model = RunningAppModel()
+
+        model.requestExpansion(for: session(.running))
+
+        #expect(model.isExpanded)
+    }
+
+    /// The widget tap that sends this usually launches the app from cold, so there
+    /// is nothing to present until a connection and a poll have both come back.
+    @Test("a link that arrives before the status does waits for it")
+    func expandsOnceTheStatusArrives() {
+        let model = RunningAppModel()
+
+        model.requestExpansion(for: session(nil))
+        #expect(model.isExpanded == false)
+
+        model.visibleStatusChanged(status(.running))
+        #expect(model.isExpanded)
+    }
+
+    /// Past the window the user has gone on to something else, and a sheet opening
+    /// over it is not the page they asked for.
+    @Test("a link that waited too long is dropped rather than honoured late")
+    func dropsAStaleRequest() {
+        let model = RunningAppModel()
+        let asked = Date(timeIntervalSince1970: 1_800_000_000)
+
+        model.requestExpansion(for: session(nil), at: asked)
+        model.visibleStatusChanged(
+            status(.running),
+            at: asked.addingTimeInterval(RunningAppModel.expansionRequestWindow + 1)
+        )
+
+        #expect(model.isExpanded == false)
+    }
+
+    /// One request, one sheet. An app restarting a minute later must not reopen it.
+    @Test("a honoured request is not honoured twice")
+    func honoursARequestOnce() {
+        let model = RunningAppModel()
+
+        model.requestExpansion(for: session(nil))
+        model.visibleStatusChanged(status(.running))
+        model.isExpanded = false
+        model.visibleStatusChanged(status(.running))
+
+        #expect(model.isExpanded == false)
+    }
+
+    /// A crash is the case the link exists for: the tile says "Failed" and the page
+    /// is the only place the traceback is.
+    @Test("a crashed app is something to open")
+    func expandsOnACrash() {
+        let model = RunningAppModel()
+
+        model.requestExpansion(for: session(.error, error: "ImportError"))
+
+        #expect(model.isExpanded)
+    }
+
+    /// Dismissal stops the crash from reopening on its own. Tapping the widget is
+    /// a new, explicit request to read that same traceback again.
+    @Test("a link reopens a dismissed crash")
+    func reopensADismissedCrash() {
+        let model = RunningAppModel()
+        let crashed = session(.error, error: "ImportError")
+        model.dismissFailure(crashed)
+        #expect(model.visibleStatus(for: crashed) == nil)
+
+        model.requestExpansion(for: crashed)
+
+        #expect(model.visibleStatus(for: crashed)?.state == .error)
+        #expect(model.isExpanded)
+    }
+
     // MARK: - Poll cadence
 
     /// Asserted as a value rather than waited out: a test that sleeps the interval

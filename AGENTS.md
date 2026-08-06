@@ -79,6 +79,12 @@ Everything pipes through xcsift, which on long runs can truncate and report `sta
 result — verify the artifact, or rerun the tool directly
 (`./bin/mise x -- swiftlint lint --strict Sources Tests Apps/ReachySpike`). Always pass those explicit paths — a bare
 `.` walks into `Apps/DerivedData`, and swiftformat then "fails" on generated and vendored sources.
+**swiftformat and `#expect` disagree about key paths, and the formatter wins.** `preferKeyPath` rewrites
+`allSatisfy { $0.isTappable }` into `allSatisfy(\.isTappable)`, which the macro cannot expand: the build fails with
+`call can throw, but it is not marked with 'try'` at `macro expansion #expect`, pointing at generated code rather
+than at the line you wrote. So `mise run format` breaks a test that compiled a minute earlier, and undoing it by hand
+is a loop — the next format run puts it back. Assert on a mapped array instead
+(`map(\.isTappable).contains(false) == false`), which the rule leaves alone.
 `mise run clean` only clears `.build` — `Apps/DerivedData` (Xcode's, several GB) is not touched.
 **SwiftPM holds one `.build` lock per worktree**, so a second invocation waits instead of failing, printing
 `Another instance of SwiftPM (PID: …) is already running` — a line that never appears when the output is piped

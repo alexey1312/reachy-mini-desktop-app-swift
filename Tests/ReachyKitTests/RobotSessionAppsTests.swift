@@ -2,100 +2,6 @@ import Foundation
 @testable import ReachyKit
 import Testing
 
-/// A daemon that can serve apps. `RobotAPIClient` is what `connect` needs;
-/// `RobotAppsClient` is the capability the session gates the store on.
-private final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked Sendable {
-    private let lock = NSLock()
-    private(set) var catalogueCalls = 0
-    private(set) var installedCalls = 0
-    private(set) var removed: [String] = []
-    private(set) var running: RobotAppStatus?
-    var failsCatalogue = false
-    var returnsEmptyInstalled = false
-
-    private var status: Components.Schemas.DaemonStatus {
-        let json = """
-        {"robot_name":"testbot","state":"running","wireless_version":true,
-         "desktop_app_daemon":false,"simulation_enabled":true,"mockup_sim_enabled":false,
-         "backend_status":{"motor_control_mode":"enabled","error":null}}
-        """
-        // swiftlint:disable:next force_try
-        return try! JSONDecoder().decode(Components.Schemas.DaemonStatus.self, from: Data(json.utf8))
-    }
-
-    func handshake() async throws -> RobotConnection.Handshake {
-        .init(identity: .init(hardwareID: "hw", name: "testbot", daemonVersion: "1.9.0"), status: status)
-    }
-
-    func daemonStatus() async throws -> Components.Schemas.DaemonStatus {
-        status
-    }
-
-    func wakeUp() async throws -> String {
-        "wake"
-    }
-
-    func gotoSleep() async throws -> String {
-        "sleep"
-    }
-
-    func availableApps() async throws -> [RobotApp] {
-        lock.withLock { catalogueCalls += 1 }
-        if failsCatalogue {
-            throw ReachyKitError.daemonRejected(statusCode: 503)
-        }
-        return [
-            Self.app(name: "reachy-mini-dance", kind: "hf_space"),
-            Self.app(name: "dance_party", kind: "installed"),
-        ]
-    }
-
-    func installedApps() async throws -> [RobotApp] {
-        lock.withLock { installedCalls += 1 }
-        if returnsEmptyInstalled {
-            return []
-        }
-        return [Self.app(name: "dance_party", kind: "installed")]
-    }
-
-    func removeApp(named name: String) async throws -> String {
-        lock.withLock { removed.append(name) }
-        return "job-1"
-    }
-
-    func currentAppStatus() async throws -> RobotAppStatus? {
-        lock.withLock { running }
-    }
-
-    func startApp(named name: String) async throws -> RobotAppStatus {
-        let status = Self.status(name: name)
-        lock.withLock { running = status }
-        return status
-    }
-
-    func stopCurrentApp() async throws {
-        lock.withLock { running = nil }
-    }
-
-    func setRunning(_ status: RobotAppStatus?) {
-        lock.withLock { running = status }
-    }
-
-    static func status(name: String, state: String = "running") -> RobotAppStatus {
-        // swiftlint:disable:next force_try
-        try! JSONDecoder().decode(RobotAppStatus.self, from: Data(#"""
-        {"info": {"name": "\#(name)", "source_kind": "installed", "extra": {}}, "state": "\#(state)"}
-        """#.utf8))
-    }
-
-    static func app(name: String, kind: String) -> RobotApp {
-        // swiftlint:disable:next force_try
-        try! JSONDecoder().decode(RobotApp.self, from: Data(#"""
-        {"name": "\#(name)", "source_kind": "\#(kind)", "extra": {}}
-        """#.utf8))
-    }
-}
-
 /// A daemon with no app surface at all — the shape every other capability test
 /// uses to prove a screen can ask before it calls.
 private final class PlainRobotClient: RobotAPIClient, @unchecked Sendable {
@@ -129,27 +35,15 @@ private final class PlainRobotClient: RobotAPIClient, @unchecked Sendable {
 @MainActor
 @Suite("Robot session apps", .timeLimit(.minutes(1)))
 struct RobotSessionAppsTests {
-    /// What the session leaves behind for the widget. One table per test:
-    /// `--parallel` runs suites concurrently against a single shared one.
-    private struct Stores {
-        let snapshots: RobotSnapshotStore
-        let apps: RobotAppsCacheStore
-
-        init(defaults: UserDefaults) {
-            snapshots = RobotSnapshotStore(defaults: defaults)
-            apps = RobotAppsCacheStore(defaults: defaults)
-        }
+    private func makeStores() throws -> AppSessionStores {
+        try .make("RobotSessionAppsTests")
     }
 
-    private func makeStores() throws -> Stores {
-        try Stores(defaults: #require(UserDefaults(suiteName: "RobotSessionAppsTests.\(UUID().uuidString)")))
-    }
-
-    private func connected(_ client: any RobotAPIClient, stores: Stores? = nil) async throws -> RobotSession {
-        let stores = try stores ?? makeStores()
-        let session = RobotSession(snapshots: stores.snapshots, appsCache: stores.apps) { _ in client }
-        #expect(await session.connect(to: .init(host: "127.0.0.1")))
-        return session
+    private func connected(
+        _ client: any RobotAPIClient,
+        stores: AppSessionStores? = nil
+    ) async throws -> RobotSession {
+        try await connectedAppSession(client, stores: stores ?? makeStores())
     }
 
     @Test("the store is out of reach until a robot is connected")
@@ -316,21 +210,60 @@ struct RobotSessionAppsTests {
     }
 
     /// The divergence between the two readers, and the reason the session stores the
-    /// raw status: the dock has to be able to say "stopped with an error", while a
-    /// widget offering Stop for an app that already died would be worse than one
-    /// showing nothing.
-    @Test("a crashed app stays on the session after it leaves the widget snapshot")
+    /// raw status: a widget offering Stop for an app that already died would be
+    /// worse than one showing nothing, so the crash travels on its own field —
+    /// never as the app that is running.
+    @Test("a crashed app stays on the session and reaches the snapshot as a failure")
     func keepsTerminalStatusesOnTheSession() async throws {
         let stores = try makeStores()
         let client = AppsRobotClient()
         let session = try await connected(client, stores: stores)
         _ = try await session.startApp(named: "dance_party")
 
-        client.setRunning(AppsRobotClient.status(name: "dance_party", state: "error"))
+        client.setRunning(AppsRobotClient.status(
+            name: "dance_party",
+            state: "error",
+            error: "ImportError: no module named cv2"
+        ))
         _ = try await session.currentApp()
 
         #expect(session.runningApp?.state == .error)
         #expect(stores.snapshots.current?.runningAppName == nil)
+        #expect(stores.snapshots.current?.failedApp?.name == "dance_party")
+        #expect(stores.snapshots.current?.failedApp?.error == "ImportError: no module named cv2")
+        // The reading is only worth expiring if it is dated, and the running-app
+        // date is what dates it.
+        #expect(stores.snapshots.current?.runningAppTakenAt != nil)
+    }
+
+    /// An app that ran to completion is not a failure. Reporting one would put a
+    /// warning badge on every tile whose app simply finished.
+    @Test("an app that finished is not recorded as a failure")
+    func doesNotReportAFinishedAppAsAFailure() async throws {
+        let stores = try makeStores()
+        let client = AppsRobotClient()
+        let session = try await connected(client, stores: stores)
+        client.setRunning(AppsRobotClient.status(name: "dance_party", state: "done"))
+
+        _ = try await session.currentApp()
+
+        #expect(stores.snapshots.current?.failedApp == nil)
+    }
+
+    /// One reading of one question: whoever saw a live app thereby saw no crash.
+    @Test("starting an app again clears the crash it left behind")
+    func clearsAFailureOnTheNextStart() async throws {
+        let stores = try makeStores()
+        let client = AppsRobotClient()
+        let session = try await connected(client, stores: stores)
+        client.setRunning(AppsRobotClient.status(name: "dance_party", state: "error", error: "boom"))
+        _ = try await session.currentApp()
+        #expect(stores.snapshots.current?.failedApp != nil)
+
+        _ = try await session.startApp(named: "dance_party")
+
+        #expect(stores.snapshots.current?.failedApp == nil)
+        #expect(stores.snapshots.current?.runningAppName == "dance_party")
     }
 
     /// A dock left floating over the connection screen is exactly the bug this
@@ -379,5 +312,25 @@ struct RobotSessionAppsTests {
         #expect(stores.snapshots.current?.runningAppTakenAt == appReading)
         #expect(stores.snapshots.current?.takenAt == pollDate)
         #expect(stores.snapshots.current?.robotName == "testbot")
+    }
+
+    /// The same trap one field over: a poll that blanked the crash would have the
+    /// widget forget it three seconds after learning it.
+    @Test("the status poll does not forget a crash either")
+    func pollDoesNotClobberAFailure() async throws {
+        let stores = try makeStores()
+        let client = AppsRobotClient()
+        let session = try await connected(client, stores: stores)
+        client.setRunning(AppsRobotClient.status(name: "dance_party", state: "error", error: "boom"))
+        _ = try await session.currentApp()
+
+        let appReading = try #require(stores.snapshots.current?.runningAppTakenAt)
+        session.recordSnapshot(
+            identity: .init(hardwareID: "hw", name: "testbot", daemonVersion: "1.9.0"),
+            at: appReading.addingTimeInterval(60)
+        )
+
+        #expect(stores.snapshots.current?.failedApp?.name == "dance_party")
+        #expect(stores.snapshots.current?.runningAppTakenAt == appReading)
     }
 }
