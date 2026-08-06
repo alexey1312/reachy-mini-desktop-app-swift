@@ -13,7 +13,10 @@ let project = Project(
         // Prefire renders SwiftUI previews as snapshots and as a browsable playbook. It is
         // declared here rather than in Package.swift because its generated tests and its
         // PlaybookView both call UIKit unconditionally — the root package still builds for macOS.
-        .remote(url: "https://github.com/BarredEwe/Prefire", requirement: .upToNextMajor(from: "5.7.0")),
+        // Exact, not `upToNextMajor`: `ReachyUISnapshotTests/PreviewTests.stencil` is a fork of
+        // this version's built-in test template, and a floated minor would render it against a
+        // changed set of Stencil arguments.
+        .remote(url: "https://github.com/BarredEwe/Prefire", requirement: .exact("5.7.0")),
         .remote(
             url: "https://github.com/pointfreeco/swift-snapshot-testing",
             requirement: .upToNextMajor(from: "1.19.4")

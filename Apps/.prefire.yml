@@ -1,6 +1,7 @@
 test_configuration:
   target: ReachyUI
   test_target_path: ${PROJECT_DIR}/ReachyUISnapshotTests
+  template_file_path: PreviewTests.stencil
   sources:
     - ${PROJECT_DIR}/../Sources/ReachyDesign/Previews
     - ${PROJECT_DIR}/../Sources/ReachyUI/Previews

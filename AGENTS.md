@@ -164,9 +164,16 @@ either re-records everything or fails the run outright:
 | `26.4.1` / `26`                | `REACHY_SNAPSHOT_OS` / `required_os` | Full runtime for the destination; major only for Prefire's check.                                    |
 
 So a reference named `…-iPhone-16-Pro.png` was rendered on an iPhone 17 Pro, at iPhone 16 Pro dimensions. A
-different iOS runtime renders text differently and every reference would have to be re-recorded. **Light appearance is
-pinned too**, by `simctl ui … appearance light` in `snapshots:_run`: the simulator's appearance is not part of the
-destination and outlives a reboot, so without it whoever last switched that device to dark re-records the whole set.
+different iOS runtime renders text differently and every reference would have to be re-recorded.
+**Every preview is captured in both appearances**, by `Apps/ReachyUISnapshotTests/PreviewTests.stencil` — a fork of
+Prefire 5.7.0's built-in test template, which is why the package requirement is `.exact` rather than
+`upToNextMajor`. Light keeps the name it always had and dark takes a `-dark` suffix, so adopting it added 500 files
+and modified none. What a dark reference can and cannot prove — glass renders light in both — is in
+`Sources/ReachyDesign/AGENTS.md`. `simctl ui … appearance light` survives in `snapshots:_run` as belt and braces
+only: the injected trait decides, measured by re-recording the surfaces gallery on a dark simulator and getting
+byte-identical images.
+**References are English-only**, pinned by `-testLanguage en -testRegion US` on the `xcodebuild test` line. Every
+user-facing string is localizable, so a simulator left in another language re-renders all 1000 of them in it.
 Run `test:snapshots` before `test:snapshots:record` — it names every reference that moved, which `record` then
 overwrites blind. If _every_ reference moved, suspect the environment rather than the code: check one nothing could
 have affected (`JoystickPad`) against HEAD with `git show HEAD:<png> | git lfs smudge > /tmp/old.png`.

@@ -87,6 +87,32 @@ one:
   `ViewBuilder` form, which does not. A scrim that today paints into the safe area (`LogConsoleView`,
   `OnboardingFlow`, `BLEConsoleScreen`) needs its own `.ignoresSafeArea` when it adopts the role.
 
+## Both appearances, and what glass does to the dark half
+
+Every preview is now captured twice — `Apps/ReachyUISnapshotTests/PreviewTests.stencil` forks Prefire's built-in
+test template and loops the capture over `[.light, .dark]`, naming the dark file with a `-dark` suffix. The light
+names are untouched, which is why adopting it re-recorded nothing: 500 new files, 0 modified.
+
+The appearance travels as a **trait**, not as `preferredColorScheme` (which wants a window scene the snapshot host has
+no equivalent of) and not as `\.colorScheme` in the environment (which moves SwiftUI's own colours and leaves
+UIKit-backed ones light). swift-snapshot-testing feeds the collection to `setOverrideTraitCollection`, which reaches
+both halves.
+
+**`glassEffect` renders a light surface in both appearances, and it is opaque.** Measured on `Design — surfaces`: in
+the dark capture `badge` and `window` flip correctly while `chrome`, `card` and `scrim` stay white capsules with
+their white labels invisible on them. The two that flip are exactly the two roles with `glass == nil`. It is not the
+trait failing to arrive: re-recording that gallery with the _simulator_ switched to dark produced both images
+byte-for-byte identical to the run on a light simulator, so the injected trait is what decides and glass ignores it
+either way.
+
+What that means when reading a dark reference:
+
+- Over a `.chrome`, `.card` or `.scrim` surface, a dark capture shows **the snapshot's white glass, not the device's**.
+  Light-on-that is invisible in the image and legible on hardware. Do not "fix" a foreground because it vanished there.
+- The roles that carry no glass — `.badge`, `.window` — and everything outside a surface are truthful, and that is
+  where the dark half earns its keep: `LogConsoleView`'s level palette, the status captions, every screen background.
+- A dark reference is therefore evidence about _content_, and evidence about glass only on device.
+
 ## Previews
 
 `Previews/` is excluded from the SwiftPM target and compiled only by the Xcode targets in `Apps/` — `#Preview` is an
