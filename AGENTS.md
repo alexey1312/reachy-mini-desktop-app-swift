@@ -61,6 +61,7 @@ self-contained `./bin/mise` binary and wires git hooks (`core.hooksPath .githook
 ./bin/mise run test:snapshots # Snapshot-test every ReachyUI preview (iOS Simulator)
 ./bin/mise run test:snapshots:record  # Re-record the reference images
 ./bin/mise run storybook      # Browsable catalogue of every preview, on a simulator
+gh workflow run snapshots.yml -f mode=record --ref <branch>  # Record them on CI instead
 ```
 
 `build` / `test` are SwiftPM only — they never compile `Apps/ReachySpike`. Use `build:app` for that; CI runs it as a
@@ -161,7 +162,7 @@ either re-records everything or fails the run outright:
 | `iPhone 17 Pro`                | `mise.toml`, `REACHY_SNAPSHOT_SIM`   | The simulator the tests execute on. Renders every image.                                             |
 | `iPhone18,1`                   | `.prefire.yml`, `simulator_device`   | The same machine as a model id. Prefire aborts on a mismatch.                                        |
 | `iPhone 16 Pro`, `iPad Pro 11` | `.prefire.yml`, `snapshot_devices`   | `ViewImageConfig`s — frame size and traits, and the filename suffixes. Not devices anything runs on. |
-| `26.4.1` / `26`                | `REACHY_SNAPSHOT_OS` / `required_os` | Full runtime for the destination; major only for Prefire's check.                                    |
+| `26.2` / `26`                  | `REACHY_SNAPSHOT_OS` / `required_os` | Full runtime for the destination; major only for Prefire's check.                                    |
 
 So a reference named `…-iPhone-16-Pro.png` was rendered on an iPhone 17 Pro, at iPhone 16 Pro dimensions. A
 different iOS runtime renders text differently and every reference would have to be re-recorded.
@@ -191,9 +192,22 @@ a `pre-push` hook, and `core.hooksPath` makes git ignore `.git/hooks` — so its
 alongside the hand-written ones. Drop them and `git push` sends pointers with no data behind them.
 Adding a reference image still needs an explicit `git add`: the LFS filter decides how a staged file is _stored_, and
 the pre-commit hook only re-stages what it reformatted (`*.swift`, `*.md`) — neither one stages a PNG for you.
-There is no CI job yet: local Xcode and the CI pin differ, so references recorded on one fail on the other.
+**CI both verifies and records them, and that is why the runtime pin is 26.2.** `.github/workflows/snapshots.yml`
+runs `verify` on every PR touching `Sources/{ReachyUI,ReachyDesign,ReachyWidgetUI}` or `Apps/`, and `record` on
+manual dispatch — which rewrites the references, commits them and pushes to the branch it ran on. This used to say
+there could be no such job because local Xcode and the CI pin differ, and that was true of `26.4.1`: the
+`macos-15` image carries iOS **26.0, 26.1 and 26.2** only, and a runtime newer than the Xcode it runs under is
+refused, so CI could never have produced those images. Moving the pin to the newest runtime CI _has_ is what makes
+one set of references serve both. Keep Xcode as new as you like — an older runtime runs fine under it, and Xcode is
+not what renders; install iOS 26.2 from Xcode → Settings → Components. `snapshots:_run` now **refuses to start** on
+any other runtime rather than silently re-rendering all 1060 files, which is how that mismatch used to be found.
 `test:snapshots` compares the images either side of the run and fails if any had to be written — Prefire generates
 `record: .missing`, so a reference that does not exist yet is created rather than compared.
+The record job pushes LFS objects **explicitly** (`git lfs push`) instead of relying on the `pre-push` hook:
+`core.hooksPath` only points at `.githooks/` once mise's enter hook has run, which is not guaranteed on a runner,
+and a push without the objects leaves pointers with nothing behind them. It commits with `GITHUB_TOKEN`, and a push
+made with that token does not trigger workflows — so the record job cannot loop, and nothing re-verifies it
+automatically either: dispatch `verify` afterwards if you want the check.
 The compact root used to capture as a near-blank ghost, which made `Root-connected`, `Root-no-camera` and
 `Root-unreachable` byte-identical on iPhone — three references verifying nothing. Splitting the root into a gate and
 a five-tab shell ended that: each root capture now renders the selected tab's content. Two iPhone captures may still
