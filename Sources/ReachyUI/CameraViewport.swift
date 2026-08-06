@@ -111,23 +111,73 @@ struct CameraViewport: View {
 
 /// Unmutes the client → robot audio uplink. Lives beside the viewport switcher
 /// rather than inside the video, so the floating controls stay in one cluster.
+///
+/// A refused microphone used to be invisible here: `setMicEnabled(true)` swallowed
+/// the refusal, so the glyph never changed and tapping did nothing, forever. The
+/// blocked state is now a different button — it says so, and it goes somewhere.
 struct CameraMicButton: View {
     let session: CameraSession
 
+    @Environment(\.reachyPreviewMode) private var previewMode
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var isBlocked: Bool {
+        session.micPermission.isBlocking
+    }
+
     var body: some View {
-        Button {
-            session.setMicEnabled(!session.isMicEnabled)
-        } label: {
-            Label(
-                session
-                    .isMicEnabled ? String(localized: .reachy("Mute microphone")) :
-                    String(localized: .reachy("Unmute microphone")),
-                systemImage: session.isMicEnabled ? "mic.fill" : "mic.slash"
-            )
-            .labelStyle(.iconOnly)
-            .foregroundStyle(session.isMicEnabled ? .red : .secondary)
+        Button(action: act) {
+            Label(title, systemImage: symbol)
+                .labelStyle(.iconOnly)
+                .foregroundStyle(tint)
         }
         .viewportControlStyle()
+        // A blocked microphone is still worth explaining while the stream is down,
+        // but there is nothing to unmute into, so the rule is unchanged.
         .disabled(session.phase != .streaming)
+        .onChange(of: scenePhase) { _, phase in
+            scenePhaseChanged(phase)
+        }
+    }
+
+    private func act() {
+        if isBlocked {
+            PrivacySettingsLink.open(.microphone)
+        } else {
+            session.setMicEnabled(!session.isMicEnabled)
+        }
+    }
+
+    private func scenePhaseChanged(_ phase: ScenePhase) {
+        guard !previewMode, phase == .active else { return }
+        session.refreshMicPermission()
+    }
+
+    /// The glyph is icon-only, so this is also what a screen reader announces.
+    private var title: String {
+        if isBlocked {
+            return String(localized: .reachy("Microphone access is turned off"))
+        }
+        return session.isMicEnabled
+            ? String(localized: .reachy("Mute microphone"))
+            : String(localized: .reachy("Unmute microphone"))
+    }
+
+    private var symbol: String {
+        if isBlocked {
+            return "mic.slash.circle"
+        }
+        return session.isMicEnabled ? "mic.fill" : "mic.slash"
+    }
+
+    /// `.warning`, not `.danger`: a live microphone is already red, and two reds on one
+    /// control would say "recording" and "broken" in the same colour. The tones resolve
+    /// to the same `.red`/`.secondary` this button always used, so naming them moves no
+    /// reference image.
+    private var tint: AnyShapeStyle {
+        if isBlocked {
+            return Tone.warning.style
+        }
+        return session.isMicEnabled ? Tone.danger.style : Tone.quiet.style
     }
 }

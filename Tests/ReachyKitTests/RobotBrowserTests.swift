@@ -18,9 +18,9 @@ struct RobotBrowserTests {
 
     @Test("policy denial recognizes symbolic and numeric Network errors")
     func policyDenial() {
-        #expect(RobotBrowser.stateLooksPolicyDenied("waiting(PolicyDenied)"))
-        #expect(RobotBrowser.stateLooksPolicyDenied("DNS error -65570"))
-        #expect(!RobotBrowser.stateLooksPolicyDenied("ready"))
+        #expect(LocalNetworkProbe.looksPolicyDenied("waiting(PolicyDenied)"))
+        #expect(LocalNetworkProbe.looksPolicyDenied("DNS error -65570"))
+        #expect(!LocalNetworkProbe.looksPolicyDenied("ready"))
     }
 
     @Test("the hardware id comes off the TXT record the daemon publishes")

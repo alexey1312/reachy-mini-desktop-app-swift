@@ -8,6 +8,10 @@ import SwiftUI
 /// Robots that answered a handshake before are listed whether or not Bonjour finds
 /// them — mDNS does not reach every network, and an absent robot is worth showing
 /// as absent rather than not at all.
+///
+/// A refused Local Network permission used to be reported here and is not any more.
+/// It breaks every route, not just this one, so it belongs to the screen — see
+/// `ConnectionScreen.privacySection`. This section is about robots.
 struct NetworkRobotsSection: View {
     let session: RobotSession
     let browser: RobotBrowser
@@ -24,17 +28,6 @@ struct NetworkRobotsSection: View {
             if !session.automaticConnectionAllowed {
                 Label(.reachy("Automatic reconnect paused"), systemImage: "pause.circle")
                     .foregroundStyle(Tone.quiet.style)
-            }
-            if browser.permissionLooksDenied {
-                Label(.reachy("Local Network permission denied"), systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(Tone.danger.style)
-                #if os(iOS)
-                    Button(.reachy("Open Settings")) {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    }
-                #endif
             }
             if isSearching {
                 Text(.reachy("Searching…"))

@@ -29,6 +29,17 @@ import SwiftUI
     PreviewScene.viewport(.preview(content: .camera, cameraSession: .preview(.waitingForProducer)))
 }
 
+// A refused microphone used to look exactly like a muted one — same glyph, same
+// colour, and tapping it did nothing. `ViewportView` owns that button, so the
+// reference goes through the whole viewport rather than its camera-only content.
+#Preview("Viewport — microphone blocked") {
+    let camera = CameraSession.preview(.streaming, micPermission: .denied)
+    return PreviewScene.viewport(
+        .preview(content: .camera, cameraSession: camera),
+        makeTeleop: PreviewScene.teleopFactory
+    )
+}
+
 // Over the relay the URDF and its meshes are out of reach, so the 3D pane says so once instead of
 // spinning on a download that is never going to start.
 #Preview("Viewport — no 3D over the relay") {

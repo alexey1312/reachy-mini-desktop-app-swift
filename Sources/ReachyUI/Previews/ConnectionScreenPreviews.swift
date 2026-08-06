@@ -125,3 +125,17 @@ import SwiftUI
         manualInput: "not an address"
     )
 }
+
+// The bug this section was moved for. The banner used to live inside the network
+// segment, so someone blocked from discovery switched to typing an address — the one
+// route where the explanation was invisible — and watched that fail silently too,
+// because the permission gates plain HTTP to the LAN and not only Bonjour. This
+// reference is the proof it survives the segment it is not in.
+#Preview("Connection — manual address, permission denied") {
+    PreviewScene.connection(
+        .preview(phase: .idle, status: nil, address: nil),
+        route: .manual,
+        browser: .preview(names: [], permissionDenied: true),
+        manualInput: "192.168.1.42"
+    )
+}

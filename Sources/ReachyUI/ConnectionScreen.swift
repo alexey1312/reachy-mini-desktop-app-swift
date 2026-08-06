@@ -20,6 +20,10 @@ struct ConnectionScreen: View {
     /// Absent in previews and wherever the remote list has nowhere to be presented
     /// from, which is what hides that segment's content rather than a flag.
     var showRemoteRobots: (() -> Void)?
+    /// Opens the privacy screen. Optional for the same reason as the list above —
+    /// the sheet belongs to the root, and a leaf that reached for the router
+    /// directly could not be previewed.
+    var showPermissions: (() -> Void)?
 
     @State private var browser: RobotBrowser
     @State private var manualInput: String
@@ -41,11 +45,13 @@ struct ConnectionScreen: View {
         knownRobots: KnownRobotsModel? = nil,
         sweep: CandidateSweep? = nil,
         route: ConnectRoute = .network,
-        showRemoteRobots: (() -> Void)? = nil
+        showRemoteRobots: (() -> Void)? = nil,
+        showPermissions: (() -> Void)? = nil
     ) {
         self.session = session
         self.progress = progress
         self.showRemoteRobots = showRemoteRobots
+        self.showPermissions = showPermissions
         _browser = State(initialValue: browser)
         _manualInput = State(initialValue: manualInput ?? KnownRobots.lastAddress.map(\.displayString) ?? "")
         _knownRobots = State(initialValue: knownRobots)
@@ -77,6 +83,7 @@ struct ConnectionScreen: View {
             progress.observe(phase)
         }
         .onDisappear {
+            guard !previewMode else { return }
             sweep?.stop()
             browser.stop()
             knownRobots?.stop()
@@ -128,9 +135,37 @@ struct ConnectionScreen: View {
                     .disabled(!session.phase.acceptsConnectionChoice)
             }
             setUpSection
+            privacySection
             errorSection
         }
         .formStyle(.grouped)
+    }
+
+    /// Outside the segments, for the same reason `setUpSection` is: a refused Local
+    /// Network permission breaks *every* route, and the banner used to live inside
+    /// `NetworkRobotsSection` where only one of the three could show it. Someone
+    /// blocked from discovery reaches for the manual address next — the one place the
+    /// explanation was invisible, while a typed address failed just as silently,
+    /// because the permission gates plain HTTP to the LAN and not only Bonjour.
+    ///
+    /// The heartbeat question this screen's `AGENTS.md` insists on: nothing here keys
+    /// off `session.phase` or `lastError`, so nothing mounts and unmounts on the 10 s
+    /// sweep. `permissionLooksDenied` flips at most once in a browser's life.
+    private var privacySection: some View {
+        Section {
+            if browser.permissionLooksDenied {
+                Label(.reachy("Local Network permission denied"), systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(Tone.danger.style)
+                PrivacySettingsButton(pane: .localNetwork)
+            }
+            if let showPermissions {
+                Button(.reachy("Privacy permissions"), action: showPermissions)
+            }
+        } footer: {
+            if browser.permissionLooksDenied {
+                Text(.reachy("Without it this app cannot find the robot or reach it at a typed address."))
+            }
+        }
     }
 
     /// The last error, shown only once the sweep has stopped rewriting it.

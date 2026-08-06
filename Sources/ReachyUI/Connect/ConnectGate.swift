@@ -22,7 +22,8 @@ struct ConnectGate: View {
             ConnectionScreen(
                 session: session,
                 progress: progress,
-                showRemoteRobots: { router.showsRemoteRobots = true }
+                showRemoteRobots: { router.showsRemoteRobots = true },
+                showPermissions: { router.showsPermissions = true }
             )
             // A `Form` left to itself fills a 1024 pt iPad, and rows a metre
             // wide with three words in them read as a broken layout. Nothing

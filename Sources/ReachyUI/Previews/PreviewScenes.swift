@@ -185,7 +185,8 @@ enum PreviewScene {
             browser: browser ?? .preview(names: []),
             manualInput: manualInput,
             knownRobots: knownRobots ?? .preview([]),
-            route: route
+            route: route,
+            showPermissions: {}
         )
         .preview()
     }

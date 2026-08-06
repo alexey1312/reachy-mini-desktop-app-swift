@@ -44,6 +44,7 @@ struct SettingsScreen: View {
                 WiFiSettingsCard(session: session)
             }
             diagnosticsSection
+            privacySection
             recoverySection
         }
         .formStyle(.grouped)
@@ -65,6 +66,31 @@ struct SettingsScreen: View {
                     Label(.reachy("Daemon logs"), systemImage: "terminal")
                 }
             }
+        }
+    }
+
+    /// Above Advanced rather than in it: everything in that group needs the robot
+    /// within Bluetooth range, and this needs no robot at all. The same screen is
+    /// reachable from the connection gate, which is where someone whose permissions
+    /// are the reason they cannot get this far will find it.
+    ///
+    /// A LAN link is proof the local network was granted — the daemon cannot be
+    /// reached without it — and a relay session is proof of nothing, which is the
+    /// case worth being able to see.
+    private var privacySection: some View {
+        Section {
+            NavigationLink {
+                PermissionsScreen(localNetworkProvenByConnection: isConnectedOverLAN)
+            } label: {
+                Label(.reachy("Privacy"), systemImage: "hand.raised")
+            }
+        }
+    }
+
+    private var isConnectedOverLAN: Bool {
+        switch session.link {
+        case .lan: true
+        case .none, .remote: false
         }
     }
 

@@ -44,6 +44,23 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   — the Hugging Face segment carried it and went dead every 10 s under a finger, which is the third instance of the
   same bug and the reason `YourReachiesSection` is now the one segment nothing disables: a robot on the relay is not
   on this Wi-Fi, so a sweep of this one says nothing about whether it can be reached.
+- **Privacy permissions are one screen and four in-place refusals, and the split is deliberate.**
+  `Settings/Permissions/` holds the overview: `PermissionsScreen` reports Bluetooth, Local Network and
+  the microphone, and offers each one an action. Its governing rule is that **opening it must never raise
+  a prompt** — `refresh()` reads only what can answer without asking, and every prompting path is behind a
+  button. Bluetooth is the awkward one: there is no `requestAuthorization` for it, so "Allow" builds a
+  short-lived central, which is exactly what `CoreBluetoothTransport` says to do only behind a screen that
+  has explained itself. This screen, with a "why" under every row, _is_ that screen; opening it still is
+  not. It is reachable from Settings **and** from the gate through `router.showsPermissions`, because the
+  Settings tab does not exist until a robot has answered and two of the three permissions are what
+  answering takes. A `Button` and a sheet rather than a `NavigationLink`: `PreviewScene.connection` has no
+  `NavigationHost`, and adding one would put an empty large-title bar on all thirteen references.
+  `PrivacySettingsLink` is the one deep link — the same six lines used to sit in three screens, each under
+  `#if os(iOS)`, so on macOS a refusal was reported with **no way at all to act on it**. It is `public`
+  only because `SpikeView` calls it. And the Local Network banner now lives in
+  `ConnectionScreen.privacySection`, outside the route segments, for the reason `setUpSection` is: it used
+  to sit in `NetworkRobotsSection`, where only one of the three routes could show it, while the manual
+  address — where a blocked user goes next — failed just as silently.
 - Leaves stay injectable rather than reading the router: `ConnectionScreen.showRemoteRobots` is optional because its
   absence is what hides `YourReachiesSection` in previews. The router is the shell's business.
 - All robot interaction goes through `RobotSession` / `RobotBrowser` from ReachyKit — no direct URLSession here.

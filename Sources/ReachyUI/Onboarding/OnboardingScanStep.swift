@@ -29,13 +29,7 @@ struct OnboardingScanStep: View {
                     String(localized: .reachy("This app can't use Bluetooth")),
                     detail: String(localized: .reachy("Allow Bluetooth for this app in Settings, then come back."))
                 )
-                #if os(iOS)
-                    Button(.reachy("Open Settings")) {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    }
-                #endif
+                PrivacySettingsButton(pane: .bluetooth)
             case .unsupported:
                 unavailable(
                     String(localized: .reachy("This device has no Bluetooth")),

@@ -48,5 +48,27 @@ struct RootSheets: ViewModifier {
                     )
                 }
             }
+            .sheet(isPresented: $router.showsPermissions) {
+                NavigationStack {
+                    // Only a LAN session proves the local network was granted; a relay
+                    // session proves the opposite is possible, which is half the reason
+                    // this screen is reachable from the gate at all.
+                    PermissionsScreen(localNetworkProvenByConnection: isConnectedOverLAN)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(.reachy("Done")) { router.showsPermissions = false }
+                            }
+                        }
+                }
+            }
+    }
+
+    private var isConnectedOverLAN: Bool {
+        switch session.link {
+        case .lan: true
+        // A relay session proves nothing about the local network, and `.none` proves
+        // less — which is the case this sheet is reachable from the gate for.
+        case .none, .remote: false
+        }
     }
 }
