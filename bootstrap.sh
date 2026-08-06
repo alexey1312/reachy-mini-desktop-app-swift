@@ -26,7 +26,9 @@ chmod +x .githooks/*
 # Snapshot reference images are LFS pointers; without the filter they check out as text stubs
 # and every snapshot test fails with an unreadable-image error.
 echo "==> Enabling Git LFS for this clone"
-./bin/mise x -- git lfs install --local
+# LFS hooks are tracked in .githooks and combined with hk where necessary.
+# Install only the local filters so git-lfs does not reject those existing hooks.
+./bin/mise x -- git lfs install --local --skip-repo
 
 echo "==> Done"
 ./bin/mise run setup
