@@ -6,8 +6,16 @@ name: Snapshots
 # ReachyStorybook and ReachyUISnapshotTests targets. A broken preview therefore went
 # green until someone ran the snapshots on a Mac.
 #
-# `record` writes to the repository, so it is dispatch-only — never a push or a label.
-# A push made with GITHUB_TOKEN does not trigger workflows, so it cannot loop either.
+# `record` rewrites the references and pushes them, so it never runs by itself: it
+# takes either a manual dispatch or the `record-snapshots` label on a pull request.
+# Both are deliberate acts. A push made with GITHUB_TOKEN does not trigger workflows,
+# so the commit it makes cannot loop back into this job.
+#
+# The label exists because dispatch alone cannot bootstrap: GitHub only registers a
+# `workflow_dispatch` trigger once the file is on the default branch, so a branch that
+# *adds* this workflow could never dispatch it — while `pull_request` runs the workflow
+# from the PR's own head. Without the label, the first recording would have to wait for
+# a merge that `verify` is meanwhile failing.
 on:
   workflow_dispatch:
     inputs:
@@ -18,6 +26,7 @@ on:
         options: [verify, record]
   pull_request:
     branches: ["main"]
+    types: [opened, synchronize, reopened, labeled]
     # Everything that can move a reference. A ReachyKit-only change cannot, and
     # should not pay for a macOS runner.
     paths:
@@ -40,12 +49,17 @@ env:
 
 jobs:
   snapshots:
-    name: Snapshots (${{ inputs.mode || 'verify' }})
+    # Any other label on a pull request is none of this workflow's business.
+    if: >-
+      github.event.action != 'labeled' || github.event.label.name == 'record-snapshots'
+    name: Snapshots
     runs-on: macos-15
     timeout-minutes: 90
     permissions:
       # `record` commits the rewritten references back to the branch it ran on.
       contents: write
+      # …and takes the label off again, so the next one re-fires.
+      pull-requests: write
     env:
       # Deliberately Xcode's own Swift with no swift.org toolchain overlaid, for the
       # reason the app-build job gives: xcodebuild cannot load the local package's
@@ -56,11 +70,19 @@ jobs:
       # `snapshots:_run` in mise.toml, which refuses to run on anything else.
       REACHY_SNAPSHOT_OS: "26.2"
       REACHY_SNAPSHOT_SIM: "iPhone 17 Pro"
-      MODE: ${{ inputs.mode || 'verify' }}
+      MODE: >-
+        ${{ (inputs.mode == 'record' || github.event.label.name == 'record-snapshots') && 'record' || 'verify' }}
+      # Where a recording gets pushed. `head_ref` is set for a pull request and empty
+      # for a dispatch, where the run's own ref is the branch.
+      TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
 
     steps:
       - uses: actions/checkout@v7
         with:
+          # The head branch itself, not the merge ref a pull request checks out by
+          # default: the references belong to the branch, and `record` has to be able
+          # to commit onto it rather than onto a detached merge commit.
+          ref: ${{ github.head_ref || github.ref }}
           # Without this the references check out as text pointers and every
           # comparison fails against a file that is not an image.
           lfs: true
@@ -105,8 +127,13 @@ jobs:
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # A pull request from a fork gets a read-only token, so there is nothing to push
+      # to and saying so beats a confusing 403 at the end of a 40-minute run.
       - name: Commit and push the references
-        if: env.MODE == 'record'
+        if: >-
+          env.MODE == 'record'
+          && (github.event_name == 'workflow_dispatch'
+              || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
           if [ -z "$(git status --porcelain --untracked-files=all -- "$SNAPSHOT_DIR")" ]; then
             echo "Every reference already matched; nothing to commit." >> "$GITHUB_STEP_SUMMARY"
@@ -124,7 +151,17 @@ jobs:
           # `core.hooksPath` points at `.githooks/` only once mise's enter hook has run,
           # and a push without the objects leaves pointers with nothing behind them.
           git lfs push origin HEAD
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "HEAD:${TARGET_BRANCH}"
+
+      # So the next `record-snapshots` is a fresh event rather than a no-op on a label
+      # that is already there. Never worth failing the run over.
+      - name: Take the label back off
+        if: always() && github.event.action == 'labeled'
+        continue-on-error: true
+        run: |
+          gh pr edit "${{ github.event.pull_request.number }}" --remove-label record-snapshots
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # A verify failure is the interesting one, and the reference alone does not
       # explain it. swift-snapshot-testing attaches the expected/actual pair to the

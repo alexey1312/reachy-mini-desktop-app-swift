@@ -194,7 +194,12 @@ Adding a reference image still needs an explicit `git add`: the LFS filter decid
 the pre-commit hook only re-stages what it reformatted (`*.swift`, `*.md`) — neither one stages a PNG for you.
 **CI both verifies and records them, and that is why the runtime pin is 26.2.** `.github/workflows/snapshots.yml`
 runs `verify` on every PR touching `Sources/{ReachyUI,ReachyDesign,ReachyWidgetUI}` or `Apps/`, and `record` on
-manual dispatch — which rewrites the references, commits them and pushes to the branch it ran on. This used to say
+manual dispatch **or the `record-snapshots` label on a PR** — which rewrites the references, commits them and pushes
+to the branch it ran on. The label is not a convenience: **`workflow_dispatch` cannot bootstrap.** GitHub registers
+that trigger only for workflows already on the default branch, so the branch that _adds_ this workflow can never
+dispatch it, while `pull_request` runs the workflow from the PR's own head. Without the label the first recording
+would have to wait for a merge that `verify` is meanwhile failing. The label is removed again at the end of the run,
+so re-applying it is what asks for another. This used to say
 there could be no such job because local Xcode and the CI pin differ, and that was true of `26.4.1`: the
 `macos-15` image carries iOS **26.0, 26.1 and 26.2** only, and a runtime newer than the Xcode it runs under is
 refused, so CI could never have produced those images. Moving the pin to the newest runtime CI _has_ is what makes
