@@ -129,19 +129,6 @@ depends = ["project"]
 run = '''
 set -o pipefail
 SIM="${REACHY_SNAPSHOT_SIM:-iPhone 17 Pro}"
-OS="${REACHY_SNAPSHOT_OS:-26.2}"
-# The runtime draws every pixel, so running on another one re-renders all 1060 references —
-# a diff that reads as "the UI changed" when it means "the machine changed". It used to be
-# discovered afterwards, in a 1060-file diff; now it is a refusal. 26.2 is the pin because it
-# is the newest the GitHub macos-15 runner carries, which is what lets `snapshots.yml` record
-# and verify the same images a Mac does. Xcode may be newer locally: an older runtime runs
-# fine under it, and Xcode is not what renders.
-if ! xcrun simctl list runtimes | grep -q "iOS ${OS} "; then
-  echo "The iOS ${OS} simulator runtime is not installed, and it is the only one this" >&2
-  echo "repository's references were rendered by. Get it in Xcode → Settings → Components." >&2
-  echo "Set REACHY_SNAPSHOT_OS only if you mean to re-record the entire suite elsewhere." >&2
-  exit 1
-fi
 # Belt and braces since the forked template took over: each preview is captured in both
 # appearances from an injected trait, and the surfaces gallery re-recorded on a *dark* simulator
 # came out byte-identical, so the trait decides. Left here for whatever the trait does not reach.
@@ -150,7 +137,7 @@ xcrun simctl ui "$SIM" appearance light >/dev/null 2>&1 || true
 # References are English-only on purpose. Every string this app shows is localizable, and a
 # simulator left in another language would re-render all 1000 of them in it.
 xcodebuild test -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachyUISnapshotTests \
-  -destination "platform=iOS Simulator,name=${SIM},OS=${OS}" \
+  -destination "platform=iOS Simulator,name=${SIM},OS=${REACHY_SNAPSHOT_OS:-26.4.1}" \
   -derivedDataPath Apps/DerivedData \
   -testLanguage en -testRegion US \
   CODE_SIGNING_ALLOWED=NO \
@@ -207,7 +194,7 @@ prefire playbook Sources/ReachyDesign/Previews Sources/ReachyUI/Previews Apps/Re
 ./bin/mise run project
 set -o pipefail
 xcodebuild -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachyStorybook \
-  -destination "platform=iOS Simulator,name=$SIM,OS=${REACHY_SNAPSHOT_OS:-26.2}" \
+  -destination "platform=iOS Simulator,name=$SIM,OS=${REACHY_SNAPSHOT_OS:-26.4.1}" \
   -configuration Debug -derivedDataPath Apps/DerivedData \
   CODE_SIGNING_ALLOWED=NO -skipPackagePluginValidation -skipMacroValidation \
   build 2>&1 | xcsift

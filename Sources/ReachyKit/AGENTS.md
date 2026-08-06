@@ -21,7 +21,7 @@ Transport + domain core. No UI imports (SwiftUI/UIKit forbidden here). Swift 6 s
   `RobotConnection` both implement it, so the sealing and the screens are shared and the HTTP path is available if the
   ~260-byte sealed payload turns out not to fit one ATT write. `WiFiConfigClient` adds the settings-only routes.
 - **`Permissions/` answers "may we", never "can we", and the two are not the same question.**
-  `BluetoothPermission` reads the *class* property `CBCentralManager.authorization`, which builds no
+  `BluetoothPermission` reads the _class_ property `CBCentralManager.authorization`, which builds no
   central and so raises no prompt — the only way to report Bluetooth on a screen that must not ask. It
   cannot report a switched-off radio or absent hardware: `CBManagerAuthorization` has no such case, and a
   Simulator with no radio still answers `.notDetermined`. That axis stays `BLEAvailability`, and it costs a

@@ -118,6 +118,9 @@ struct CameraViewport: View {
 struct CameraMicButton: View {
     let session: CameraSession
 
+    @Environment(\.reachyPreviewMode) private var previewMode
+    @Environment(\.scenePhase) private var scenePhase
+
     private var isBlocked: Bool {
         session.micPermission.isBlocking
     }
@@ -132,6 +135,9 @@ struct CameraMicButton: View {
         // A blocked microphone is still worth explaining while the stream is down,
         // but there is nothing to unmute into, so the rule is unchanged.
         .disabled(session.phase != .streaming)
+        .onChange(of: scenePhase) { _, phase in
+            scenePhaseChanged(phase)
+        }
     }
 
     private func act() {
@@ -140,6 +146,11 @@ struct CameraMicButton: View {
         } else {
             session.setMicEnabled(!session.isMicEnabled)
         }
+    }
+
+    private func scenePhaseChanged(_ phase: ScenePhase) {
+        guard !previewMode, phase == .active else { return }
+        session.refreshMicPermission()
     }
 
     /// The glyph is icon-only, so this is also what a screen reader announces.
@@ -153,7 +164,9 @@ struct CameraMicButton: View {
     }
 
     private var symbol: String {
-        if isBlocked { return "mic.slash.circle" }
+        if isBlocked {
+            return "mic.slash.circle"
+        }
         return session.isMicEnabled ? "mic.fill" : "mic.slash"
     }
 
@@ -162,7 +175,9 @@ struct CameraMicButton: View {
     /// to the same `.red`/`.secondary` this button always used, so naming them moves no
     /// reference image.
     private var tint: AnyShapeStyle {
-        if isBlocked { return Tone.warning.style }
+        if isBlocked {
+            return Tone.warning.style
+        }
         return session.isMicEnabled ? Tone.danger.style : Tone.quiet.style
     }
 }

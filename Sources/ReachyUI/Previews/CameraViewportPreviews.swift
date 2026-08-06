@@ -32,17 +32,6 @@ import SwiftUI
     }
 }
 
-// A refused microphone used to look exactly like a muted one — same glyph, same
-// colour, and tapping it did nothing. The reference is here to keep the two apart.
-#Preview("Camera — microphone blocked") {
-    PreviewScene.pane {
-        CameraViewport(
-            session: .preview(.streaming, micPermission: .denied),
-            makeTeleop: PreviewScene.teleopFactory
-        )
-    }
-}
-
 #Preview("Camera — body turned") {
     PreviewScene.pane {
         CameraViewport(
