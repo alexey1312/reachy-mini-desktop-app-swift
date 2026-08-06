@@ -187,9 +187,11 @@ the pre-commit hook only re-stages what it reformatted (`*.swift`, `*.md`) — n
 There is no CI job yet: local Xcode and the CI pin differ, so references recorded on one fail on the other.
 `test:snapshots` compares the images either side of the run and fails if any had to be written — Prefire generates
 `record: .missing`, so a reference that does not exist yet is created rather than compared.
-**`Root-connected`, `Root-no-camera` and `Root-unreachable` are byte-identical on iPhone**: the compact connected
-root captures as a near-blank ghost, so those three verify nothing and a change to that layout passes untested.
-Their iPad captures are the ones carrying the layout — check a compact change against a preview that renders.
+The compact root used to capture as a near-blank ghost, which made `Root-connected`, `Root-no-camera` and
+`Root-unreachable` byte-identical on iPhone — three references verifying nothing. Splitting the root into a gate and
+a five-tab shell ended that: each root capture now renders the selected tab's content. Two iPhone captures may still
+collide legitimately, when the state they differ in belongs to a tab neither is showing; that is a sign the preview
+is pointed at the wrong tab, not that the capture is dead.
 `Apps/.prefire.yml` carries no comments on purpose: Prefire's hand-rolled YAML parser reads a comment line ending in
 `:` as a config key, warns, and moves on — a helpful comment silently becomes an unknown setting.
 **Macros that ship with Xcode rather than with the toolchain break `swift build`.** The pinned swift.org toolchain has

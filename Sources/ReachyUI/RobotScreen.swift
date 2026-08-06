@@ -33,15 +33,6 @@ struct RobotScreen: View {
         }
         .formStyle(.grouped)
         .navigationTitle(identity?.name ?? "Robot")
-        .toolbar {
-            ToolbarItem {
-                NavigationLink {
-                    SettingsScreen(session: session)
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-            }
-        }
     }
 
     private var identity: RobotIdentity? {
@@ -88,31 +79,12 @@ struct RobotScreen: View {
         }
     }
 
+    /// Power alone. The three destinations that used to sit above these buttons are
+    /// each a tab or a settings row now — the controller behind Live, the move
+    /// library at the root of its own tab, the daemon log with the rest of the
+    /// diagnostics — so this screen is about the robot's identity and its state.
     private var controlSection: some View {
         Section("Control") {
-            // Three separate questions, where one `if let address` used to stand
-            // for all of them. Only the middle one is genuinely LAN-only.
-            if session.canTeleoperate {
-                NavigationLink {
-                    ControllerScreen(session: session)
-                } label: {
-                    Label("Controller", systemImage: "gamecontroller")
-                }
-            }
-            if session.canPlayMoves {
-                NavigationLink {
-                    MovesScreen(session: session)
-                } label: {
-                    Label("Moves & expressions", systemImage: "music.note")
-                }
-            }
-            if session.canReadDaemonLogs {
-                NavigationLink {
-                    LogConsoleScreen(session: session)
-                } label: {
-                    Label("Daemon logs", systemImage: "terminal")
-                }
-            }
             Button {
                 Task { await session.wake() }
             } label: {

@@ -145,7 +145,7 @@ enum PreviewScene {
     static func root(
         _ session: RobotSession,
         viewport: ViewportModel? = nil,
-        tab: ReachyRootView<Text>.TabID = .robot,
+        tab: ReachyRouter.Tab = .robot,
         hfAccount: HFAccount? = nil,
         remoteLink: RemoteRobotLink? = nil
     ) -> some View {

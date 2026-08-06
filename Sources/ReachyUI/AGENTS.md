@@ -4,6 +4,19 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 
 - Adaptive layouts, not per-platform copies; `#if os(iOS)` only for platform-exclusive APIs (Settings deep link etc.).
 - `horizontalSizeClass` is unavailable on macOS — guard size-class branching with `#if os(macOS)` (always regular there).
+  **Nothing in this target branches on it any more.** The root used to build a two-column `HStack` for a regular width
+  and hide the Live tab on a compact one; `.tabViewStyle(.sidebarAdaptable)` does that adaptation itself, and it is
+  iOS 18 / macOS 15, not an iOS 26 API. Reaching for the size class again is a sign the layout is being forked rather
+  than adapted.
+- **Navigation is `ReachyRouter` plus two destinations.** `ReachyRootView` owns what outlives a screen and picks the
+  gate or the shell; `Navigation/` holds the router, the effect cluster and the sheet stack; `Shell/` holds the five
+  tabs. The five are unconditional — a tab that comes and goes forces the shell to catch its disappearance and drag
+  the selection elsewhere, which is what `onChange(of: offersLiveTab)` used to do. An unavailable feature renders an
+  unavailable state inside its own tab instead.
+- **`.unreachable` belongs to the shell, not the gate.** Only `.idle` and `.connecting` show the gate. A network blip
+  must not pull the tab bar out from under a finger, and the robot screen already reports the state in place.
+- Leaves stay injectable rather than reading the router: `ConnectionScreen.showRemoteRobots` is optional because its
+  absence is what hides `YourReachiesSection` in previews. The router is the shell's business.
 - All robot interaction goes through `RobotSession` / `RobotBrowser` from ReachyKit — no direct URLSession here.
 - Screen logic belongs in a `@MainActor @Observable` model beside the view (`MovesModel`, `LogConsoleModel`), covered
   by `Tests/ReachyUITests`; the view stays thin. `@Observable` does honour `didSet`, so derived caches can live there.
@@ -66,6 +79,12 @@ Adding a screen (project rule 8) means: a preview per state in `Previews/<Screen
   is the CoreBluetooth call a preview must not make, so the factory assigns it.
 - A screen whose `.task` guards on `model == nil` needs no `reachyPreviewMode` check — injecting the model is what
   makes it inert. Add the guard only where the effect runs unconditionally (`WiFiSettingsCard`, `LogConsoleScreen`).
+- **There is no `Root — settings tab` preview, and adding one back needs a seam first.** Inside the shell that tab
+  captures pure white on iPhone while the same screen renders on iPad and `SettingsPreviews` renders it standalone on
+  both. The tell is in the image: the tab bar comes out as bare glyphs rather than with its labels, so the frame was
+  taken before the tab settled. `MovesTab` survives the same treatment only because its loading state _is_ a final
+  frame, while `SettingsScreen` builds `SystemUpdateCard(session:)` itself and has no way to be handed a settled one.
+  A blank reference is worse than a missing one — it reads as coverage and passes any change.
 - Not covered, deliberately: `SceneViewport` in `.ready` (a bare `RealityView`) and `CameraViewport` in `.streaming`
   (Metal-backed `RTCMTLVideoView`). Neither renders anything meaningful headless — snapshot their overlay phases.
 - One `RobotSceneModel` per preview: `ReachyScene/AGENTS.md` requires exactly one live `RealityView` per model.

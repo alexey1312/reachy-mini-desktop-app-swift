@@ -42,11 +42,29 @@ struct SettingsScreen: View {
             if session.canConfigureWiFi {
                 WiFiSettingsCard(session: session)
             }
+            diagnosticsSection
             recoverySection
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
         .onAppear { nameDraft = identity?.name ?? "" }
+    }
+
+    /// The daemon's journal, moved off the robot screen: it answers "what is the
+    /// robot doing" the way the rest of this screen's lower half does, and it is not
+    /// a control. It stays out of the Advanced group below, whose contents all need
+    /// the robot to be within Bluetooth range — this one needs the opposite.
+    @ViewBuilder
+    private var diagnosticsSection: some View {
+        if session.canReadDaemonLogs {
+            Section {
+                NavigationLink {
+                    LogConsoleScreen(session: session)
+                } label: {
+                    Label("Daemon logs", systemImage: "terminal")
+                }
+            }
+        }
     }
 
     /// Collapsed, and last. Everything behind it talks to the robot over Bluetooth
