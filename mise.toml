@@ -129,14 +129,17 @@ depends = ["project"]
 run = '''
 set -o pipefail
 SIM="${REACHY_SNAPSHOT_SIM:-iPhone 17 Pro}"
-# The simulator's appearance survives reboots and is not part of the destination, so whoever last
-# switched this device to dark decides what every reference looks like. Left alone it rewrites all
-# of them and `test:snapshots` fails on a tree nobody touched.
+# Belt and braces since the forked template took over: each preview is captured in both
+# appearances from an injected trait, and the surfaces gallery re-recorded on a *dark* simulator
+# came out byte-identical, so the trait decides. Left here for whatever the trait does not reach.
 xcrun simctl boot "$SIM" 2>/dev/null || true
 xcrun simctl ui "$SIM" appearance light >/dev/null 2>&1 || true
+# References are English-only on purpose. Every string this app shows is localizable, and a
+# simulator left in another language would re-render all 1000 of them in it.
 xcodebuild test -workspace Apps/ReachyMiniApps.xcworkspace -scheme ReachyUISnapshotTests \
   -destination "platform=iOS Simulator,name=${SIM},OS=${REACHY_SNAPSHOT_OS:-26.4.1}" \
   -derivedDataPath Apps/DerivedData \
+  -testLanguage en -testRegion US \
   CODE_SIGNING_ALLOWED=NO \
   -skipPackagePluginValidation -skipMacroValidation \
   2>&1 | xcsift
@@ -185,7 +188,7 @@ run = '''
 set -euo pipefail
 SIM="${REACHY_SNAPSHOT_SIM:-iPhone 17 Pro}"
 # The playbook plugin only ever scans its own target's sources, so the CLI is driven directly.
-prefire playbook Sources/ReachyUI/Previews Apps/ReachySpike/Previews \
+prefire playbook Sources/ReachyDesign/Previews Sources/ReachyUI/Previews Apps/ReachySpike/Previews \
   --output Apps/ReachyStorybook/Generated \
   --config Apps
 ./bin/mise run project
@@ -242,7 +245,7 @@ set -euo pipefail
 # The storybook target globs `Generated/**`, which is gitignored — tuist rejects a glob whose
 # directory does not exist, so generation fails outright on a fresh clone (and in CI) unless the
 # playbook is written first. Cheap enough to redo every time.
-prefire playbook Sources/ReachyUI/Previews Apps/ReachySpike/Previews \
+prefire playbook Sources/ReachyDesign/Previews Sources/ReachyUI/Previews Apps/ReachySpike/Previews \
   --output Apps/ReachyStorybook/Generated --config Apps
 TUIST="$(./bin/mise where tuist)/tuist"
 cd Apps && exec env -u TOOLCHAINS "$TUIST" generate --no-open

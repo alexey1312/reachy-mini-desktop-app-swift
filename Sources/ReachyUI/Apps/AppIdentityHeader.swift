@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyWidgetUI
 import SwiftUI
@@ -24,13 +25,13 @@ struct AppIdentityHeader: View {
                 }
                 HStack(spacing: 10) {
                     if app.isOfficial {
-                        Label("Official", systemImage: "checkmark.seal.fill")
+                        Label(.reachy("Official"), systemImage: "checkmark.seal.fill")
                     }
                     if app.isPrivate {
-                        Label("Private", systemImage: "lock.fill")
+                        Label(.reachy("Private"), systemImage: "lock.fill")
                     }
                     if let likes = app.likes, likes > 0 {
-                        Label("\(likes)", systemImage: "heart.fill")
+                        Label(.reachy("\(likes)"), systemImage: "heart.fill")
                     }
                 }
                 .font(.caption)

@@ -1,4 +1,5 @@
 import Foundation
+import ReachyDesign
 import ReachyKit
 
 /// Starting and stopping one app, with no session around it.
@@ -30,9 +31,9 @@ public struct RobotAppLauncher: Sendable {
         public var errorDescription: String? {
             switch self {
             case let .busy(title):
-                "“\(title)” is running. Stop it first."
+                String(localized: .reachy("“\(title)” is running. Stop it first."))
             case let .unusableName(name):
-                "“\(name)” can't be started from here. Open Reachy Mini and start it there."
+                String(localized: .reachy("“\(name)” can't be started from here. Open Reachy Mini and start it there."))
             }
         }
     }

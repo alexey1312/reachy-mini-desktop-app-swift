@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -25,11 +26,11 @@ struct OnboardingFlow: View {
     var body: some View {
         NavigationStack {
             step
-                .navigationTitle("Set up a robot")
+                .navigationTitle(.reachy("Set up a robot"))
                 .toolbarTitleStyle()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
+                        Button(.reachy("Cancel")) {
                             model.cancel()
                             onCancel()
                         }
@@ -84,7 +85,7 @@ struct OnboardingStepScaffold<Content: View, Actions: View>: View {
             }
             .padding()
             .frame(maxWidth: .infinity)
-            .background(.bar)
+            .reachyScrim(ignoringSafeArea: .bottom)
         }
     }
 }
@@ -96,7 +97,7 @@ struct OnboardingBackButton: View {
 
     var body: some View {
         if model.canGoBack {
-            Button("Back") { model.back() }
+            Button(.reachy("Back")) { model.back() }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
         }

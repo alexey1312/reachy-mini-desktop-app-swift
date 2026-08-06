@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -42,11 +43,29 @@ struct SettingsScreen: View {
             if session.canConfigureWiFi {
                 WiFiSettingsCard(session: session)
             }
+            diagnosticsSection
             recoverySection
         }
         .formStyle(.grouped)
-        .navigationTitle("Settings")
+        .navigationTitle(.reachy("Settings"))
         .onAppear { nameDraft = identity?.name ?? "" }
+    }
+
+    /// The daemon's journal, moved off the robot screen: it answers "what is the
+    /// robot doing" the way the rest of this screen's lower half does, and it is not
+    /// a control. It stays out of the Advanced group below, whose contents all need
+    /// the robot to be within Bluetooth range — this one needs the opposite.
+    @ViewBuilder
+    private var diagnosticsSection: some View {
+        if session.canReadDaemonLogs {
+            Section {
+                NavigationLink {
+                    LogConsoleScreen(session: session)
+                } label: {
+                    Label(.reachy("Daemon logs"), systemImage: "terminal")
+                }
+            }
+        }
     }
 
     /// Collapsed, and last. Everything behind it talks to the robot over Bluetooth
@@ -58,25 +77,25 @@ struct SettingsScreen: View {
                 NavigationLink {
                     BLEConsoleScreen()
                 } label: {
-                    Label("Recovery over Bluetooth", systemImage: "wrench.and.screwdriver")
+                    Label(.reachy("Recovery over Bluetooth"), systemImage: "wrench.and.screwdriver")
                 }
                 if let developerScreen {
                     NavigationLink {
                         developerScreen()
                     } label: {
-                        Label("Developer tools", systemImage: "stethoscope")
+                        Label(.reachy("Developer tools"), systemImage: "stethoscope")
                     }
                 }
             }
         } footer: {
-            Text("For a robot that has dropped off the network. It needs to be within Bluetooth range.")
+            Text(.reachy("For a robot that has dropped off the network. It needs to be within Bluetooth range."))
         }
     }
 
     private var robotSection: some View {
         Section {
             HStack {
-                TextField("Name", text: $nameDraft)
+                TextField(.reachy("Name"), text: $nameDraft)
                     .focused($nameFocused)
                     .autocorrectionDisabled()
                     .onSubmit { rename() }
@@ -90,7 +109,7 @@ struct SettingsScreen: View {
                 if isRenaming {
                     ProgressView().controlSize(.small)
                 } else if canRename {
-                    Button("Save", action: rename)
+                    Button(.reachy("Save"), action: rename)
                         .buttonStyle(.borderless)
                 }
             }
@@ -99,14 +118,14 @@ struct SettingsScreen: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
-            LabeledContent("Daemon", value: identity?.daemonVersion ?? "—")
-            LabeledContent("Connection", value: session.link.displayString)
+            LabeledContent(.reachy("Daemon"), value: identity?.daemonVersion ?? "—")
+            LabeledContent(.reachy("Connection"), value: session.link.displayString)
             if let hardwareID = identity?.hardwareID {
-                LabeledContent("Hardware ID", value: hardwareID)
+                LabeledContent(.reachy("Hardware ID"), value: hardwareID)
                     .font(.body.monospaced())
             }
         } header: {
-            Text("Robot")
+            Text(.reachy("Robot"))
         } footer: {
             Text(nameField.footer)
         }

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -63,11 +64,11 @@ struct BLESoftwareResetScreen: View {
             countdown = value - 1
         }
         .confirmationDialog(
-            "Erase the robot's software?",
+            .reachy("Erase the robot's software?"),
             isPresented: $confirming,
             titleVisibility: .visible
         ) {
-            Button("Erase and restore", role: .destructive) {
+            Button(.reachy("Erase and restore"), role: .destructive) {
                 Task { await dispatch() }
             }
         } message: {
@@ -76,53 +77,57 @@ struct BLESoftwareResetScreen: View {
     }
 
     private var consequences: some View {
-        Section("What this does") {
-            bullet("Deletes the robot's Python environments outright.")
-            bullet("Copies the factory set back from the robot's own restore directory.")
-            bullet("Every app you installed, and everything those apps stored, is gone.")
-            bullet("It takes about five minutes. Do not power the robot off during it.")
+        Section(.reachy("What this does")) {
+            bullet(String(localized: .reachy("Deletes the robot's Python environments outright.")))
+            bullet(String(localized: .reachy("Copies the factory set back from the robot's own restore directory.")))
+            bullet(String(localized: .reachy("Every app you installed, and everything those apps stored, is gone.")))
+            bullet(String(localized: .reachy("It takes about five minutes. Do not power the robot off during it.")))
         }
     }
 
     @ViewBuilder
     private var gates: some View {
         Section {
-            Toggle("I understand every installed app will be erased", isOn: $acknowledged)
+            Toggle(.reachy("I understand every installed app will be erased"), isOn: $acknowledged)
         }
         Section {
-            TextField("Hardware ID", text: $typedID)
+            TextField(.reachy("Hardware ID"), text: $typedID)
                 .font(.body.monospaced())
                 .autocorrectionDisabled()
             #if os(iOS)
                 .textInputAutocapitalization(.never)
             #endif
         } header: {
-            Text("Confirm the robot")
+            Text(.reachy("Confirm the robot"))
         } footer: {
             if let hardwareID = model.hardwareID {
-                Text("Type \(hardwareID) — this robot's id, shown so you are erasing the one in front of you.")
+                Text(.reachy("Type \(hardwareID) — this robot's id, shown so you are erasing the one in front of you."))
                     .font(.caption.monospaced())
             } else {
-                Text("This robot did not report a hardware id, so it cannot be confirmed. Do not continue.")
+                Text(.reachy("This robot did not report a hardware id, so it cannot be confirmed. Do not continue."))
             }
         }
         Section {
-            SecureField("Robot's code", text: $code)
+            SecureField(.reachy("Robot's code"), text: $code)
                 .font(.body.monospaced())
         } header: {
-            Text("Confirm it is you")
+            Text(.reachy("Confirm it is you"))
         } footer: {
-            Text("Sent again the instant before the command goes out, so a session opened earlier for "
-                + "something harmless cannot carry this through with it.")
+            Text(
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "Sent again the instant before the command goes out, so a session opened earlier for something harmless cannot carry this through with it."
+                )
+            )
         }
         Section {
             Button(role: .destructive) {
                 confirming = true
             } label: {
                 if let countdown, countdown > 0 {
-                    Text("Erase and restore in \(countdown)…")
+                    Text(.reachy("Erase and restore in \(countdown)…"))
                 } else {
-                    Text("Erase and restore")
+                    Text(.reachy("Erase and restore"))
                 }
             }
             .disabled(!gatesPassed || (countdown ?? Self.arming) > 0)
@@ -133,22 +138,26 @@ struct BLESoftwareResetScreen: View {
     }
 
     private var restoring: some View {
-        Section("Restoring") {
+        Section(.reachy("Restoring")) {
             HStack(spacing: 10) {
                 ProgressView()
-                Text("This takes about five minutes. Leave the robot powered on.")
+                Text(.reachy("This takes about five minutes. Leave the robot powered on."))
             }
-            LabeledContent("Bluetooth") {
+            LabeledContent(.reachy("Bluetooth")) {
                 switch stillAnswering {
-                case true: Text("answering").foregroundStyle(.green)
-                case false: Text("no answer").foregroundStyle(.orange)
+                case true: Text(.reachy("answering")).foregroundStyle(.green)
+                case false: Text(.reachy("no answer")).foregroundStyle(.orange)
                 case nil: ProgressView()
                 }
             }
-            Text("The Bluetooth service is a separate unit and stays up throughout, so this only says the "
-                + "robot is still there. Progress shows up in the journal when the daemon comes back.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Text(
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "The Bluetooth service is a separate unit and stays up throughout, so this only says the robot is still there. Progress shows up in the journal when the daemon comes back."
+                )
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
         .task {
             guard !previewMode else { return }

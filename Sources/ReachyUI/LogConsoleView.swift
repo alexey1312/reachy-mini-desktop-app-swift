@@ -1,3 +1,4 @@
+import ReachyDesign
 import SwiftUI
 
 /// The console proper: tailing list, level filter, search, pause, copy and export.
@@ -28,10 +29,14 @@ struct LogConsoleView: View {
     var body: some View {
         Group {
             if let failure {
-                ContentUnavailableView("Log stream failed", systemImage: "xmark.octagon", description: Text(failure))
+                ContentUnavailableView(
+                    .reachy("Log stream failed"),
+                    systemImage: "xmark.octagon",
+                    description: Text(failure)
+                )
             } else if model.entries.isEmpty {
                 ContentUnavailableView(
-                    "Waiting for logs…",
+                    .reachy("Waiting for logs…"),
                     systemImage: "text.alignleft",
                     description: Text(emptyDescription)
                 )
@@ -42,7 +47,7 @@ struct LogConsoleView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { statusBar }
-        .searchable(text: $model.query, prompt: "Filter log")
+        .searchable(text: $model.query, prompt: String(localized: .reachy("Filter log")))
         .toolbar { toolbarContent }
         .onAppear { model.capacity = capacity }
         .onChange(of: capacity) { model.capacity = capacity }
@@ -64,6 +69,9 @@ struct LogConsoleView: View {
                     .onDisappear { atBottom = false }
             }
             .listStyle(.plain)
+            // The one list in the app dense enough to want it: monospaced lines with
+            // no grouping to end on, running straight under the navigation bar.
+            .reachySoftScrollEdge(.top)
             .onChange(of: model.visible.last?.id) {
                 guard atBottom else { return }
                 proxy.scrollTo(Anchor.bottom, anchor: .bottom)
@@ -80,26 +88,28 @@ struct LogConsoleView: View {
             Text(statusText)
             Spacer()
             if !atBottom {
-                Button("Jump to latest", systemImage: "arrow.down.to.line") { jumpToken += 1 }
+                Button(.reachy("Jump to latest"), systemImage: "arrow.down.to.line") { jumpToken += 1 }
                     .buttonStyle(.borderless)
             }
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
+        .font(Typography.status)
+        .foregroundStyle(Tone.quiet.style)
+        .padding(.horizontal, Space.md)
         .padding(.vertical, 6)
-        .background(.bar)
+        .reachyScrim(ignoringSafeArea: .bottom)
     }
 
     private var statusText: String {
         var parts: [String] = []
         if model.isFiltered {
-            parts.append("\(model.visible.count) of \(model.entries.count) lines")
+            parts.append(String(localized: .reachy("\(model.visible.count) of \(model.entries.count) lines")))
         } else {
-            parts.append("\(model.entries.count) lines")
+            parts.append(String(localized: .reachy("\(model.entries.count) lines")))
         }
         if model.paused {
-            parts.append(model.pending.isEmpty ? "paused" : "paused · +\(model.pending.count) new")
+            parts
+                .append(model.pending
+                    .isEmpty ? "paused" : String(localized: .reachy("paused · +\(model.pending.count) new")))
         }
         return parts.joined(separator: " · ")
     }
@@ -116,40 +126,53 @@ struct LogConsoleView: View {
         .font(.caption2.monospaced())
         .textSelection(.enabled)
         .contextMenu {
-            Button("Copy line", systemImage: "doc.on.doc") { Clipboard.copy(entry.text) }
+            Button(.reachy("Copy line"), systemImage: "doc.on.doc") { Clipboard.copy(entry.text) }
         }
         .listRowSeparator(.hidden)
         .listRowInsets(.init(top: 1, leading: 8, bottom: 1, trailing: 8))
     }
 
+    /// Two groups, not three buttons in a row: pausing acts on the feed, the other
+    /// two act on what it has already collected. From iOS 26 `ToolbarSpacer` is what
+    /// makes that split visible — each group becomes its own pane of glass — and
+    /// below the floor the two groups simply sit next to each other, as they did.
+    ///
+    /// This is the only toolbar in the app with enough in it to divide. The plan
+    /// named `RobotScreen`, `AppStoreScreen` and `MovesScreen`; the first lost its
+    /// toolbar with the gear in PR 2, and the other two carry a single Refresh.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup {
+        ToolbarItem {
             Button(model.paused ? "Resume" : "Pause", systemImage: model.paused ? "play" : "pause") {
                 model.paused.toggle()
             }
+        }
+        if #available(iOS 26.0, macOS 26.0, *) {
+            ToolbarSpacer(.fixed)
+        }
+        ToolbarItemGroup {
             ShareLink(item: model.export(address: source), preview: SharePreview("Log")) {
-                Label("Export", systemImage: "square.and.arrow.up")
+                Label(.reachy("Export"), systemImage: "square.and.arrow.up")
             }
             .disabled(model.visible.isEmpty)
             Menu {
-                Picker("Level", selection: $model.minimumLevel) {
-                    Text("All").tag(LogLevel.debug)
-                    Text("Info and above").tag(LogLevel.info)
-                    Text("Warnings and above").tag(LogLevel.warning)
-                    Text("Errors").tag(LogLevel.error)
+                Picker(.reachy("Level"), selection: $model.minimumLevel) {
+                    Text(.reachy("All")).tag(LogLevel.debug)
+                    Text(.reachy("Info and above")).tag(LogLevel.info)
+                    Text(.reachy("Warnings and above")).tag(LogLevel.warning)
+                    Text(.reachy("Errors")).tag(LogLevel.error)
                 }
-                Picker("Buffer", selection: $capacity) {
+                Picker(.reachy("Buffer"), selection: $capacity) {
                     ForEach(LogConsoleModel.capacities, id: \.self) { size in
-                        Text("\(size) lines").tag(size)
+                        Text(.reachy("\(size) lines")).tag(size)
                     }
                 }
                 Divider()
-                Button("Copy all", systemImage: "doc.on.doc") { Clipboard.copy(model.copyText) }
+                Button(.reachy("Copy all"), systemImage: "doc.on.doc") { Clipboard.copy(model.copyText) }
                     .disabled(model.visible.isEmpty)
-                Button("Clear", systemImage: "trash", role: .destructive) { model.clear() }
+                Button(.reachy("Clear"), systemImage: "trash", role: .destructive) { model.clear() }
             } label: {
-                Label("More", systemImage: "ellipsis.circle")
+                Label(.reachy("More"), systemImage: "ellipsis.circle")
             }
         }
     }

@@ -1,3 +1,4 @@
+import ReachyDesign
 import SwiftUI
 import WidgetKit
 
@@ -19,7 +20,7 @@ public struct RobotAppsWidgetView: View {
     }
 
     private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 8), count: content.tiles.count <= 2 ? 1 : 2)
+        Array(repeating: GridItem(.flexible(), spacing: Space.sm), count: content.tiles.count <= 2 ? 1 : 2)
     }
 
     public var body: some View {
@@ -27,7 +28,7 @@ public struct RobotAppsWidgetView: View {
             if content.tiles.isEmpty {
                 emptyState
             } else {
-                LazyVGrid(columns: columns, spacing: 8) {
+                LazyVGrid(columns: columns, spacing: Space.sm) {
                     ForEach(content.tiles) { tile in
                         RobotAppTileView(tile: tile)
                     }
@@ -61,7 +62,7 @@ public struct RobotAppsWidgetView: View {
     }
 
     private func noticeRow(_ message: String) -> some View {
-        Text(content.notice.invitesTheApp ? "\(message) Tap to open." : message)
+        Text(content.notice.invitesTheApp ? String(localized: .reachy("\(message) Tap to open.")) : message)
             .font(.caption2)
             .foregroundStyle(.secondary)
             .lineLimit(2)
@@ -87,28 +88,19 @@ struct RobotAppTileView: View {
     }
 
     private var label: some View {
-        HStack(spacing: 8) {
-            AppArtworkTile(
-                artwork: AppArtwork(emoji: tile.emoji, gradient: tile.gradient, key: tile.id),
-                size: 30
-            )
-            .overlay { badge }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(tile.title)
-                    .font(.caption)
-                    .fontWeight(tile.state == .running ? .semibold : .regular)
-                    .lineLimit(1)
-                if let caption {
-                    Text(caption)
-                        .font(.caption2)
-                        .foregroundStyle(captionStyle)
-                        .lineLimit(1)
-                }
+        AppRowLabel(
+            artwork: AppArtwork(emoji: tile.emoji, gradient: tile.gradient, key: tile.id),
+            title: tile.title,
+            layout: .tile,
+            titleWeight: tile.state == .running ? .semibold : .regular,
+            status: caption.map {
+                ReachyStatusLabel(text: $0, tone: statusTone, font: Typography.statusCompact, lineLimit: 1)
             }
-            Spacer(minLength: 0)
+        ) {
+            badge
         }
         .padding(6)
-        .background(background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(background, in: Radius.rect(Radius.sm))
         .opacity(isDimmed ? 0.4 : 1)
         // WidgetKit dims this by itself while the button's intent is in flight,
         // which is the only progress a widget can show across a process boundary.
@@ -143,15 +135,19 @@ struct RobotAppTileView: View {
         case .running: "Running"
         case .starting: "Starting…"
         case .stopping: "Stopping…"
-        case .notInstalled: "Not installed"
+        case .notInstalled: String(localized: .reachy("Not installed"))
         // One word, because that is all the room there is. The notice under the
         // grid carries what the daemon actually said.
         case .failed: "Failed"
         }
     }
 
-    private var captionStyle: AnyShapeStyle {
-        tile.state == .failed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary)
+    /// Only a crash gets a colour. "Running" stays quiet here even though the same
+    /// word is `.active` elsewhere: a tile already says it is running by weight, by
+    /// its tint and by the stop target on the artwork, and a fourth signal in green
+    /// would make the grid read as a status board.
+    private var statusTone: StatusTone {
+        tile.state == .failed ? .failed : .idle
     }
 
     private var background: AnyShapeStyle {

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -38,7 +39,7 @@ struct AudioSettingsSection: View {
                 ) {
                     await model.commitMicrophone(session: session)
                 }
-                Button("Test sound") {
+                Button(.reachy("Test sound")) {
                     Task { await model.playTestSound(session: session) }
                 }
                 .disabled(model.isBusy || !model.isReady)
@@ -70,7 +71,7 @@ struct AudioSettingsSection: View {
             HStack {
                 Label(title, systemImage: systemImage)
                 Spacer()
-                Text("\(Int(value.wrappedValue.rounded()))%")
+                Text(.reachy("\(Int(value.wrappedValue.rounded()))%"))
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
@@ -83,7 +84,7 @@ struct AudioSettingsSection: View {
             // Only the LAN routes name the device; a remote session reports the
             // level alone, and a line reading " · " would be worse than none.
             if let name = device?.device, let platform = device?.platform {
-                Text("\(name) · \(platform)")
+                Text(.reachy("\(name) · \(platform)"))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

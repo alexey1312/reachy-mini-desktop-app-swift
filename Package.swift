@@ -3,6 +3,10 @@ import PackageDescription
 
 let package = Package(
     name: "ReachyMini",
+    // Required the moment a target carries a localized resource. English is the
+    // source language of `ReachyDesign/Resources/Localizable.xcstrings`, the one
+    // catalogue both executables read.
+    defaultLocalization: "en",
     platforms: [
         // RealityView (the 3D robot viewer) is iOS 18 / macOS 15.
         .macOS(.v15),
@@ -10,6 +14,7 @@ let package = Package(
     ],
     products: [
         .library(name: "HuggingFaceAuth", targets: ["HuggingFaceAuth"]),
+        .library(name: "ReachyDesign", targets: ["ReachyDesign"]),
         .library(name: "ReachyKit", targets: ["ReachyKit"]),
         .library(name: "ReachyMedia", targets: ["ReachyMedia"]),
         .library(name: "ReachyScene", targets: ["ReachyScene"]),
@@ -30,6 +35,15 @@ let package = Package(
         // stays in ReachyKit — which does not depend on this target either, so a
         // token reaches it as a value the UI passes in, never as a global.
         .target(name: "HuggingFaceAuth"),
+        // Tokens and the `ReachySurface` facade. It depends on SwiftUI and
+        // nothing else, which is what lets both `ReachyUI` and `ReachyWidgetUI`
+        // link it: a dependency is linked into a *target*, not into the place it
+        // is called from, so anything heavier here would reach the widget too.
+        .target(
+            name: "ReachyDesign",
+            exclude: ["AGENTS.md", "CLAUDE.md", "Previews"],
+            resources: [.process("Resources")]
+        ),
         .target(
             name: "ReachyKit",
             dependencies: [
@@ -58,7 +72,9 @@ let package = Package(
             // `ReachyWidgetUI` for the app artwork alone, which both the store
             // rows and the widget's tiles draw. The arrow points this way round on
             // purpose: the widget target must stay clear of ReachyMedia.
-            dependencies: ["HuggingFaceAuth", "ReachyKit", "ReachyMedia", "ReachyScene", "ReachyWidgetUI"],
+            dependencies: [
+                "HuggingFaceAuth", "ReachyDesign", "ReachyKit", "ReachyMedia", "ReachyScene", "ReachyWidgetUI",
+            ],
             // `Previews` sits beside the views it documents but is compiled by the Xcode targets
             // in `Apps/`, not by this one: `#Preview` is an external macro whose implementation
             // ships inside Xcode's platform SDKs, so SwiftPM builds on the pinned swift.org
@@ -71,7 +87,7 @@ let package = Package(
         // business loading a media stack to draw two lines of text.
         .target(
             name: "ReachyWidgetUI",
-            dependencies: ["ReachyKit"],
+            dependencies: ["ReachyDesign", "ReachyKit"],
             exclude: ["AGENTS.md", "CLAUDE.md", "Previews"]
         ),
         // Not a product: stubs for the test targets only, in a plain target because

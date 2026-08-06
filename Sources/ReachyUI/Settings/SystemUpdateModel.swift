@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import ReachyDesign
 import ReachyKit
 
 /// Drives one robot software update: check, start, stream the log, wait out the
@@ -84,7 +85,7 @@ final class SystemUpdateModel {
                     log.ingest(line)
                 case let .status(status):
                     if status == .failed {
-                        state = .failed("The robot reported that the update failed.")
+                        state = .failed(String(localized: .reachy("The robot reported that the update failed.")))
                         return
                     }
                 case let .rejected(reason):
@@ -105,14 +106,23 @@ final class SystemUpdateModel {
 
     private func confirmRestart(from previous: String) async {
         guard let version = await reconnect() else {
-            state = .failed("The robot did not come back after the update. Power-cycle it and try again.")
+            state =
+                .failed(
+                    String(
+                        localized: .reachy(
+                            "The robot did not come back after the update. Power-cycle it and try again."
+                        )
+                    )
+                )
             return
         }
         guard version != previous else {
-            state = .failed(
-                "The update finished but the robot still reports \(version). "
-                    + "A new enough release may not be published yet."
-            )
+            state = .failed(String(
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "The update finished but the robot still reports \(version). A new enough release may not be published yet."
+                )
+            ))
             return
         }
         state = .finished(version: version)

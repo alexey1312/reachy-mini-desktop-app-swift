@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -34,17 +35,17 @@ struct SpikeView: View {
     }
 
     private var discoverySection: some View {
-        Section("Discovery (Bonjour)") {
+        Section(.reachy("Discovery (Bonjour)")) {
             ForEach(Array(discovery.browserStates.sorted(by: { $0.key < $1.key })), id: \.key) { type, state in
                 LabeledContent(type) {
                     Text(state).font(.caption.monospaced())
                 }
             }
             if discovery.permissionLooksDenied {
-                Label("Local Network permission denied", systemImage: "exclamationmark.triangle")
+                Label(.reachy("Local Network permission denied"), systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
                 #if os(iOS)
-                    Button("Open Settings") {
+                    Button(.reachy("Open Settings")) {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
                             UIApplication.shared.open(url)
                         }
@@ -52,26 +53,26 @@ struct SpikeView: View {
                 #endif
             }
             if discovery.services.isEmpty {
-                Text("No robots found").foregroundStyle(.secondary)
+                Text(.reachy("No robots found")).foregroundStyle(.secondary)
             }
             ForEach(discovery.services) { service in
                 LabeledContent(service.name) {
                     Text(service.type).font(.caption.monospaced())
                 }
             }
-            Button("Restart discovery") { discovery.start() }
+            Button(.reachy("Restart discovery")) { discovery.start() }
         }
     }
 
     private var connectSection: some View {
-        Section("Connection") {
-            TextField("Host (IP or name.local)", text: $model.host)
+        Section(.reachy("Connection")) {
+            TextField(.reachy("Host (IP or name.local)"), text: $model.host)
                 .autocorrectionDisabled()
             #if os(iOS)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
             #endif
-            Button("Connect (handshake)") {
+            Button(.reachy("Connect (handshake)")) {
                 Task { await model.connect() }
             }
             if let summary = model.handshakeSummary {
@@ -86,15 +87,17 @@ struct SpikeView: View {
     }
 
     private var streamSection: some View {
-        Section("State stream (10 Hz by default)") {
-            Button(model.isStreaming ? "Stop stream" : "Start stream") {
+        Section(.reachy("State stream (10 Hz by default)")) {
+            Button(model
+                .isStreaming ? String(localized: .reachy("Stop stream")) : String(localized: .reachy("Start stream")))
+            {
                 model.toggleStream()
             }
-            LabeledContent("Frames") { Text("\(model.frameCount)") }
-            LabeledContent("Rate") { Text(String(format: "%.1f Hz", model.hertz)) }
+            LabeledContent(.reachy("Frames")) { Text(.reachy("\(model.frameCount)")) }
+            LabeledContent(.reachy("Rate")) { Text(String(format: "%.1f Hz", model.hertz)) }
             if model.streamDiagnostics.decodeFailures > 0 || model.streamDiagnostics.unsupportedFrames > 0 {
                 Label(
-                    "Invalid frames: \(model.invalidFrameCount)",
+                    .reachy("Invalid frames: \(model.invalidFrameCount)"),
                     systemImage: "exclamationmark.triangle"
                 )
                 .foregroundStyle(.orange)

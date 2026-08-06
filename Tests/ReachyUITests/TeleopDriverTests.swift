@@ -58,6 +58,40 @@ struct TeleopDriverTests {
         #expect(driver.target.bodyYaw == turned)
     }
 
+    /// What the camera's return-to-neutral button keys off, and why it keys off the
+    /// body alone: the pad puts the head back itself on release, so a button
+    /// answering to head deflection would appear under the finger and leave with it.
+    @Test("only an accumulated body turn reads as displaced")
+    func bodyTurnedTracksTheBodyAlone() {
+        let driver = TeleopDriver()
+        #expect(driver.isBodyTurned == false)
+
+        driver.apply(.init(x: 0.5, y: -0.25))
+        #expect(driver.target.yaw != 0)
+        #expect(driver.isBodyTurned == false)
+
+        // One 20 ms tick at full deflection is 1.2°, well past the 0.5° threshold:
+        // the button is there as soon as the turn starts, not once it is large.
+        driver.apply(.init(x: -1.0))
+        driver.integrateRotation(seconds: 0.02)
+        #expect(driver.isBodyTurned)
+
+        driver.apply(.zero)
+        #expect(driver.isBodyTurned)
+
+        driver.reset()
+        #expect(driver.isBodyTurned == false)
+        driver.stop()
+    }
+
+    /// `ControllerScreen` binds a slider to this same property, and a gesture can
+    /// leave float dust behind — which must not put a button on the camera.
+    @Test("a turn too small to see is not a turn")
+    func bodyTurnedIgnoresDust() {
+        #expect(TeleopDriver(target: .init(bodyYaw: 1e-12)).isBodyTurned == false)
+        #expect(TeleopDriver(target: .init(bodyYaw: -1.0 * .pi / 180)).isBodyTurned)
+    }
+
     @Test("reset returns the body too")
     func reset() {
         let driver = TeleopDriver(target: .init(roll: 0.3, bodyYaw: 1.2))

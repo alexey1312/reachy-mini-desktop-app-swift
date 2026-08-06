@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -68,23 +69,23 @@ struct ConnectionStepper: View {
                     // The daemon state walks stopped → starting → running on its own
                     // as `waitForDaemonRunning` refreshes it: real progress, not a timer.
                     if let state = session.lastStatus?.state {
-                        Text("Daemon state: \(String(describing: state))")
+                        Text(.reachy("Daemon state: \(String(localized: DaemonStateCaption.text(for: state)))"))
                             .font(.caption)
                     }
                 }
                 .foregroundStyle(.secondary)
             }
         } else if isBackendUnavailable {
-            Button("Start robot backend") {
+            Button(.reachy("Start robot backend")) {
                 Task { await session.startBackend() }
             }
-            Button("Continue anyway") {
+            Button(.reachy("Continue anyway")) {
                 session.proceedWithoutBackend()
             }
             cancelButton
         } else if isFailed {
             if let address = session.address {
-                Button("Try again") {
+                Button(.reachy("Try again")) {
                     Task { await session.connect(to: address) }
                 }
             }
@@ -96,16 +97,16 @@ struct ConnectionStepper: View {
     /// pauses automatic reconnect, which is what stops the 10 s rescan from
     /// reopening this very card moments later.
     private var cancelButton: some View {
-        Button("Cancel", role: .cancel) {
+        Button(.reachy("Cancel"), role: .cancel) {
             session.disconnect()
         }
     }
 
     private func title(for stage: RobotSession.ConnectionStage) -> String {
         switch stage {
-        case .connect: "Connect to daemon"
-        case .compatibility: "Daemon version"
-        case .backend: "Robot backend"
+        case .connect: String(localized: .reachy("Connect to daemon"))
+        case .compatibility: String(localized: .reachy("Daemon version"))
+        case .backend: String(localized: .reachy("Robot backend"))
         }
     }
 
@@ -116,13 +117,16 @@ struct ConnectionStepper: View {
             return failedStage == stage ? message : nil
         case let .needsDaemonUpdate(_, requirement):
             return stage == .compatibility
-                ? "Robot runs \(requirement.reported); this app needs \(requirement.minimum)"
+                ?
+                String(
+                    localized: .reachy("Robot runs \(requirement.reported); this app needs \(requirement.minimum)")
+                )
                 : nil
         case .backendUnavailable:
-            return stage == .backend ? "The robot backend is not running" : nil
+            return stage == .backend ? String(localized: .reachy("The robot backend is not running")) : nil
         case .checkingBackend:
             guard stage == .backend, let state = session.lastStatus?.state else { return nil }
-            return "Daemon state: \(String(describing: state))"
+            return String(localized: .reachy("Daemon state: \(String(localized: DaemonStateCaption.text(for: state)))"))
         case .handshaking:
             return nil
         }
@@ -135,7 +139,8 @@ struct ConnectionStepper: View {
 
     private var headerText: String {
         let target = session.link == .none ? "robot" : session.link.displayString
-        return isFailed ? "Couldn't connect to \(target)" : "Connecting to \(target)"
+        return isFailed ? String(localized: .reachy("Couldn't connect to \(target)")) :
+            String(localized: .reachy("Connecting to \(target)"))
     }
 
     private var isBackendUnavailable: Bool {

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -22,6 +23,6 @@ struct HFSignInScreen: View {
         // Named for what the user came to do, not for the service: the section
         // inside already carries "Hugging Face" as its header, and a screen
         // repeating it says nothing twice.
-        .navigationTitle("Sign in")
+        .navigationTitle(.reachy("Sign in"))
     }
 }

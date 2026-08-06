@@ -1,5 +1,6 @@
 import CoreTransferable
 import Foundation
+import ReachyDesign
 import UniformTypeIdentifiers
 
 /// Share payload for the visible log. Holds a snapshot array — cheap to rebuild on every
@@ -35,7 +36,7 @@ struct LogExport: Transferable, Sendable {
         # lines: \(entries.count) of \(totalCount)
         """
         if let filterSummary {
-            header += " (\(filterSummary))"
+            header += String(localized: .reachy(" (\(filterSummary))"))
         }
         return header + "\n" + entries.map(\.text).joined(separator: "\n") + "\n"
     }

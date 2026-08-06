@@ -104,6 +104,12 @@ enum PreviewScene {
         .preview()
     }
 
+    /// Enough to hang the joystick and its return-to-neutral button on a camera
+    /// preview: what offers them is the factory being *present*, not it being
+    /// callable. Nothing ever calls this one — `connectTeleop` returns early in
+    /// preview mode — so throwing is the honest body rather than a limitation.
+    static let teleopFactory: TeleopFactory = { throw ReachyKitError.teleopUnavailable }
+
     /// `makeTeleop` decides whether the joystick is offered at all, so it is a
     /// preview knob rather than something derived here.
     static func viewport(
@@ -145,7 +151,7 @@ enum PreviewScene {
     static func root(
         _ session: RobotSession,
         viewport: ViewportModel? = nil,
-        tab: ReachyRootView<Text>.TabID = .robot,
+        tab: ReachyRouter.Tab = .robot,
         hfAccount: HFAccount? = nil,
         remoteLink: RemoteRobotLink? = nil
     ) -> some View {

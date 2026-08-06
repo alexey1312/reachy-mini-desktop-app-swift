@@ -1,0 +1,183 @@
+# ReachyDesign
+
+Design tokens and the `ReachySurface` facade. **Depends on SwiftUI and nothing else** — both `ReachyUI` and
+`ReachyWidgetUI` link it, and a dependency is linked into a _target_, not into the place it is called from, so
+anything heavier added here would be dragged into the widget extension too. In particular: never import `ReachyKit`.
+A caller maps its own domain type onto a token (`RobotAppStatus.state` → `StatusTone`); the mapping is the caller's.
+
+## What is here
+
+| File                       | Holds                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `Space.swift`              | The 4-point layout rhythm, and the two rules for adopting it                 |
+| `Radius.swift`             | Corner radii plus `Radius.rect(_:)`, the only rounded rectangle handed out   |
+| `Tone.swift`               | Semantic colour roles over system styles — no palette, no `.xcassets`        |
+| `Typography.swift`         | Text roles from semantic `Font`s, and `IconRatio` for glyph-as-artwork       |
+| `Motion.swift`             | The three animations the app runs, named                                     |
+| `Metrics.swift`            | Sizes fixed by what they represent rather than by their text                 |
+| `StatusTone.swift`         | `StatusTone` + `ReachyStatusLabel`, the one shape a state caption renders in |
+| `ReachySurface.swift`      | `SurfaceRole` + `reachySurface(_:in:)`                                       |
+| `ReachyBadge.swift`        | A word in a capsule, on the `.badge` surface                                 |
+| `ReachySurfaceGroup.swift` | `GlassEffectContainer` — and why it cannot hold a `reachySurface`            |
+| `ReachyButton.swift`       | `ButtonEmphasis` + `reachyButton(_:)` — and why it has no glass tier         |
+| `ReachyChrome.swift`       | The iOS 26 bar behaviours, each a no-op below the floor                      |
+
+## Rules
+
+- **A call site names a role, never a material, a glass or an OS version.** `.reachySurface(.chrome, in: .capsule)`,
+  not `.background(.regularMaterial, in: Capsule())`. The availability fork lives in one file.
+- **Every role lays an opaque `baseFill` first, then the effect on top.** Neither glass nor a material renders in a
+  headless snapshot (`RunningAppDock.swift:172-178` records the same about `.bar`). Without a fill that _does_ render,
+  every surface would be invisible to the reference images and the layout and text on each card would silently lose
+  their regression cover. Do not "simplify" the fill away because it looks redundant on device.
+- **Glass is invisible headless, but what it wraps is not.** `glassEffect` renders its content vibrantly, and that
+  _does_ come out in a reference image: measured on the iOS 26 simulator, `.red`, `.orange`, `.green` and `.secondary`
+  text inside one all render black, while `.tint` survives. Modifier order makes no difference — inside or outside the
+  surface, the result is identical. So the effect goes **under** the content, never around it, and `.badge` takes
+  neither glass nor material: a marker inside a card floats over nothing, and carrying a colour is the whole of its job.
+- **Three more things glass does headless, each measured rather than assumed.** They are why this module looks more
+  conservative than the plan:
+  1. **`.buttonStyle(.glass)` blanks the whole capture.** Not "does not render" — a screen carrying one comes out
+     empty apart from its toolbar, which is a separate pass. Recorded the onboarding suite twice to confirm: every
+     reference blank with it, every reference complete without it, nothing else changed. `reachyButton` therefore has
+     no glass tier, and roughly sixty references keep their cover.
+  2. **Glass over an edge with nothing behind it renders as a black-red-green smear.** The dock's shape crosses the
+     safe area, and its reference caught exactly that. The same glass over the viewport's chrome, which stays inside
+     the screen, is clean. Hence `.window`, a role that is `.scrim` minus the glass.
+  3. **Glass laid over a `Color.clear` does the same** — there is no backdrop to refract. It goes over the opaque
+     `baseFill`, which is where `ReachySurfaceFill` puts it.
+- **`GlassEffectContainer` and `reachySurface` are mutually exclusive, and only a device says so.** A container
+  composites the `glassEffect`s it finds in its subtree into one merged sheet — but it only finds the ones applied to
+  its own subviews. One nested inside a `.background`, which is where every role puts it, is hoisted into that sheet
+  and drawn **over** the content rather than under it. The result is a crisp capsule with its own contents refracted
+  into a smear: on the Live tab the switcher's "3D model" / "Camera" labels and the options glyph were unreadable,
+  while the capsule's edge stayed sharp — which is the tell, since a low-contrast surface blurs nothing.
+  **The references did carry it, as an absence nobody read.** The hoisted sheet is the opaque light glass this file
+  already describes, so headless it covered the chrome instead of blurring it: 36 captures across `Viewport*` and
+  `Root — live tab` showed bare white where the switcher and the options button should be. White on a white viewport
+  reads as "nothing is drawn there yet", which is why it sat unnoticed. Removing the container re-recorded all 36 and
+  put "3D model | Camera" and the glyph back into them, so the fix is also a restoration of cover, not a cost to it.
+  The diagnosis came from a booted iOS 26.4 simulator instead — a four-cell isolate, `.background`-glass and
+  content-wrapping glass, each inside a container and outside one, through `simctl io booted screenshot`. Only the
+  `.background`-inside-a-container cell was broken. Reach for that harness when a reference shows an absence: it says
+  _that_ something is wrong, never _what_.
+- **Wrapping glass does _not_ eat colour on a device.** The same isolate put a `.red` glyph inside a content-wrapping
+  `glassEffect` and it stayed red. The rule above — red, orange and green rendering black — is a property of the
+  headless capture, not of glass, and the two claims are about different things. Do not cite it as a device-side
+  argument.
+- **A surface is a shape, not a `Color`.** A `Color` is flexible in both axes, so one carrying `ignoresSafeArea`
+  expands to the entire safe-area container rather than to the thing it backs. Mounted under a `safeAreaInset` — which
+  draws over the content — that painted whole screens in the window colour. Use `ReachySurfaceFill`, or `reachyScrim`,
+  which asks for the inset by name because `reachySurface` uses the `ViewBuilder` form of `background` and stops at
+  the safe area where `background(_:)` taking a `ShapeStyle` did not.
+- **No `@ScaledMetric` on `Space`.** The app is 98 `Section`s over 18 `Form`s and SwiftUI already scales list metrics;
+  what clips at AX5 is a fixed _size_. So each component that reads a `Metrics` constant gets its own `@ScaledMetric`
+  — and at the default text size the multiplier is 1, so adopting one moves no reference image.
+- **Optical adjustments stay literals.** `Space` governs the rhythm of a layout; a 1 pt gap inside the dock or a 3 pt
+  inset on the joystick's arc is not rhythm. A grid that swallowed the optics would be worse than no grid.
+- Nothing in this module renders a domain type. `ReachyStatusLabel` takes a `String`.
+- **A `Tone` colours a foreground, not a fill.** `ReachyBadge` puts the tone on its text and takes the `.badge`
+  surface underneath, which is what let the app's one pinned `.foregroundStyle(.white)` go: white read only against a
+  capsule filled with `.tint`, and a light tint in a dark appearance left white on light. Filling a shape with a tone
+  brings the pinned foreground back with it.
+- **A `static func` returning one of these views needs `@MainActor`.** `View` carries that isolation in Swift 6, so a
+  nonisolated factory building a `ReachyStatusLabel` compiles with an `ActorIsolatedCall` warning
+  (`RunningAppCaption.label`). The value-only mappings beside it stay off the actor.
+
+## Not here yet, and why
+
+- **A glass tier on `reachyButton`.** Not deferred for taste — it blanks the capture (see the rules above). Revisit
+  only with evidence that a screen carrying one snapshots whole.
+- **`glassEffectID` morphing between screens.** Worth having only once a layout is built around it, and there is no
+  equivalent below the floor.
+- **A reduce-motion resolver.** Out of scope; do not read one into `Motion`'s names.
+- **The App Intents strings.** `RobotAppIntents`, `RobotPowerIntents`, `RobotAppsConfigurationIntent`,
+  `RobotAppEntity`, `ReachyShortcuts` and the two widget `configurationDisplayName`s stay bare
+  `LocalizedStringResource` against the main bundle. `AppIntent.title` and `DisplayRepresentation` are baked into
+  `Metadata.appintents` at build time, and `.reachy(_:)` records a _runtime_ bundle URL the metadata processor has no
+  reason to be able to follow — Siri and Shortcuts would read an unresolvable reference. Localizing them means a
+  catalogue in each executable's own bundle, which is a separate decision from this one.
+
+## The localization catalogue
+
+`Resources/Localizable.xcstrings` is the app's only catalogue, and `Localization.swift` is the only way in:
+`.reachy("Wake up")` returns a `LocalizedStringResource` bound to `Bundle.module`.
+
+It lives here because **both executables link this target**, so SwiftPM copies `ReachyMini_ReachyDesign.bundle` into
+each — verified on a device build: `en.lproj/Localizable.strings` is present in `ReachySpike.app` _and_ in
+`PlugIns/ReachyWidget.appex`. One catalogue, one hand-off to a translator, two processes served.
+
+Three things measured rather than assumed:
+
+- **`Section`, `LabeledContent`, `TextField` and `SecureField` only got their `LocalizedStringResource` initialiser in
+  iOS 26 / macOS 26.** `Text`, `Button`, `Label`, `Toggle`, `Picker`, `navigationTitle`, `alert` and the rest have had
+  one since iOS 16. `LocalizedControls.swift` backfills those four at this app's floor, forwarding to the
+  `Text`-taking form. Both are visible against the iOS 26 SDK and the SDK's carries `@_disfavoredOverload`, so ours
+  win with no ambiguity — 28 call sites that would otherwise each be a two-closure builder.
+- **The catalogue derives a Swift symbol per key, and two keys that differ only in punctuation collide** — a hard
+  build error from `xcstringstool`, not a warning. `"Bluetooth is switched off."` against `"Bluetooth is switched
+  off"` was the app saying the same sentence two ways; `"Starting…"` against `"Starting"` was not, and the daemon's
+  lifecycle took `"Starting up"` / `"Shutting down"` to clear it. Expect to be told when a new key rhymes with an old
+  one, and fix the copy rather than the tooling.
+- **`.xcstrings` compiles under the pinned swift.org toolchain**, unlike `#Preview`: SwiftPM shells out to `xcrun`
+  for `xcstringstool`, so `mise run build` and `mise run test` are unaffected.
+
+Seeding is manual. `SWIFT_EMIT_LOC_STRINGS` is not set for SwiftPM targets through Tuist, so Xcode never extracts:
+the 335 keys with no interpolation were collected from the source and written in with `extractionState: "manual"`.
+The ~50 keys that _do_ interpolate are deliberately absent — their stored form carries `%@` / `%lld` placeholders
+whose types cannot be read off the call site, and a wrong entry is worse than a missing one, which merely falls back
+to the English key. Finish them by opening the catalogue in Xcode, which extracts the placeholders correctly. The
+working list lives under gitignored `.context/` and does not travel to another clone: rebuild it with
+`grep -rnE '\.reachy\("[^"]*\\\(' Sources --include='*.swift'` — 53 call sites, ~50 distinct keys.
+
+## Applying a role — what happened
+
+All seven ad-hoc sites now name a role: the viewport's three pieces of chrome (`.chrome`), the log console, the BLE
+console and the onboarding footer (`reachyScrim`), and the running-app strip (`.window`). What to expect from the next
+one:
+
+- `ViewportStatus.loading` moved its reference image because `Radius.rect` is `.continuous` where
+  `RoundedRectangle(cornerRadius: 12)` defaulted to `.circular`. That is the intended correction, not a regression.
+- `background(_:in:)` taking a `ShapeStyle` defaults to `ignoresSafeAreaEdges: .all`; `reachySurface` uses the
+  `ViewBuilder` form, which does not. A scrim that today paints into the safe area (`LogConsoleView`,
+  `OnboardingFlow`, `BLEConsoleScreen`) needs its own `.ignoresSafeArea` when it adopts the role.
+
+## Both appearances, and what glass does to the dark half
+
+Every preview is now captured twice — `Apps/ReachyUISnapshotTests/PreviewTests.stencil` forks Prefire's built-in
+test template and loops the capture over `[.light, .dark]`, naming the dark file with a `-dark` suffix. The light
+names are untouched, which is why adopting it re-recorded nothing: 500 new files, 0 modified.
+
+The appearance travels as a **trait**, not as `preferredColorScheme` (which wants a window scene the snapshot host has
+no equivalent of) and not as `\.colorScheme` in the environment (which moves SwiftUI's own colours and leaves
+UIKit-backed ones light). swift-snapshot-testing feeds the collection to `setOverrideTraitCollection`, which reaches
+both halves.
+
+**`glassEffect` renders a light surface in both appearances, and it is opaque.** Measured on `Design — surfaces`: in
+the dark capture `badge` and `window` flip correctly while `chrome`, `card` and `scrim` stay white capsules with
+their white labels invisible on them. The two that flip are exactly the two roles with `glass == nil`. It is not the
+trait failing to arrive: re-recording that gallery with the _simulator_ switched to dark produced both images
+byte-for-byte identical to the run on a light simulator, so the injected trait is what decides and glass ignores it
+either way.
+
+What that means when reading a dark reference:
+
+- Over a `.chrome`, `.card` or `.scrim` surface, a dark capture shows **the snapshot's white glass, not the device's**.
+  Light-on-that is invisible in the image and legible on hardware. Do not "fix" a foreground because it vanished there.
+- The roles that carry no glass — `.badge`, `.window` — and everything outside a surface are truthful, and that is
+  where the dark half earns its keep: `LogConsoleView`'s level palette, the status captions, every screen background.
+- A dark reference is therefore evidence about _content_, and evidence about glass only on device.
+
+## Previews
+
+`Previews/` is excluded from the SwiftPM target and compiled only by the Xcode targets in `Apps/` — `#Preview` is an
+external macro that ships inside Xcode's SDKs, not in the pinned swift.org toolchain. The same rules as
+`ReachyUI/Previews` apply: anything a preview body names must be visible target-wide, because Prefire copies the body
+into a generated file.
+
+Adding a preview directory here means editing **six** files, not the five a target's wiring usually takes:
+`Package.swift`, `Apps/Project.swift` (`sources` of _both_ preview-hosting targets), `Apps/.prefire.yml` (`sources`
+and `testable_imports` in _both_ sections), this file, and `mise.toml` — where `prefire playbook` is handed an
+explicit directory list in **two** tasks (`project` and `storybook`). Miss the `.prefire.yml` `sources` entry and the
+previews compile while generating no tests at all, which reads as everything passing. Miss `mise.toml` and the
+gallery is simply absent from the storybook, with no error anywhere.

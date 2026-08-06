@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -35,13 +36,13 @@ struct ControllerScreen: View {
                 }
             }
             Group {
-                Section("Head — drag: yaw / pitch, hold sideways: turn the body") {
+                Section(.reachy("Head — drag: yaw / pitch, hold sideways: turn the body")) {
                     JoystickPad(mapping: driver.mapping) { driver.apply($0) }
                         .frame(maxWidth: 280)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                 }
-                Section("Head") {
+                Section(.reachy("Head")) {
                     slider(
                         "Roll",
                         value: $driver.target.roll,
@@ -50,15 +51,15 @@ struct ControllerScreen: View {
                     )
                     slider("Height", value: $driver.target.z, range: -0.03 ... 0.03, format: .millimeters)
                 }
-                Section("Body") {
+                Section(.reachy("Body")) {
                     slider(
-                        "Body yaw",
+                        String(localized: .reachy("Body yaw")),
                         value: $driver.target.bodyYaw,
                         range: -fullTurn ... fullTurn,
                         format: .degrees
                     )
                 }
-                Section("Antennas") {
+                Section(.reachy("Antennas")) {
                     slider(
                         "Left",
                         value: $driver.target.antennaLeft,
@@ -73,7 +74,7 @@ struct ControllerScreen: View {
                     )
                 }
                 Section {
-                    Button("Reset to neutral") { driver.reset() }
+                    Button(.reachy("Reset to neutral")) { driver.reset() }
                 }
             }
             .disabled(!session.isAwake)
@@ -86,7 +87,7 @@ struct ControllerScreen: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Controller")
+        .navigationTitle(.reachy("Controller"))
         .onAppear { start() }
         .onChange(of: session.isAwake) { _, awake in
             // Targets accumulated while asleep would be replayed as one jump.

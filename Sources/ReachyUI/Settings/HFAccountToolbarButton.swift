@@ -1,4 +1,5 @@
 import HuggingFaceAuth
+import ReachyDesign
 import SwiftUI
 
 /// The Hugging Face account, in the leading slot of the navigation bar.
@@ -29,7 +30,7 @@ struct HFAccountToolbarButton: View {
     private func label(for state: HFAccount.State) -> some View {
         switch state {
         case .signedOut, .failed:
-            Label("Account", systemImage: "person.crop.circle")
+            Label(.reachy("Account"), systemImage: "person.crop.circle")
         case .signingIn:
             ProgressView().controlSize(.small)
         case let .signedIn(username):
@@ -49,10 +50,10 @@ struct HFAccountToolbarButton: View {
 
     private func accessibilityLabel(for state: HFAccount.State) -> String {
         switch state {
-        case .signedOut, .failed: "Sign in to Hugging Face"
-        case .signingIn: "Signing in to Hugging Face"
-        case let .signedIn(username): "Hugging Face account: \(username)"
-        case .needsReauth: "Hugging Face session expired"
+        case .signedOut, .failed: String(localized: .reachy("Sign in to Hugging Face"))
+        case .signingIn: String(localized: .reachy("Signing in to Hugging Face"))
+        case let .signedIn(username): String(localized: .reachy("Hugging Face account: \(username)"))
+        case .needsReauth: String(localized: .reachy("Hugging Face session expired"))
         }
     }
 }

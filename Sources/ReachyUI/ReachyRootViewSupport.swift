@@ -64,15 +64,4 @@ extension View {
             WidgetCenter.shared.reloadAllTimelines()
         }
     }
-
-    /// A large title inside a narrow side column is laid out against the window
-    /// rather than the column, so it starts flush against the divider with no
-    /// leading inset. Inline titles sit correctly.
-    func columnTitleStyle() -> some View {
-        #if os(iOS)
-            navigationBarTitleDisplayMode(.inline)
-        #else
-            self
-        #endif
-    }
 }

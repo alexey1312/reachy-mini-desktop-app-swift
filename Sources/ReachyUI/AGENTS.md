@@ -4,6 +4,19 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 
 - Adaptive layouts, not per-platform copies; `#if os(iOS)` only for platform-exclusive APIs (Settings deep link etc.).
 - `horizontalSizeClass` is unavailable on macOS — guard size-class branching with `#if os(macOS)` (always regular there).
+  **Nothing in this target branches on it any more.** The root used to build a two-column `HStack` for a regular width
+  and hide the Live tab on a compact one; `.tabViewStyle(.sidebarAdaptable)` does that adaptation itself, and it is
+  iOS 18 / macOS 15, not an iOS 26 API. Reaching for the size class again is a sign the layout is being forked rather
+  than adapted.
+- **Navigation is `ReachyRouter` plus two destinations.** `ReachyRootView` owns what outlives a screen and picks the
+  gate or the shell; `Navigation/` holds the router, the effect cluster and the sheet stack; `Shell/` holds the five
+  tabs. The five are unconditional — a tab that comes and goes forces the shell to catch its disappearance and drag
+  the selection elsewhere, which is what `onChange(of: offersLiveTab)` used to do. An unavailable feature renders an
+  unavailable state inside its own tab instead.
+- **`.unreachable` belongs to the shell, not the gate.** Only `.idle` and `.connecting` show the gate. A network blip
+  must not pull the tab bar out from under a finger, and the robot screen already reports the state in place.
+- Leaves stay injectable rather than reading the router: `ConnectionScreen.showRemoteRobots` is optional because its
+  absence is what hides `YourReachiesSection` in previews. The router is the shell's business.
 - All robot interaction goes through `RobotSession` / `RobotBrowser` from ReachyKit — no direct URLSession here.
 - Screen logic belongs in a `@MainActor @Observable` model beside the view (`MovesModel`, `LogConsoleModel`), covered
   by `Tests/ReachyUITests`; the view stays thin. `@Observable` does honour `didSet`, so derived caches can live there.
@@ -29,6 +42,20 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 - Deployment floor is iOS 18 / macOS 15 (`Package.swift`, `Apps/Project.swift`), set by `RealityView`.
   `ScrollPosition`, `onScrollPhaseChange` and `onScrollGeometryChange` are available; the zero-height sentinel row in
   `LogConsoleScreen` predates the bump and is not a required pattern.
+
+## Strings
+
+Project rule 9 in the root `AGENTS.md` is the whole of it: `.reachy("…")` where SwiftUI takes a
+`LocalizedStringResource`, `String(localized: .reachy("…"))` where the value has to stay a `String`. Two things this
+target learned doing it:
+
+- **A caption type, not `String(describing:)`.** `DaemonStateCaption` maps the generated
+  `Components.Schemas.DaemonState` onto words; `RunningAppCaption` does the same for a process state. Both live here
+  rather than in `ReachyKit`, because `ReachyKit` does not link `ReachyDesign` and must not start — a caller maps its
+  own domain type onto a presentation value, never the reverse.
+- **A sentence is one key.** Prose split across `+` for the sake of the 120-column rule became one literal with
+  `// swiftlint:disable:next line_length` above it. Two half-keys cannot be reordered by a translator, and the
+  fragments collide as generated symbols with whatever else ends in the same words.
 
 ## Previews and snapshots
 
@@ -66,8 +93,25 @@ Adding a screen (project rule 8) means: a preview per state in `Previews/<Screen
   is the CoreBluetooth call a preview must not make, so the factory assigns it.
 - A screen whose `.task` guards on `model == nil` needs no `reachyPreviewMode` check — injecting the model is what
   makes it inert. Add the guard only where the effect runs unconditionally (`WiFiSettingsCard`, `LogConsoleScreen`).
-- Not covered, deliberately: `SceneViewport` in `.ready` (a bare `RealityView`) and `CameraViewport` in `.streaming`
-  (Metal-backed `RTCMTLVideoView`). Neither renders anything meaningful headless — snapshot their overlay phases.
+- **A tab whose content is loaded by a `.task` has no usable root capture, only a standalone one.** The shell builds
+  all five tabs at once, and whichever loses that race is caught mid-layout. Settings comes out pure white on iPhone
+  while rendering fine on iPad; Moves came out on iPad with its spinner but with the caption under it missing, and
+  only a later run — one preview added elsewhere, timings shifted — produced the full frame. The tell is in the
+  image: bare tab-bar glyphs instead of labels, or a state missing half of itself. Neither `SettingsScreen` nor
+  `MovesTab` can be handed a settled model from `PreviewScene.root`, because the root builds the shell and the shell
+  builds the tab — threading a seam through both for a preview is not worth it. So capture those screens standalone
+  (`SettingsPreviews`, `MovesScreenPreviews`) and capture _placement_ from a state that needs no `.task` at all
+  (`Root — relay moves tab`, which renders `MovesUnavailableView`). A blank or half-drawn reference is worse than a
+  missing one: it reads as coverage and passes any change.
+- Not covered, deliberately: `SceneViewport` in `.ready` — a bare `RealityView`, which renders nothing meaningful
+  headless, so its overlay phases are what get snapshotted.
+- **`CameraViewport` in `.streaming` used to be on that list and is not any more.** The reasoning was that the video
+  is a Metal-backed `RTCMTLVideoView` and captures as an empty rectangle — true, and beside the point once the phase
+  grew chrome of its own. The joystick and the return-to-neutral button draw over that empty rectangle perfectly
+  well, and the button is _conditional_: a reference for the turned state alone cannot tell a conditional control
+  from a permanent one, so `Camera — facing forward` exists to capture its **absence**. A black frame with controls
+  on it is the intended image. The rule this leaves behind: a phase is uncapturable only while nothing but the
+  unrenderable layer is in it.
 - One `RobotSceneModel` per preview: `ReachyScene/AGENTS.md` requires exactly one live `RealityView` per model.
 - **Navigation chrome does not stay inside a preview card.** SwiftUI hoists `.toolbar` and
   `.searchable` out of the storybook's scaled cards into the app's own bars, even though each

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyScene
 import SwiftUI
 
@@ -15,21 +16,21 @@ struct SceneViewport: View {
     private var status: some View {
         switch model.phase {
         case .idle, .fetchingDescription:
-            ViewportStatus.loading("Reading the robot's description…", progress: nil)
+            ViewportStatus.loading(String(localized: .reachy("Reading the robot's description…")), progress: nil)
         case let .downloadingMeshes(completed, total):
             // The first visit pulls every mesh over the robot's own Wi-Fi, which
             // is slow enough that a bare spinner reads as a hang.
             ViewportStatus.loading(
-                "Downloading model \(completed)/\(total)…",
+                String(localized: .reachy("Downloading model \(completed)/\(total)…")),
                 progress: total > 0 ? Double(completed) / Double(total) : nil
             )
         case .buildingScene:
-            ViewportStatus.loading("Building the scene…", progress: nil)
+            ViewportStatus.loading(String(localized: .reachy("Building the scene…")), progress: nil)
         case .ready:
             EmptyView()
         case let .failed(message):
             ContentUnavailableView(
-                "Could not load the model",
+                .reachy("Could not load the model"),
                 systemImage: "exclamationmark.triangle",
                 description: Text(message)
             )
@@ -47,23 +48,23 @@ struct SceneOptionsMenu: View {
             Button {
                 model.camera.reset()
             } label: {
-                Label("Reset view", systemImage: "arrow.counterclockwise")
+                Label(.reachy("Reset view"), systemImage: "arrow.counterclockwise")
             }
             Divider()
-            Toggle("Place head from pose", isOn: Binding(
+            Toggle(.reachy("Place head from pose"), isOn: Binding(
                 get: { model.placesHeadDirectly },
                 set: { model.placesHeadDirectly = $0 }
             ))
-            Toggle("Solve Stewart linkage", isOn: Binding(
+            Toggle(.reachy("Solve Stewart linkage"), isOn: Binding(
                 get: { model.solvesPassiveJoints },
                 set: { model.solvesPassiveJoints = $0 }
             ))
             if let lastFrameAt = model.lastFrameAt {
-                Text("Last frame \(lastFrameAt.formatted(date: .omitted, time: .standard))")
+                Text(.reachy("Last frame \(lastFrameAt.formatted(date: .omitted, time: .standard))"))
             }
-            Text("Decoded frames: \(model.streamDiagnostics.decodedFrames)")
+            Text(.reachy("Decoded frames: \(model.streamDiagnostics.decodedFrames)"))
         } label: {
-            Label("Options", systemImage: "ellipsis.circle")
+            Label(.reachy("Options"), systemImage: "ellipsis.circle")
                 .labelStyle(.iconOnly)
         }
         .viewportControlStyle()

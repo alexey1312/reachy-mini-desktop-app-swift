@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyWidgetUI
 import SwiftUI
@@ -26,7 +27,7 @@ struct RunningAppDock: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.snappy(duration: 0.28), value: isVisible)
+        .animation(Motion.dock, value: isVisible)
         // Without this the strip rides up on top of the keyboard whenever the Apps
         // search field takes focus. Being covered is the least surprising thing a
         // pinned bar can do.
@@ -138,22 +139,18 @@ struct RunningAppDockContent: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.md) {
             Button(action: expand) {
-                HStack(spacing: 12) {
-                    AppArtworkTile(app: status.app, size: 30)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(status.app.title)
-                            .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-                        RunningAppStatusChip(status: status, isReachable: isReachable)
-                    }
-                    Spacer(minLength: 4)
-                }
+                AppRowLabel(
+                    artwork: AppArtwork(app: status.app),
+                    title: status.app.title,
+                    layout: .dock,
+                    status: RunningAppCaption.label(of: status, isReachable: isReachable)
+                )
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Opens the running app")
+            .accessibilityHint(.reachy("Opens the running app"))
 
             if hasFailed {
                 dismissButton
@@ -162,43 +159,39 @@ struct RunningAppDockContent: View {
                 stopButton
             }
         }
-        .padding(.horizontal, 16)
-        .frame(minHeight: Self.contentHeight)
+        .padding(.horizontal, Space.lg)
+        .frame(minHeight: Metrics.dockStrip)
         .background { windowEdge }
     }
-
-    /// Telegram's own numbers, read off `MinimizedContainer.swift`: a 56 pt strip
-    /// (`minimizedNavigationHeight`) under a 25 pt corner radius
-    /// (`containerNode.cornerRadius`), with a shadow behind it.
-    private static let contentHeight: CGFloat = 56
-    private static let cornerRadius: CGFloat = 25
 
     /// What makes the strip read as a *window under the app* rather than as a
     /// toolbar belonging to it: a rounded top edge with a shadow above it. A flat
     /// full-bleed bar with a hairline divider says the opposite — that it is part of
     /// the screen it is pinned to.
     ///
-    /// Two fills, and the lower one is load-bearing: nothing may show through a
-    /// window. `.bar` alone is translucent — on iPad the Disconnect card behind it
-    /// read straight through — and it does not render at all in a headless snapshot,
+    /// The `.window` role is this strip's own two-fill backing, generalised: an
+    /// opaque base under the material, because nothing may show through a window.
+    /// `.bar` alone is translucent — on iPad the Disconnect card behind it read
+    /// straight through — and it does not render at all in a headless snapshot,
     /// which is the same reason the tab bar's glass is absent from every root
-    /// capture. `.background` is the semantic style, not a pinned colour, so it
-    /// follows the appearance and avoids the trap `ReachyUI/AGENTS.md` records for
-    /// `Color.black` under adaptive chrome.
+    /// capture. The role exists as its own case rather than as `.scrim` because
+    /// this shape crosses the safe-area edge, where glass has nothing to refract.
+    ///
+    /// It is placed as a fill rather than applied to the strip's content, so the
+    /// caption keeps its colour: a crashed app says so in red, and glass renders
+    /// what it wraps vibrantly.
     ///
     /// The shape reaches past the home indicator so the fill runs to the screen
     /// edge; only its top corners are rounded, since the rest is off-screen.
     private var windowEdge: some View {
         let shape = UnevenRoundedRectangle(
-            topLeadingRadius: Self.cornerRadius,
+            topLeadingRadius: Radius.window,
             bottomLeadingRadius: 0,
             bottomTrailingRadius: 0,
-            topTrailingRadius: Self.cornerRadius,
+            topTrailingRadius: Radius.window,
             style: .continuous
         )
-        return shape
-            .fill(.background)
-            .overlay { shape.fill(.bar) }
+        return ReachySurfaceFill(.window, in: shape)
             .shadow(color: .black.opacity(0.15), radius: 10, y: -1)
             .ignoresSafeArea(edges: .bottom)
     }
@@ -207,10 +200,10 @@ struct RunningAppDockContent: View {
         Button {
             perform(.restart)
         } label: {
-            Label("Restart", systemImage: "arrow.clockwise")
+            Label(.reachy("Restart"), systemImage: "arrow.clockwise")
                 .labelStyle(.iconOnly)
         }
-        .buttonStyle(.bordered)
+        .reachyButton()
         .buttonBorderShape(.circle)
         .disabled(busy || !isReachable)
     }
@@ -219,10 +212,10 @@ struct RunningAppDockContent: View {
         Button {
             perform(.stop)
         } label: {
-            Label("Stop", systemImage: "stop.fill")
+            Label(.reachy("Stop"), systemImage: "stop.fill")
                 .labelStyle(.iconOnly)
         }
-        .buttonStyle(.borderedProminent)
+        .reachyButton(.prominent)
         .buttonBorderShape(.circle)
         .tint(.red)
         .disabled(busy || !isReachable)
@@ -232,10 +225,10 @@ struct RunningAppDockContent: View {
         Button {
             perform(.dismiss)
         } label: {
-            Label("Dismiss", systemImage: "xmark")
+            Label(.reachy("Dismiss"), systemImage: "xmark")
                 .labelStyle(.iconOnly)
         }
-        .buttonStyle(.bordered)
+        .reachyButton()
         .buttonBorderShape(.circle)
     }
 }

@@ -1,3 +1,4 @@
+import ReachyDesign
 import SwiftUI
 
 /// The way into the remote list from the connection screen.
@@ -18,14 +19,14 @@ struct YourReachiesSection: View {
                 Button {
                     show()
                 } label: {
-                    LabeledContent("Your Reachies") {
-                        Text("Through Hugging Face")
+                    LabeledContent(.reachy("Your Reachies")) {
+                        Text(.reachy("Through Hugging Face"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             } footer: {
-                Text("Robots linked to your Hugging Face account, wherever they are.")
+                Text(.reachy("Robots linked to your Hugging Face account, wherever they are."))
             }
         }
     }

@@ -146,10 +146,12 @@ outright on a fresh clone and in CI until the generator ran. Do not drop that st
 body into a generated file, where a leading-dot call resolves against the type expected _there_. A `static func`
 helper for an element type therefore belongs on that element (`KnownRobotsModel.Entry.preview`), not on its owner:
 the latter compiles under SwiftPM and fails the snapshot target 17 minutes later.
-A new _directory_ of previews needs three edits, not one: `sources` in `Apps/.prefire.yml` (Prefire reads its own
-list, not the target's), the `sources` of **both** preview-hosting targets in `Project.swift`, and `testable_imports`
-for any module those previews name — the generated file imports that list and nothing else. Miss the first and the
-previews compile while generating no tests at all, which reads as everything passing.
+A new _directory_ of previews needs four edits, not one: `sources` in `Apps/.prefire.yml` (Prefire reads its own
+list, not the target's), the `sources` of **both** preview-hosting targets in `Project.swift`, `testable_imports`
+for any module those previews name — the generated file imports that list and nothing else — and the explicit
+directory list `prefire playbook` is handed in `mise.toml`, which appears in **two** tasks (`project` and
+`storybook`). Miss the first and the previews compile while generating no tests at all, which reads as everything
+passing; miss the last and the previews are simply absent from the storybook, with no error anywhere.
 
 **Four device/runtime identifiers are in play, and they deliberately do not match.** Changing one without the others
 either re-records everything or fails the run outright:
@@ -162,9 +164,16 @@ either re-records everything or fails the run outright:
 | `26.4.1` / `26`                | `REACHY_SNAPSHOT_OS` / `required_os` | Full runtime for the destination; major only for Prefire's check.                                    |
 
 So a reference named `…-iPhone-16-Pro.png` was rendered on an iPhone 17 Pro, at iPhone 16 Pro dimensions. A
-different iOS runtime renders text differently and every reference would have to be re-recorded. **Light appearance is
-pinned too**, by `simctl ui … appearance light` in `snapshots:_run`: the simulator's appearance is not part of the
-destination and outlives a reboot, so without it whoever last switched that device to dark re-records the whole set.
+different iOS runtime renders text differently and every reference would have to be re-recorded.
+**Every preview is captured in both appearances**, by `Apps/ReachyUISnapshotTests/PreviewTests.stencil` — a fork of
+Prefire 5.7.0's built-in test template, which is why the package requirement is `.exact` rather than
+`upToNextMajor`. Light keeps the name it always had and dark takes a `-dark` suffix, so adopting it added 500 files
+and modified none. What a dark reference can and cannot prove — glass renders light in both — is in
+`Sources/ReachyDesign/AGENTS.md`. `simctl ui … appearance light` survives in `snapshots:_run` as belt and braces
+only: the injected trait decides, measured by re-recording the surfaces gallery on a dark simulator and getting
+byte-identical images.
+**References are English-only**, pinned by `-testLanguage en -testRegion US` on the `xcodebuild test` line. Every
+user-facing string is localizable, so a simulator left in another language re-renders all 1000 of them in it.
 Run `test:snapshots` before `test:snapshots:record` — it names every reference that moved, which `record` then
 overwrites blind. If _every_ reference moved, suspect the environment rather than the code: check one nothing could
 have affected (`JoystickPad`) against HEAD with `git show HEAD:<png> | git lfs smudge > /tmp/old.png`.
@@ -185,9 +194,11 @@ the pre-commit hook only re-stages what it reformatted (`*.swift`, `*.md`) — n
 There is no CI job yet: local Xcode and the CI pin differ, so references recorded on one fail on the other.
 `test:snapshots` compares the images either side of the run and fails if any had to be written — Prefire generates
 `record: .missing`, so a reference that does not exist yet is created rather than compared.
-**`Root-connected`, `Root-no-camera` and `Root-unreachable` are byte-identical on iPhone**: the compact connected
-root captures as a near-blank ghost, so those three verify nothing and a change to that layout passes untested.
-Their iPad captures are the ones carrying the layout — check a compact change against a preview that renders.
+The compact root used to capture as a near-blank ghost, which made `Root-connected`, `Root-no-camera` and
+`Root-unreachable` byte-identical on iPhone — three references verifying nothing. Splitting the root into a gate and
+a five-tab shell ended that: each root capture now renders the selected tab's content. Two iPhone captures may still
+collide legitimately, when the state they differ in belongs to a tab neither is showing; that is a sign the preview
+is pointed at the wrong tab, not that the capture is dead.
 `Apps/.prefire.yml` carries no comments on purpose: Prefire's hand-rolled YAML parser reads a comment line ending in
 `:` as a config key, warns, and moves on — a helpful comment silently becomes an unknown setting.
 **Macros that ship with Xcode rather than with the toolchain break `swift build`.** The pinned swift.org toolchain has
@@ -197,13 +208,13 @@ environment keys are written out by hand — swiftformat's `environmentEntry` ru
 
 ## Project Context
 
-|                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Robot API       | `http://<robot>:8000/api`, OpenAPI 3.1 spec committed at `Sources/ReachyKit/openapi.json`                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| State stream    | WebSocket `/api/state/ws/full`, 10 Hz by default (not in the OpenAPI spec — hand-written client)                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Upstream        | `pollen-robotics/reachy-mini-desktop-app` + `pollen-robotics/reachy_mini` — **specification only, never copy code**                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Packages        | `ReachyKit` (transport + domain) → `ReachyMedia` (WebRTC) / `ReachyScene` (RealityKit) → `ReachyUI` → `Apps/`. `ReachyWidgetUI` sits under `ReachyUI` on `ReachyKit` alone — the widget's views and the App Intents the app and the extension share, plus `AppArtwork`, which the store rows draw too. It must **not** gain a `ReachyMedia` dependency: a widget process woken for a moment cannot afford to link WebRTC. That is what fixes the arrow's direction — anything both surfaces draw moves down into it, never the other way. |
-| Off to the side | `HuggingFaceAuth` — this app's own HF session (sign-in, Keychain, renewal). Nothing in it knows what a robot is, and `ReachyKit` does **not** depend on it: a token reaches the robot as a value the UI passes in. `ReachyTestSupport` holds stubs shared by the test targets and is deliberately not a product.                                                                                                                                                                                                                          |
+|                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Robot API       | `http://<robot>:8000/api`, OpenAPI 3.1 spec committed at `Sources/ReachyKit/openapi.json`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| State stream    | WebSocket `/api/state/ws/full`, 10 Hz by default (not in the OpenAPI spec — hand-written client)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Upstream        | `pollen-robotics/reachy-mini-desktop-app` + `pollen-robotics/reachy_mini` — **specification only, never copy code**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Packages        | `ReachyKit` (transport + domain) → `ReachyMedia` (WebRTC) / `ReachyScene` (RealityKit) → `ReachyUI` → `Apps/`. `ReachyDesign` (tokens + the `ReachySurface` facade) sits under everything on nothing at all — SwiftUI and no more — and is linked by both `ReachyUI` and `ReachyWidgetUI`; see `Sources/ReachyDesign/AGENTS.md`. `ReachyWidgetUI` sits under `ReachyUI` on `ReachyKit` alone — the widget's views and the App Intents the app and the extension share, plus `AppArtwork`, which the store rows draw too. It must **not** gain a `ReachyMedia` dependency: a widget process woken for a moment cannot afford to link WebRTC. That is what fixes the arrow's direction — anything both surfaces draw moves down into it, never the other way. |
+| Off to the side | `HuggingFaceAuth` — this app's own HF session (sign-in, Keychain, renewal). Nothing in it knows what a robot is, and `ReachyKit` does **not** depend on it: a token reaches the robot as a value the UI passes in. `ReachyTestSupport` holds stubs shared by the test targets and is deliberately not a product.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## Project Rules
 
@@ -235,6 +246,31 @@ environment keys are written out by hand — swiftformat's `environmentEntry` ru
    orders only within one — a harness holding shared global state passes until a second suite uses it
    (`StubURLProtocol` binds stubs to their session for exactly this reason). Give async transport tests
    `.timeLimit(.minutes(1))`, or one hang stalls the whole run.
+9. **Every string a user reads goes through `.reachy(_:)`.** A bare `Text("Connect")` is a bug, and a silent one:
+   inside a library target a `LocalizedStringKey` resolves against `Bundle.main`, so it renders perfectly in English
+   and can never be translated. Two spellings, and which one applies is decided by the type, not by taste:
+   - **`.reachy("…")`** wherever SwiftUI takes a `LocalizedStringResource` — `Text`, `Button`, `Label`, `Section`,
+     `LabeledContent`, `Toggle`, `Picker`, `TextField`, `ContentUnavailableView`, `navigationTitle`, `alert`,
+     `accessibilityLabel`. This is the default; reach for it first.
+   - **`String(localized: .reachy("…"))`** only where the value has to _stay_ a `String`: a model property a test
+     asserts on, or a slot that also holds runtime text the robot sent (`RunningAppCaption.description` inlines a
+     traceback, `.unknown(state)` carries the daemon's own word). Resolving early is the price of sharing the slot.
+
+   Exempt, and only these: log lines, fixtures, identifiers, format strings, and the App Intents metadata — see
+   `Sources/ReachyDesign/AGENTS.md` for why the last one is not an oversight. **Never show `String(describing:)` of a
+   domain enum**; give it a caption type beside the screen, as `DaemonStateCaption` and `RunningAppCaption` do.
+   Layout stays direction-relative too: `leading`/`trailing`, never `left`/`right`, and the mirroring SF Symbols
+   (`chevron.forward`, `arrow.up.forward.square`) rather than the absolute ones, so a right-to-left language needs no
+   second pass. `JoystickPad` keeps `.left`/`.right` on purpose — those are the robot's directions, not the reader's.
+10. **A visual change names a token or a role, never a literal, a material or an OS version.** `Space.lg`,
+    `Radius.rect(.lg)`, `Typography.detail`, `Tone.danger`, `.reachySurface(.chrome, in: .capsule)` — not
+    `padding(16)`, not `RoundedRectangle(cornerRadius: 16)` (whose default corner style is `.circular` where every
+    token is `.continuous`), not `.background(.regularMaterial)`. Every `if #available` for glass lives in
+    `ReachyDesign` and nowhere else. Optical adjustments stay literals on purpose — a 1 pt gap in the dock is not
+    rhythm. **Glass gets measured, never reasoned about**: it is invisible headless, renders its content vibrantly so
+    colour collapses to black, blanks the entire capture under `.buttonStyle(.glass)`, and stays light in a dark
+    reference. Each was found by re-recording and is written up with its measurement in
+    `Sources/ReachyDesign/AGENTS.md`; add the next one the same way.
 
 ## Detailed Rules
 
@@ -245,5 +281,8 @@ Consult `.claude/rules/` when working in the matching area:
 | `.claude/rules/daemon-api.md` | Endpoints, WebSockets, timeouts, jobs    |
 | `.claude/rules/networking.md` | Discovery, ATS, Local Network permission |
 
-Per-target notes live beside the code: `Sources/{ReachyKit,ReachyUI,ReachyScene}/AGENTS.md` (`CLAUDE.md` is a symlink
-to it). Background reading: `docs/adr/` for accepted decisions, `docs/research/webrtc.md` for 8443 signaling quirks.
+Per-target notes live beside the code: `Sources/{ReachyKit,ReachyUI,ReachyScene,ReachyDesign,ReachyWidgetUI}/AGENTS.md`
+(`CLAUDE.md` is a symlink to it). **`ReachyDesign/AGENTS.md` is the design system's entire rulebook** — the tokens,
+the `SurfaceRole` facade, the four things glass does headless, what a dark reference proves and what it does not, and
+the localization catalogue. Read it before any visual change, not after one moved a reference.
+Background reading: `docs/adr/` for accepted decisions, `docs/research/webrtc.md` for 8443 signaling quirks.

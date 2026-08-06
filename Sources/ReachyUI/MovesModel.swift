@@ -1,31 +1,32 @@
 import Foundation
 import Observation
+import ReachyDesign
 import ReachyKit
 
 @MainActor
 @Observable
 final class MovesModel {
     struct Library: Equatable {
-        let title: String
+        let title: LocalizedStringResource
         let dataset: String
-        let loadingTitle: String
+        let loadingTitle: LocalizedStringResource
     }
 
     static let libraries = [
         Library(
-            title: "Dances",
+            title: .reachy("Dances"),
             dataset: "pollen-robotics/reachy-mini-dances-library",
-            loadingTitle: "Teaching the servos new steps…"
+            loadingTitle: .reachy("Teaching the servos new steps…")
         ),
         Library(
-            title: "Emotions",
+            title: .reachy("Emotions"),
             dataset: "pollen-robotics/reachy-mini-emotions-library",
-            loadingTitle: "Calibrating robot feelings…"
+            loadingTitle: .reachy("Calibrating robot feelings…")
         ),
         Library(
-            title: "Music",
+            title: .reachy("Music"),
             dataset: "Anne-Charlotte/music",
-            loadingTitle: "Warming up the tiny speakers…"
+            loadingTitle: .reachy("Warming up the tiny speakers…")
         ),
     ]
 

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -24,24 +25,30 @@ struct AppsUnavailableView: View {
             Text(message)
         } actions: {
             Button(action: findRobot) {
-                Text(isRemote ? "Find it on this network" : "Find one nearby")
+                Text(isRemote ? String(localized: .reachy("Find it on this network")) :
+                    String(localized: .reachy("Find one nearby")))
             }
         }
-        .navigationTitle("Apps")
+        .navigationTitle(.reachy("Apps"))
     }
 
     private var title: String {
-        isRemote ? "Apps need the local network" : "No robot connected"
+        isRemote ? String(localized: .reachy("Apps need the local network")) :
+            String(localized: .reachy("No robot connected"))
     }
 
     private var message: String {
         if isRemote {
-            "The relay carries the robot's commands and its camera, not its app store. "
-                + "Connect on the same network as the robot to install and start apps."
+            String(
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "The relay carries the robot's commands and its camera, not its app store. Connect on the same network as the robot to install and start apps."
+                )
+            )
         } else {
             // The catalogue is served by the daemon, not by the Hub — the robot
             // fetches it — so there is genuinely nothing to show without one.
-            "Apps are installed on the robot, so this needs one connected."
+            String(localized: .reachy("Apps are installed on the robot, so this needs one connected."))
         }
     }
 }

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -23,7 +24,7 @@ struct BLERecoveryCommandsSheet: View {
                 .disabled(isLocked)
         }
         .formStyle(.grouped)
-        .navigationTitle("Commands")
+        .navigationTitle(.reachy("Commands"))
         .confirmationDialog(
             confirming?.name ?? "",
             isPresented: Binding(get: { confirming != nil }, set: {
@@ -33,7 +34,7 @@ struct BLERecoveryCommandsSheet: View {
             }),
             presenting: confirming
         ) { script in
-            Button("Run \(script.name)", role: .destructive) {
+            Button(.reachy("Run \(script.name)"), role: .destructive) {
                 Task { await model.run(script) }
             }
         } message: { script in
@@ -48,7 +49,7 @@ struct BLERecoveryCommandsSheet: View {
     private var unlock: some View {
         Section {
             TextField(
-                "Five-character code",
+                .reachy("Five-character code"),
                 text: Binding(get: { model.pinInput }, set: { model.pinInput = $0 })
             )
             .font(.body.monospaced())
@@ -58,19 +59,22 @@ struct BLERecoveryCommandsSheet: View {
                 .textInputAutocapitalization(.never)
             #endif
                 .onSubmit(submit)
-            Button("Unlock the robot", action: submit)
-                .buttonStyle(.borderedProminent)
+            Button(.reachy("Unlock the robot"), action: submit)
+                .reachyButton(.prominent)
                 .frame(maxWidth: .infinity)
                 .disabled(!model.canSubmitPIN)
             if let error = model.errorMessage {
                 Text(error).font(.callout).foregroundStyle(.red)
             }
         } header: {
-            Text("Code")
+            Text(.reachy("Code"))
         } footer: {
-            Text("The last five characters of the serial number printed on the robot. Capitals matter, and it is "
-                + "not always digits. Running any script clears the robot's session, so the code is needed again "
-                + "each time — that is the robot's rule, not this app's.")
+            Text(
+                .reachy(
+                    // swiftlint:disable:next line_length
+                    "The last five characters of the serial number printed on the robot. Capitals matter, and it is not always digits. Running any script clears the robot's session, so the code is needed again each time — that is the robot's rule, not this app's."
+                )
+            )
         }
     }
 
@@ -86,7 +90,7 @@ struct BLERecoveryCommandsSheet: View {
 
         Section {
             if ordinary.isEmpty {
-                Text("This robot reports no recovery scripts.")
+                Text(.reachy("This robot reports no recovery scripts."))
                     .foregroundStyle(.secondary)
             }
             ForEach(ordinary) { script in
@@ -97,17 +101,21 @@ struct BLERecoveryCommandsSheet: View {
                 }
             }
         } header: {
-            Text("Commands")
+            Text(.reachy("Commands"))
         } footer: {
             Text(isLocked
-                ? "Enter the code above to run any of these."
-                : "A script answers nothing — the robot's handler crashes encoding its own reply. "
-                + "Watch the journal for what happened.")
+                ? String(localized: .reachy("Enter the code above to run any of these."))
+                : String(
+                    localized: .reachy(
+                        // swiftlint:disable:next line_length
+                        "A script answers nothing — the robot's handler crashes encoding its own reply. Watch the journal for what happened."
+                    )
+                ))
         }
 
         if !destructive.isEmpty {
             Section {
-                DisclosureGroup("Destructive recovery") {
+                DisclosureGroup(String(localized: .reachy("Destructive recovery"))) {
                     ForEach(destructive) { script in
                         NavigationLink {
                             BLESoftwareResetScreen(model: model, script: script)

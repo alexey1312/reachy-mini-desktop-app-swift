@@ -1,4 +1,5 @@
 import Observation
+import ReachyDesign
 import ReachyKit
 import ReachyMedia
 import ReachyScene
@@ -22,7 +23,7 @@ final class ViewportModel {
 
         var title: String {
             switch self {
-            case .scene: "3D model"
+            case .scene: String(localized: .reachy("3D model"))
             case .camera: "Camera"
             }
         }
@@ -82,8 +83,11 @@ final class ViewportModel {
     /// Why there is no 3D model, where there is a reason rather than a wait.
     var sceneUnavailableReason: String? {
         guard case .remote = source else { return nil }
-        return "The robot's 3D description is served over its own network, "
-            + "which a relay session cannot reach."
+        return String(
+            localized: .reachy(
+                "The robot's 3D description is served over its own network, which a relay session cannot reach."
+            )
+        )
     }
 
     /// Re-attaching to the same source is a no-op, so a SwiftUI redraw cannot
@@ -161,7 +165,7 @@ final class ViewportModel {
     private func startScene(at address: RobotAddress) {
         if sceneModel == nil {
             guard let connection = try? RobotConnection(address: address) else {
-                setupError = "Could not reach \(address.host)"
+                setupError = String(localized: .reachy("Could not reach \(address.host)"))
                 return
             }
             sceneModel = RobotSceneModel(address: address, client: connection)
@@ -174,7 +178,7 @@ final class ViewportModel {
     private func startCamera(at address: RobotAddress) {
         guard cameraSession == nil else { return }
         guard let session = try? CameraSession(address: address) else {
-            setupError = "Could not reach \(address.host)"
+            setupError = String(localized: .reachy("Could not reach \(address.host)"))
             return
         }
         cameraSession = session
