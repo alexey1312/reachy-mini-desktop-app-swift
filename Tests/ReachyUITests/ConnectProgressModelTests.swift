@@ -90,6 +90,23 @@ struct ConnectProgressModelTests {
         await waitUntil("the gate is released") { model.holdsGate == false }
     }
 
+    @Test("the final frame is held even after the previous dwell elapsed")
+    func settledStageStillHoldsTheFinalFrame() async {
+        let model = ConnectProgressModel(dwell: .milliseconds(120))
+        model.observe(.connecting(.handshaking))
+
+        // This test distinguishes the immediate branch from the final-frame hold,
+        // so elapsed time is the input under test: the previous stage must already
+        // have earned its full dwell before the success arrives.
+        try? await Task.sleep(for: .milliseconds(180))
+        model.observe(.connected(identity))
+
+        #expect(model.holdsGate)
+        await waitUntil("the connected frame is shown") { model.displayed == .connected(identity) }
+        #expect(model.holdsGate)
+        await waitUntil("the final frame is released") { model.holdsGate == false }
+    }
+
     @Test("a failure is shown without waiting and drops what was queued")
     func failureBypassesTheDwell() {
         let model = ConnectProgressModel(dwell: .seconds(30))
@@ -124,10 +141,10 @@ struct ConnectProgressModelTests {
 
     @Test("the ceiling releases the gate however much was queued behind it")
     func maxHoldBoundsTheWholeWalk() async {
-        // A dwell that would take three stages well past a second, against a ceiling
-        // that cuts in first. The point is that the bound does not depend on how many
-        // phases happened to arrive.
-        let model = ConnectProgressModel(dwell: .milliseconds(400), maxHold: .milliseconds(200))
+        // Seconds against milliseconds leave enough room for a loaded runner while
+        // still proving the sleep itself is capped by the ceiling. Sleeping the full
+        // dwell here takes two seconds and fails the bound below.
+        let model = ConnectProgressModel(dwell: .seconds(2), maxHold: .milliseconds(100))
         model.observe(.connecting(.handshaking))
 
         let elapsed = await ContinuousClock().measure {
@@ -137,7 +154,7 @@ struct ConnectProgressModelTests {
         }
 
         #expect(model.displayed == .connected(identity))
-        #expect(elapsed < .milliseconds(1200))
+        #expect(elapsed < .seconds(1))
     }
 }
 

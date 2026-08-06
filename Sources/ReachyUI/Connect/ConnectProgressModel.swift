@@ -50,10 +50,12 @@ final class ConnectProgressModel {
     /// and snapshots use, and it is why injecting it makes the root behave in a
     /// reference image exactly as it did before this type existed.
     init(
+        initialPhase: RobotSession.ConnectionPhase = .idle,
         dwell: Duration = .milliseconds(300),
         maxHold: Duration = .milliseconds(1500),
         clock: ContinuousClock = ContinuousClock()
     ) {
+        displayed = initialPhase
         self.dwell = dwell
         self.maxHold = maxHold
         self.clock = clock
@@ -76,7 +78,7 @@ final class ConnectProgressModel {
         // stage genuinely took that long. Queueing here would defer the one phase
         // that has nothing to wait for by a main-actor hop, and hand the gate a
         // `holdsGate` it has no reason to hold.
-        if queue.isEmpty, remainingDwell() == nil {
+        if queue.isEmpty, remainingDwell() == nil, !holdsAfterShowing(phase) {
             show(phase)
             return
         }
@@ -106,6 +108,17 @@ final class ConnectProgressModel {
             case .failed, .backendUnavailable, .needsDaemonUpdate: true
             case .handshaking, .checkingBackend: false
             }
+        }
+    }
+
+    /// A successful connection gets one complete frame of its own even when the
+    /// previous stage had already satisfied its dwell. Without this distinction a
+    /// slow handshake takes the immediate path above, draws the checkmarks and lets
+    /// the root replace the gate in the same update.
+    private func holdsAfterShowing(_ phase: RobotSession.ConnectionPhase) -> Bool {
+        switch phase {
+        case .connected, .unreachable: true
+        case .idle, .connecting: false
         }
     }
 
@@ -141,11 +154,14 @@ final class ConnectProgressModel {
     /// flushed without waiting.
     private func remainingDwell() -> Duration? {
         guard let shownAt else { return nil }
-        if let holdingSince, clock.now - holdingSince >= maxHold {
-            return nil
-        }
-        let elapsed = clock.now - shownAt
-        return elapsed < dwell ? dwell - elapsed : nil
+        let now = clock.now
+        let elapsed = now - shownAt
+        guard elapsed < dwell else { return nil }
+        let remaining = dwell - elapsed
+        guard let holdingSince else { return remaining }
+        let held = now - holdingSince
+        guard held < maxHold else { return nil }
+        return min(remaining, maxHold - held)
     }
 
     private func show(_ phase: RobotSession.ConnectionPhase) {
@@ -169,9 +185,7 @@ final class ConnectProgressModel {
         /// A model parked on one phase, for previews and snapshots. Zero dwell, so it
         /// starts no task and never holds the gate.
         static func preview(_ phase: RobotSession.ConnectionPhase = .idle) -> ConnectProgressModel {
-            let model = ConnectProgressModel(dwell: .zero)
-            model.observe(phase)
-            return model
+            ConnectProgressModel(initialPhase: phase, dwell: .zero)
         }
     }
 #endif

@@ -52,7 +52,7 @@ public struct ReachyRootView<Developer: View>: View {
         @ViewBuilder developer: () -> Developer
     ) {
         _session = State(initialValue: session)
-        _progress = State(initialValue: progress ?? ConnectProgressModel())
+        _progress = State(initialValue: progress ?? ConnectProgressModel(initialPhase: session.phase))
         _viewport = State(initialValue: viewport)
         _floating = State(initialValue: floating ?? FloatingViewportModel())
         _runningApp = State(initialValue: runningApp ?? RunningAppModel())
@@ -107,17 +107,20 @@ public struct ReachyRootView<Developer: View>: View {
     /// stays on the shell side deliberately: a network blip must not pull the tab
     /// bar out from under a finger, and the robot screen already says so in place.
     ///
-    /// **`progress.holdsGate` is the addition, and it only ever delays.** Crossing
-    /// this line throws the gate away, so without it the rail would be destroyed in
-    /// the same tick it finally drew three checkmarks — the connection would still
-    /// read as an unexplained flash, which is the thing the rail was built to fix.
-    /// The model releases on a ceiling that depends on nothing (`maxHold`), so no
-    /// state it can reach keeps the reader out of a connected app; and at `dwell:
-    /// .zero` it never holds at all, which is why every reference image behaves
-    /// exactly as it did before this existed.
+    /// **The progress checks only ever delay.** The displayed phase must first catch
+    /// `.connected`, otherwise the child observing the transition could be removed
+    /// before it sees it. `holdsGate` then keeps that final frame visible for its
+    /// dwell. The model releases on a ceiling that depends on nothing (`maxHold`),
+    /// so no state it can reach keeps the reader out of a connected app; and at
+    /// `dwell: .zero` it never holds at all, which is why every reference image
+    /// behaves exactly as it did before this existed. `.unreachable` bypasses both:
+    /// a later network blip belongs to the shell and must never resurrect the gate.
     private var isConnectedEnough: Bool {
         switch session.phase {
-        case .connected, .unreachable: !progress.holdsGate
+        case let .connected(identity):
+            !progress.holdsGate && progress.displayed == .connected(identity)
+        case .unreachable:
+            true
         case .idle, .connecting: false
         }
     }

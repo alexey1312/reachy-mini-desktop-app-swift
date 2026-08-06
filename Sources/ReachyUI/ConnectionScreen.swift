@@ -87,6 +87,7 @@ struct ConnectionScreen: View {
         VStack(spacing: 0) {
             ConnectHeader(session: session, displayed: progress.displayed)
             ConnectRoutePicker(route: $route)
+                .disabled(!session.phase.acceptsConnectionChoice)
                 .padding(.horizontal, Space.lg)
                 .padding(.bottom, Space.sm)
             form
@@ -112,12 +113,13 @@ struct ConnectionScreen: View {
                     forget: { knownRobots?.forget($0) },
                     resolving: resolving
                 )
-                .disabled(isProbing)
+                .disabled(!session.phase.acceptsConnectionChoice)
             case .account:
                 YourReachiesSection(show: showRemoteRobots)
+                    .disabled(!session.phase.acceptsConnectionChoice)
             case .manual:
                 ManualAddressSection(input: $manualInput, connect: connectManually)
-                    .disabled(isProbing)
+                    .disabled(!session.phase.acceptsConnectionChoice)
             }
             setUpSection
             errorSection
@@ -169,15 +171,6 @@ struct ConnectionScreen: View {
         }
     }
 
-    /// An attempt is in flight and will resolve itself. The lists stay put and go
-    /// inert rather than disappearing while the sweep walks its addresses.
-    private var isProbing: Bool {
-        switch session.phase {
-        case .connecting(.handshaking), .connecting(.checkingBackend): true
-        default: false
-        }
-    }
-
     private func appeared() {
         guard !previewMode else { return }
         let robots = knownRobots ?? KnownRobotsModel()
@@ -216,6 +209,19 @@ struct ConnectionScreen: View {
             defer { resolving = nil }
             guard let address = await BonjourResolver.resolve(service.endpoint) else { return }
             await session.connect(to: address)
+        }
+    }
+}
+
+extension RobotSession.ConnectionPhase {
+    /// A connection choice may start only while no attempt or decision is active.
+    /// The setup-over-Bluetooth section does not read this value and deliberately
+    /// remains available while an automatic attempt is failing.
+    var acceptsConnectionChoice: Bool {
+        if case .idle = self {
+            true
+        } else {
+            false
         }
     }
 }

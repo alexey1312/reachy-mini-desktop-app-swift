@@ -169,10 +169,19 @@ private struct ConnectRailNode: View {
             .trim(from: 0, to: 0.3)
             .stroke(Tone.brand.style, style: StrokeStyle(lineWidth: 2, lineCap: .round))
             .rotationEffect(.degrees(spinning ? 360 : 0))
-            .onAppear {
-                guard !isStill else { return }
-                withAnimation(Motion.waiting(reduceMotion: reduceMotion)) { spinning = true }
-            }
+            .task(id: isStill) { await animateWaitingArc() }
+            .onDisappear { spinning = false }
+    }
+
+    /// The node survives a failed attempt, so its state does too. Reset before
+    /// starting each active arc; assigning `true` to an already-true state on a
+    /// retry produces no animation transaction and leaves a static ring.
+    private func animateWaitingArc() async {
+        spinning = false
+        guard !isStill else { return }
+        await Task.yield()
+        guard !Task.isCancelled else { return }
+        withAnimation(Motion.waiting(reduceMotion: reduceMotion)) { spinning = true }
     }
 
     private func filled(_ tone: Tone, symbol: String) -> some View {
