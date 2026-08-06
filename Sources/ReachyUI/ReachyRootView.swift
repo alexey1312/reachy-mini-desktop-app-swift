@@ -4,8 +4,9 @@ import ReachyMedia
 import SwiftUI
 
 /// Entry point for the shared UI. It owns what outlives a screen — the session,
-/// the account, the viewport, the running-app dock and the router — and chooses
-/// between exactly two things: connecting, or being connected.
+/// the account and its robot list, the viewport, the running-app dock and the
+/// router — and chooses between exactly two things: connecting, or being
+/// connected.
 ///
 /// The tab bar lives below this rather than in the app target because every tab
 /// shares one `RobotSession` and one `ViewportModel`. The app target's own
@@ -22,6 +23,17 @@ public struct ReachyRootView<Developer: View>: View {
     /// launch and handed down through the environment — the account outlives any
     /// one robot connection, and several screens read it.
     @State private var hfAccount: HFAccount
+    /// The account's robot list, held here rather than built by the sheet that
+    /// shows it.
+    ///
+    /// A `.sheet` content closure is re-run on **every** update of the view it
+    /// hangs off, so a model constructed inside one is replaced by a fresh, empty
+    /// one each time. This body reads `session.phase`, and the candidate sweep
+    /// walks it `idle → handshaking → idle` every 10 s while the gate is up — so
+    /// the list of robots the user was reading was replaced within seconds by a
+    /// model that had never asked central anything, and `.task` does not get a
+    /// second turn to ask again.
+    @State private var remoteRobots: YourReachiesModel
     @State private var runningApp: RunningAppModel
     @State private var router: ReachyRouter
     /// Held for as long as the remote session is: dropping it would close the peer
@@ -45,6 +57,7 @@ public struct ReachyRootView<Developer: View>: View {
         viewport: ViewportModel = ViewportModel(),
         floating: FloatingViewportModel? = nil,
         hfAccount: HFAccount? = nil,
+        remoteRobots: YourReachiesModel? = nil,
         runningApp: RunningAppModel? = nil,
         tab: ReachyRouter.Tab = .robot,
         remoteLink: RemoteRobotLink? = nil,
@@ -58,10 +71,28 @@ public struct ReachyRootView<Developer: View>: View {
         _runningApp = State(initialValue: runningApp ?? RunningAppModel())
         _router = State(initialValue: ReachyRouter(tab: tab))
         _remoteLink = State(initialValue: remoteLink)
-        _hfAccount = State(
-            initialValue: hfAccount ?? HFAccount(store: KeychainHFTokenStore())
-        )
+        let account = hfAccount ?? HFAccount(store: KeychainHFTokenStore())
+        _hfAccount = State(initialValue: account)
+        _remoteRobots = State(initialValue: remoteRobots ?? Self.yourReachies(for: account))
         self.developer = developer()
+    }
+
+    /// Central, authenticated with this app's own Hugging Face session — which is
+    /// the only thing that makes a robot visible to its owner and to nobody else.
+    @MainActor
+    private static func yourReachies(for account: HFAccount) -> YourReachiesModel {
+        YourReachiesModel(
+            listing: CentralRelayClient { [account] in await account.currentToken() },
+            // `.needsReauth` also carries a username, so the state is the question,
+            // not whether a name is known.
+            isSignedIn: { [account] in
+                if case .signedIn = account.state {
+                    true
+                } else {
+                    false
+                }
+            }
+        )
     }
 
     public var body: some View {
@@ -89,7 +120,15 @@ public struct ReachyRootView<Developer: View>: View {
         .environment(runningApp)
         .environment(hfAccount)
         .environment(router)
-        .modifier(RootSheets(session: session, hfAccount: hfAccount, router: router, connect: connectRemotely))
+        .modifier(
+            RootSheets(
+                session: session,
+                hfAccount: hfAccount,
+                remoteRobots: remoteRobots,
+                router: router,
+                connect: connectRemotely
+            )
+        )
         .modifier(
             RootLifecycle(
                 session: session,
