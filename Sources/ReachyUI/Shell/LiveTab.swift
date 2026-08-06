@@ -11,6 +11,7 @@ import SwiftUI
 struct LiveTab: View {
     let session: RobotSession
     let viewport: ViewportModel
+    let floating: FloatingViewportModel
     let router: ReachyRouter
     let remoteLink: RemoteRobotLink?
 
@@ -48,7 +49,15 @@ struct LiveTab: View {
         if viewportTarget == nil {
             LiveUnavailableView()
         } else if session.isAwake {
-            ViewportView(model: viewport, offersCamera: session.hasCamera, makeTeleop: makeTeleop)
+            if floating.isInline {
+                ViewportView(model: viewport, offersCamera: session.hasCamera, makeTeleop: makeTeleop)
+            } else {
+                // The shell builds all five tabs at once, so this body runs while
+                // another tab is showing — and that is exactly when the floating
+                // window holds the viewport. Drawing anything live here would be
+                // the second `RealityView` the whole design exists to prevent.
+                Color.clear
+            }
         } else {
             // Pinned to the top: the banner is the tab's only content, and a lone
             // card floating in the middle of an empty screen reads as a view that

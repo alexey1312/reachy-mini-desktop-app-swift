@@ -135,19 +135,18 @@ private final class ReadinessMockClient: RobotAPIClient, @unchecked Sendable {
 }
 
 @MainActor
-@Suite("RobotSession connection stages")
+@Suite("RobotSession connection stages", .timeLimit(.minutes(1)))
 struct RobotSessionConnectionTests {
     private func makeSession(
         client: ReadinessMockClient,
         readinessMs: Int = 200,
-        readinessPollMs: Int = 10,
         pollMs: Int = 20,
         startTimeoutMs: Int = 200
     ) -> RobotSession {
         var config = RobotSession.Configuration()
         config.pollInterval = .milliseconds(pollMs)
         config.readinessTimeout = .milliseconds(readinessMs)
-        config.readinessPollInterval = .milliseconds(readinessPollMs)
+        config.readinessPollInterval = .milliseconds(10)
         config.daemonStartTimeout = .milliseconds(startTimeoutMs)
         return RobotSession(configuration: config) { _ in client }
     }
@@ -217,15 +216,19 @@ struct RobotSessionConnectionTests {
     @Test("a backend stuck behind its ready flag gives up after the budget")
     func neverReadyGivesUp() async {
         let client = ReadinessMockClient(probeResults: [.notReady])
-        // This assertion is about retrying before the budget expires. Removing the
-        // poll delay keeps a loaded runner from spending the whole tiny budget
-        // waiting to schedule the second probe.
-        let session = makeSession(client: client, readinessMs: 150, readinessPollMs: 0)
+        let session = makeSession(client: client, readinessMs: 150)
 
+        let start = ContinuousClock.now
         await session.connect(to: RobotAddress(host: "10.0.0.9"))
+        let elapsed = start.duration(to: .now)
 
         #expect(backendUnavailableMessage(session.phase) != nil)
-        #expect(client.probeCalls > 1)
+        // Retry behavior is covered by `readyRaceResolves`. Here both a premature
+        // failure and the real timeout end in the same phase, so duration is the
+        // assertion: the former returns immediately, while the latter waits out the
+        // configured budget. The upper bound only prevents an unbounded regression.
+        #expect(elapsed >= .milliseconds(150))
+        #expect(elapsed < .seconds(10))
         session.disconnect()
     }
 

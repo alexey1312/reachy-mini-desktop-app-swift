@@ -4,10 +4,17 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 
 - Adaptive layouts, not per-platform copies; `#if os(iOS)` only for platform-exclusive APIs (Settings deep link etc.).
 - `horizontalSizeClass` is unavailable on macOS — guard size-class branching with `#if os(macOS)` (always regular there).
-  **Nothing in this target branches on it any more.** The root used to build a two-column `HStack` for a regular width
-  and hide the Live tab on a compact one; `.tabViewStyle(.sidebarAdaptable)` does that adaptation itself, and it is
-  iOS 18 / macOS 15, not an iOS 26 API. Reaching for the size class again is a sign the layout is being forked rather
-  than adapted.
+  The root used to build a two-column `HStack` for a regular width and hide the Live tab on a compact one;
+  `.tabViewStyle(.sidebarAdaptable)` does that adaptation itself, and it is iOS 18 / macOS 15, not an iOS 26 API.
+  Reaching for the size class to fork a _layout_ is still a sign the layout is being forked rather than adapted.
+- **There is exactly one size-class branch, in `FloatingViewportModifier`, and it is not a layout fork.** The floating
+  viewport asks a different question: not "how wide is this" but **"does the shell draw a tab bar or a sidebar"**. A
+  sidebar keeps the Live tab beside every other destination, so there is nothing to float out of it and no second
+  place the viewport could go; a tab bar hides it, which is the whole reason the window exists. `.sidebarAdaptable`
+  makes that decision on the size class and offers no way to ask what it decided, so the modifier reads the same input
+  and writes `FloatingViewportModel.hasTabBar`. False collapses `placement` to `.inline` everywhere — the exact
+  behaviour this target had before the window existed, including `viewportIsOnScreen`. This entry used to say nothing
+  in the target branched on the size class; do not "restore" it by deleting the branch.
 - **Navigation is `ReachyRouter` plus two destinations.** `ReachyRootView` owns what outlives a screen and picks the
   gate or the shell; `Navigation/` holds the router, the effect cluster and the sheet stack; `Shell/` holds the five
   tabs. The five are unconditional — a tab that comes and goes forces the shell to catch its disappearance and drag
@@ -15,6 +22,25 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   unavailable state inside its own tab instead.
 - **`.unreachable` belongs to the shell, not the gate.** Only `.idle` and `.connecting` show the gate. A network blip
   must not pull the tab bar out from under a finger, and the robot screen already reports the state in place.
+- **The gate's fork has progress conditions, and they only ever delay.** For `.connected`, `isConnectedEnough` waits
+  until `progress.displayed` has caught the session and `progress.holdsGate` is false. Crossing that line throws the
+  gate's whole subtree away, so the equality check keeps the child phase observer alive long enough to see the final
+  transition, and the hold then keeps its three checkmarks on screen — on a local network the stages can resolve in
+  tens of milliseconds and otherwise read as an unexplained flash. `.unreachable` bypasses both conditions: it is a
+  later network blip that belongs to the shell and must never resurrect the gate.
+  `ConnectProgressModel` therefore lives in the root, not in the gate: it holds each stage on screen for a floor of
+  `dwell`, holds one further `dwell` after the last frame, and releases on a `maxHold` ceiling that depends on
+  nothing. At `dwell: .zero` it never holds at all, which is what every preview injects and why the reference images
+  behave as they did before it existed.
+- **Anything conditional on "an attempt is running" mounts and unmounts every 10 s.** The candidate sweep beats on
+  that period and an automatic attempt falls back to `.idle` rather than `.failed`, so the phase walks
+  `idle → handshaking → idle` forever while nothing answers. This was a reported bug — the screen visibly compressed
+  and expanded — and it had **two** sources, not one: the connection stepper as a form section, and the `lastError`
+  section, because `beginAttempt` clears `lastError` while `failAttempt` sets it for automatic attempts too (its
+  `guard !automatically` comes after the assignment). Fixing only the first leaves the symptom intact. The rail is now
+  mounted for the whole life of the gate, its detail slot reserves one caption line whether or not there is anything
+  to say, and `lastError` is shown only once `automaticConnectionAllowed` is false. Before adding anything to this
+  screen, ask what it does on that heartbeat.
 - Leaves stay injectable rather than reading the router: `ConnectionScreen.showRemoteRobots` is optional because its
   absence is what hides `YourReachiesSection` in previews. The router is the shell's business.
 - All robot interaction goes through `RobotSession` / `RobotBrowser` from ReachyKit — no direct URLSession here.

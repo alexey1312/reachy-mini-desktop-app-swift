@@ -12,8 +12,27 @@ public enum Metrics {
     /// A store row's artwork, and the smaller tile the dock and the widget draw.
     public static let artwork: CGFloat = 52
     public static let artworkCompact: CGFloat = 30
-    /// The gutter that keeps a stepper's symbols on one optical axis.
-    public static let stepperIconColumn: CGFloat = 18
+    /// A node on the connection rail. Fixed by the glyph it has to hold — a
+    /// checkmark, a cross, a turning arc — and not by anything around it.
+    ///
+    /// It replaces `stepperIconColumn`, the gutter the vertical connection stepper
+    /// was meant to align on. That token had no call site: the stepper it was
+    /// written for spelled the same number as a literal, and the stepper is gone.
+    public static let railNode: CGFloat = 22
+    /// The live view floating over the interface — wide enough to read what the
+    /// robot is doing, narrow enough to leave a list legible beside it.
+    public static let floatingViewport = CGSize(width: 160, height: 112)
+    /// What that window leaves at the edge once it is switched off. 44 pt across
+    /// because the tab is the only way back and nothing else can be aimed at.
+    public static let viewportTab = CGSize(width: 44, height: 72)
+    /// Room for the floating tab bar, for anything drawn *over* a `TabView`.
+    ///
+    /// The bar insets the safe area of each **tab's content** and reports none of
+    /// it to an overlay on the `TabView` itself, which is a `GeometryReader` that
+    /// sees the home indicator and nothing else. Measured off `Root — unreachable`,
+    /// where the first version of the floating viewport landed squarely on the
+    /// Apps and Settings labels.
+    public static let tabBarAllowance: CGFloat = 56
     /// A `Form` left to itself fills a 1024 pt iPad and reads as broken.
     public static let readableForm: CGFloat = 560
 }

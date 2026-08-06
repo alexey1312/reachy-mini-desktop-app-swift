@@ -42,7 +42,7 @@ enum DesignGallery {
         DesignToken(name: "artwork", value: Metrics.artwork),
         DesignToken(name: "dockStrip", value: Metrics.dockStrip),
         DesignToken(name: "joystickKnob", value: Metrics.joystickKnob),
-        DesignToken(name: "stepperIconColumn", value: Metrics.stepperIconColumn),
+        DesignToken(name: "railNode", value: Metrics.railNode),
     ]
 
     static let typography: [(name: String, font: Font)] = [
@@ -83,6 +83,14 @@ enum DesignGallery {
         case .active: "Running"
         case .idle: "Not responding"
         case .failed: "Stopped with an error"
+        }
+    }
+
+    static func name(of emphasis: ButtonEmphasis) -> String {
+        switch emphasis {
+        case .prominent: "prominent"
+        case .standard: "standard"
+        case .quiet: "quiet"
         }
     }
 

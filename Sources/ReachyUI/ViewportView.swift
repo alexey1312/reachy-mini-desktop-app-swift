@@ -9,11 +9,14 @@ import SwiftUI
 /// because the session it closes over is.
 typealias TeleopFactory = @MainActor @Sendable () throws -> any TeleopChannel
 
-/// The one place a live view of the robot is mounted.
+/// The Live tab's host for the viewport: `ViewportContent` under the full-size
+/// chrome.
 ///
-/// There is deliberately no second instance anywhere: `RobotSceneView` hands the
-/// scene's root entity to `RealityView`, and an entity has exactly one parent, so
-/// a second viewport would silently steal the robot from the first.
+/// It is one of two hosts, never both at once. `RobotSceneView` hands the scene's
+/// root entity to `RealityView`, and an entity has exactly one parent, so a second
+/// mounted viewport would silently steal the robot from the first.
+/// `FloatingViewportModel.placement` is what makes "one at a time" structural: this
+/// view is drawn only at `.inline`, and `FloatingViewport` only at everything else.
 struct ViewportView: View {
     let model: ViewportModel
     /// The robot reports no camera at all on a wired unit — then there is nothing
@@ -24,7 +27,7 @@ struct ViewportView: View {
     var makeTeleop: TeleopFactory?
 
     var body: some View {
-        content
+        ViewportContent(model: model, makeTeleop: makeTeleop)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .topLeading) { chrome }
     }
@@ -62,45 +65,11 @@ struct ViewportView: View {
         }
     }
 
-    @ViewBuilder
-    private var content: some View {
-        if let setupError = model.setupError {
-            ContentUnavailableView(
-                .reachy("Viewport unavailable"),
-                systemImage: "exclamationmark.triangle",
-                description: Text(setupError)
-            )
-        } else {
-            switch model.content {
-            case .scene:
-                if let reason = model.sceneUnavailableReason {
-                    // A reason, not a wait: nothing is coming, so a spinner here
-                    // would never resolve.
-                    ContentUnavailableView(
-                        .reachy("No 3D model"),
-                        systemImage: "cube.transparent",
-                        description: Text(reason)
-                    )
-                } else if let sceneModel = model.sceneModel {
-                    SceneViewport(model: sceneModel)
-                } else {
-                    ViewportStatus.loading("Connecting…", progress: nil)
-                }
-            case .camera:
-                if let session = model.cameraSession {
-                    CameraViewport(session: session, makeTeleop: makeTeleop)
-                } else {
-                    ViewportStatus.loading("Connecting…", progress: nil)
-                }
-            }
-        }
-    }
-
     /// What there is to switch between. Over the relay the 3D model does not
     /// exist, so there is one option and the control disappears rather than
     /// offering a dead segment.
     private var options: [ViewportModel.Content] {
-        (model.offersScene ? [.scene] : []) + (offersCamera ? [.camera] : [])
+        ViewportOptions.offered(by: model, offersCamera: offersCamera)
     }
 
     @ViewBuilder

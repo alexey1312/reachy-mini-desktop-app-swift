@@ -286,6 +286,12 @@
     "Head": {
       "extractionState": "manual"
     },
+    "Hide at the leading edge": {
+      "extractionState": "manual"
+    },
+    "Hide at the trailing edge": {
+      "extractionState": "manual"
+    },
     "Head — drag: yaw / pitch, hold sideways: turn the body": {
       "extractionState": "manual"
     },
@@ -371,6 +377,12 @@
       "extractionState": "manual"
     },
     "Live": {
+      "extractionState": "manual"
+    },
+    "Live view": {
+      "extractionState": "manual"
+    },
+    "Live view, hidden": {
       "extractionState": "manual"
     },
     "Local Network permission denied": {
@@ -488,6 +500,9 @@
       "extractionState": "manual"
     },
     "Online · wired": {
+      "extractionState": "manual"
+    },
+    "Open full screen": {
       "extractionState": "manual"
     },
     "Open Settings": {
@@ -635,6 +650,9 @@
       "extractionState": "manual"
     },
     "Show installer log": {
+      "extractionState": "manual"
+    },
+    "Show the live view": {
       "extractionState": "manual"
     },
     "Shutting down": {

@@ -43,15 +43,26 @@ enum PreviewScene {
         .preview()
     }
 
-    static func stepper(
+    /// The rail with its header, on its own. Worth capturing apart from the screen:
+    /// on a full gate capture it is a strip a tenth of the frame tall, and the seven
+    /// states it distinguishes are the whole reason it exists.
+    static func rail(
         _ step: RobotSession.ConnectionStep,
         powerTransition: RobotSession.PowerTransition? = nil
     ) -> some View {
-        Form {
-            ConnectionStepper(session: .preview(phase: .connecting(step), powerTransition: powerTransition))
-        }
-        .formStyle(.grouped)
+        ConnectHeader(
+            session: .preview(phase: .connecting(step), powerTransition: powerTransition),
+            displayed: .connecting(step)
+        )
         .preview()
+    }
+
+    /// The two ends of the walk, which no `ConnectionStep` can express: nothing
+    /// attempted yet, and every stage done. The second is the frame `holdsGate`
+    /// exists to keep on screen.
+    static func rail(_ phase: RobotSession.ConnectionPhase) -> some View {
+        ConnectHeader(session: .preview(phase: phase), displayed: phase)
+            .preview()
     }
 
     /// The model defaults are `nil` rather than `.preview()`: a default argument is evaluated in a
@@ -121,6 +132,30 @@ enum PreviewScene {
             .preview()
     }
 
+    /// The floating window over a screen-shaped hole, so the corner it rests in is
+    /// part of the capture rather than something to take on trust.
+    ///
+    /// `bounds` comes from the container rather than from a real safe area: the
+    /// placement arithmetic is covered by `FloatingViewportModelTests`, and what a
+    /// reference adds is the window's own size, shape and chrome.
+    static func floatingViewport(
+        _ model: FloatingViewportModel,
+        viewport: ViewportModel? = nil,
+        session: RobotSession? = nil
+    ) -> some View {
+        GeometryReader { geometry in
+            FloatingViewport(
+                model: model,
+                viewport: viewport ?? .preview(),
+                session: session ?? .preview(),
+                bounds: CGRect(origin: .zero, size: geometry.size),
+                open: {}
+            )
+        }
+        .frame(width: 320, height: 460)
+        .preview()
+    }
+
     /// The viewport fills whatever it is given, so previews of its inner panes need a frame or
     /// they collapse to nothing on a `sizeThatFits` capture.
     static func pane(@ViewBuilder _ content: () -> some View) -> some View {
@@ -130,17 +165,27 @@ enum PreviewScene {
             .preview()
     }
 
+    /// `route` is a parameter because the segments are now the screen's shape: a
+    /// capture of one says nothing about the other two.
+    ///
+    /// The progress model is always zero-dwell. With a real one the screen's
+    /// `onChange` would queue the phase and the capture would land on whichever
+    /// frame the drain happened to be on — the same timing dependence the spinner
+    /// previews already have, and avoidable here.
     static func connection(
         _ session: RobotSession,
+        route: ConnectRoute = .network,
         browser: RobotBrowser? = nil,
         manualInput: String = "",
         knownRobots: KnownRobotsModel? = nil
     ) -> some View {
         ConnectionScreen(
             session: session,
+            progress: ConnectProgressModel(dwell: .zero),
             browser: browser ?? .preview(names: []),
             manualInput: manualInput,
-            knownRobots: knownRobots ?? .preview([])
+            knownRobots: knownRobots ?? .preview([]),
+            route: route
         )
         .preview()
     }
@@ -151,6 +196,7 @@ enum PreviewScene {
     static func root(
         _ session: RobotSession,
         viewport: ViewportModel? = nil,
+        floating: FloatingViewportModel? = nil,
         tab: ReachyRouter.Tab = .robot,
         hfAccount: HFAccount? = nil,
         remoteLink: RemoteRobotLink? = nil
@@ -158,6 +204,7 @@ enum PreviewScene {
         ReachyRootView(
             session: session,
             viewport: viewport ?? .preview(),
+            floating: floating,
             hfAccount: hfAccount,
             tab: tab,
             remoteLink: remoteLink

@@ -11,6 +11,7 @@ import SwiftUI
 struct RootLifecycle: ViewModifier {
     let session: RobotSession
     let viewport: ViewportModel
+    let floating: FloatingViewportModel
     let hfAccount: HFAccount
     let runningApp: RunningAppModel
     let router: ReachyRouter
@@ -69,12 +70,13 @@ struct RootLifecycle: ViewModifier {
     /// thing the user is actually looking at — and a sleeping robot is never that,
     /// however visible the tab is.
     ///
-    /// One condition on every platform now that Live is a tab everywhere. It used
-    /// to fork on the size class, because on a regular width the viewport lived in
-    /// a column of the Robot tab.
+    /// Two ways of being looked at now, not one. The floating window is the second,
+    /// and its tab at the edge is what turns it off: `isStreaming` is false the
+    /// moment the window is docked, and false on a regular width, where there is no
+    /// window at all.
     private var viewportIsOnScreen: Bool {
         guard scenePhase == .active, viewportTarget != nil, session.isAwake else { return false }
-        return router.tab == .live
+        return router.tab == .live || floating.isStreaming
     }
 
     private var keepsRemoteLinkAlive: Bool {
