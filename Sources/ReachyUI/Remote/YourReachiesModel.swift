@@ -30,6 +30,10 @@ public final class YourReachiesModel {
     /// why it did not change.
     public private(set) var lastRefreshError: String?
 
+    /// Changes whenever the Hugging Face session changes, so a presented screen
+    /// restarts the load that belongs to the new account.
+    private(set) var accountGeneration = 0
+
     private let listing: any CentralRobotListing
     private let isSignedIn: @MainActor () -> Bool
     private var attemptedLoad = false
@@ -40,8 +44,9 @@ public final class YourReachiesModel {
     /// whatever order it likes. Without this the *older* answer wins simply by
     /// arriving second, which is how a list of robots turns into "none online" a
     /// moment after it appeared. Same rule as `RobotSession.connectionAttemptID`: a
-    /// superseded request never writes back. Signing out bumps it too, so an answer
-    /// that lands afterwards cannot repopulate a list the account no longer owns.
+    /// superseded request never writes back. An account change bumps it too, so an
+    /// answer that lands afterwards cannot repopulate a list the account no longer
+    /// owns.
     ///
     /// Named for the newest rather than shadowed by a local of the same name inside
     /// `fetch`: `self.` would be load-bearing there, and swiftformat's
@@ -52,6 +57,17 @@ public final class YourReachiesModel {
     public init(listing: any CentralRobotListing, isSignedIn: @escaping @MainActor () -> Bool) {
         self.listing = listing
         self.isSignedIn = isSignedIn
+    }
+
+    /// Drops account-scoped data before another Hugging Face session can see it.
+    /// Incrementing the generation also restarts a presented screen's load.
+    func accountChanged() {
+        latestAttempt += 1
+        isFetching = false
+        state = .signedOut
+        lastRefreshError = nil
+        attemptedLoad = false
+        accountGeneration += 1
     }
 
     /// A signed-in account has pending content before `.task` gets its first turn,

@@ -14,8 +14,9 @@ struct YourReachiesScreen<SignIn: View>: View {
     /// content closure on every update of the view it hangs off. Adopting the first
     /// model and ignoring later ones is what stops a rebuilt, empty one from
     /// blanking a list the user is reading. The root hands in a stable model as
-    /// well — belt and braces, because the failure is silent and permanent: the
-    /// `.task` that fills the list runs once per presentation, never per model.
+    /// well — belt and braces, because replacing the model does not restart the
+    /// task that fills it. Account changes use a generation on the stable model to
+    /// restart that task separately.
     @State private var model: YourReachiesModel
     @Environment(\.reachyPreviewMode) private var previewMode
     /// Called with the robot the user picked. The session is built by whoever
@@ -70,7 +71,7 @@ struct YourReachiesScreen<SignIn: View>: View {
         .contentLoading(isPresented: model.isContentLoading, title: .reachy("Calling your Reachies home…"))
         .navigationTitle(.reachy("Your Reachies"))
         .refreshable { await model.refresh() }
-        .task {
+        .task(id: model.accountGeneration) {
             guard !previewMode else { return }
             await model.load()
         }

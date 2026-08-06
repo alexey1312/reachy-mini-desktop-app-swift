@@ -135,6 +135,7 @@ public struct ReachyRootView<Developer: View>: View {
                 viewport: viewport,
                 floating: floating,
                 hfAccount: hfAccount,
+                remoteRobots: remoteRobots,
                 runningApp: runningApp,
                 router: router,
                 remoteLink: $remoteLink

@@ -265,11 +265,39 @@ struct YourReachiesModelTests {
         let load = Task { await model.load() }
         await listing.waitForCalls(1)
         signedIn.value = false
-        await model.refresh()
+        model.accountChanged()
         await listing.answer(0, with: robots)
         await load.value
 
         #expect(model.state == .signedOut)
+    }
+
+    /// The model outlives the sheet now, so the account boundary must explicitly
+    /// discard rows that belong to the previous owner. A failed request for the
+    /// next account must not preserve those rows as though it were a refresh.
+    @Test("changing accounts clears the previous account's robots")
+    func changingAccountsClearsRobots() async throws {
+        let robots = try Self.robots(#"[{"peerId":"p1","robotName":"kitchen"}]"#)
+        let signedIn = SignedInFlag(true)
+        let listing = ListingDouble([
+            .success(robots),
+            .failure(CentralRelayClient.Failure.http(503)),
+        ])
+        let model = YourReachiesModel(listing: listing, isSignedIn: { signedIn.value })
+
+        await model.load()
+        #expect(model.state == .listed(robots))
+
+        signedIn.value = false
+        model.accountChanged()
+        #expect(model.state == .signedOut)
+
+        signedIn.value = true
+        model.accountChanged()
+        await model.load()
+
+        #expect(!model.state.hasRobots)
+        #expect(model.lastRefreshError == nil)
     }
 
     /// `.task` runs once per presentation, but nothing stops a second `load()`
