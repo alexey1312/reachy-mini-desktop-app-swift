@@ -2,10 +2,12 @@ test_configuration:
   target: ReachyUI
   test_target_path: ${PROJECT_DIR}/ReachyUISnapshotTests
   sources:
+    - ${PROJECT_DIR}/../Sources/ReachyDesign/Previews
     - ${PROJECT_DIR}/../Sources/ReachyUI/Previews
     - ${PROJECT_DIR}/../Sources/ReachyWidgetUI/Previews
     - ${PROJECT_DIR}/ReachySpike/Previews
   testable_imports:
+    - ReachyDesign
     - ReachyKit
     - ReachyMedia
     - ReachyWidgetUI
@@ -21,6 +23,7 @@ test_configuration:
 playbook_configuration:
   preview_default_enabled: true
   testable_imports:
+    - ReachyDesign
     - ReachyUI
     - ReachyKit
     - ReachyMedia

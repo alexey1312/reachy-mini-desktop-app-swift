@@ -148,6 +148,7 @@ let project = Project(
             sources: [
                 "ReachyStorybook/Sources/**",
                 "ReachyStorybook/Generated/**",
+                "../Sources/ReachyDesign/Previews/**",
                 "../Sources/ReachyUI/Previews/**",
                 "../Sources/ReachyWidgetUI/Previews/**",
                 "ReachySpike/Sources/SpikeView.swift",
@@ -155,6 +156,7 @@ let project = Project(
                 "ReachySpike/Previews/**",
             ],
             dependencies: [
+                .package(product: "ReachyDesign"),
                 .package(product: "ReachyUI"),
                 .package(product: "ReachyWidgetUI"),
                 .package(product: "Prefire"),
@@ -168,6 +170,7 @@ let project = Project(
             deploymentTargets: .multiplatform(iOS: "18.0"),
             sources: [
                 "ReachyUISnapshotTests/Sources/**",
+                "../Sources/ReachyDesign/Previews/**",
                 "../Sources/ReachyUI/Previews/**",
                 "../Sources/ReachyWidgetUI/Previews/**",
                 "ReachySpike/Sources/SpikeView.swift",
@@ -175,6 +178,7 @@ let project = Project(
                 "ReachySpike/Previews/**",
             ],
             dependencies: [
+                .package(product: "ReachyDesign"),
                 .package(product: "ReachyUI"),
                 .package(product: "ReachyWidgetUI"),
                 .package(product: "Prefire"),
