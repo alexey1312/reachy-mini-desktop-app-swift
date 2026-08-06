@@ -117,10 +117,12 @@ final class SystemUpdateModel {
             return
         }
         guard version != previous else {
-            state = .failed(
-                String(localized: .reachy("The update finished but the robot still reports \(version). "))
-                    + String(localized: .reachy("A new enough release may not be published yet."))
-            )
+            state = .failed(String(
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "The update finished but the robot still reports \(version). A new enough release may not be published yet."
+                )
+            ))
             return
         }
         state = .finished(version: version)

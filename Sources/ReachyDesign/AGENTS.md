@@ -107,7 +107,9 @@ Seeding is manual. `SWIFT_EMIT_LOC_STRINGS` is not set for SwiftPM targets throu
 the 335 keys with no interpolation were collected from the source and written in with `extractionState: "manual"`.
 The ~50 keys that _do_ interpolate are deliberately absent — their stored form carries `%@` / `%lld` placeholders
 whose types cannot be read off the call site, and a wrong entry is worse than a missing one, which merely falls back
-to the English key.
+to the English key. Finish them by opening the catalogue in Xcode, which extracts the placeholders correctly. The
+working list lives under gitignored `.context/` and does not travel to another clone: rebuild it with
+`grep -rnE '\.reachy\("[^"]*\\\(' Sources --include='*.swift'` — 53 call sites, ~50 distinct keys.
 
 ## Applying a role — what happened
 

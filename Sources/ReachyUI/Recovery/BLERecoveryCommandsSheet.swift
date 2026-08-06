@@ -105,13 +105,12 @@ struct BLERecoveryCommandsSheet: View {
         } footer: {
             Text(isLocked
                 ? String(localized: .reachy("Enter the code above to run any of these."))
-                :
-                String(
+                : String(
                     localized: .reachy(
-                        "A script answers nothing — the robot's handler crashes encoding its own reply. "
+                        // swiftlint:disable:next line_length
+                        "A script answers nothing — the robot's handler crashes encoding its own reply. Watch the journal for what happened."
                     )
-                )
-                + String(localized: .reachy("Watch the journal for what happened.")))
+                ))
         }
 
         if !destructive.isEmpty {

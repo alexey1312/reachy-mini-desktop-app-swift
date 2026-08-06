@@ -90,8 +90,11 @@ struct BLEConsoleScreen: View {
         LogConsoleView(
             model: model.log,
             source: model.hardwareID ?? "bluetooth",
-            emptyDescription: String(localized: .reachy("The robot only logs when something happens. A quiet robot "))
-                + String(localized: .reachy("sends nothing, and this stays empty."))
+            emptyDescription: String(
+                localized: .reachy(
+                    "The robot only logs when something happens. A quiet robot sends nothing, and this stays empty."
+                )
+            )
         )
         .safeAreaInset(edge: .top) { notices }
         .toolbar {

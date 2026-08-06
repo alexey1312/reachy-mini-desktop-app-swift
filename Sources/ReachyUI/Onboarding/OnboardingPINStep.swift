@@ -15,8 +15,12 @@ struct OnboardingPINStep: View {
     var body: some View {
         OnboardingStepScaffold(
             title: String(localized: .reachy("Enter the robot's code")),
-            message: String(localized: .reachy("The last five characters of the serial number printed on the robot. "))
-                + String(localized: .reachy("Capitals matter, and it is not always digits."))
+            message: String(
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "The last five characters of the serial number printed on the robot. Capitals matter, and it is not always digits."
+                )
+            )
         ) {
             TextField(.reachy("Code"), text: Binding(get: { model.pinInput }, set: { model.pinInput = $0 }))
                 .textFieldStyle(.roundedBorder)

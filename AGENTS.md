@@ -262,6 +262,15 @@ environment keys are written out by hand — swiftformat's `environmentEntry` ru
    Layout stays direction-relative too: `leading`/`trailing`, never `left`/`right`, and the mirroring SF Symbols
    (`chevron.forward`, `arrow.up.forward.square`) rather than the absolute ones, so a right-to-left language needs no
    second pass. `JoystickPad` keeps `.left`/`.right` on purpose — those are the robot's directions, not the reader's.
+10. **A visual change names a token or a role, never a literal, a material or an OS version.** `Space.lg`,
+    `Radius.rect(.lg)`, `Typography.detail`, `Tone.danger`, `.reachySurface(.chrome, in: .capsule)` — not
+    `padding(16)`, not `RoundedRectangle(cornerRadius: 16)` (whose default corner style is `.circular` where every
+    token is `.continuous`), not `.background(.regularMaterial)`. Every `if #available` for glass lives in
+    `ReachyDesign` and nowhere else. Optical adjustments stay literals on purpose — a 1 pt gap in the dock is not
+    rhythm. **Glass gets measured, never reasoned about**: it is invisible headless, renders its content vibrantly so
+    colour collapses to black, blanks the entire capture under `.buttonStyle(.glass)`, and stays light in a dark
+    reference. Each was found by re-recording and is written up with its measurement in
+    `Sources/ReachyDesign/AGENTS.md`; add the next one the same way.
 
 ## Detailed Rules
 
@@ -272,5 +281,8 @@ Consult `.claude/rules/` when working in the matching area:
 | `.claude/rules/daemon-api.md` | Endpoints, WebSockets, timeouts, jobs    |
 | `.claude/rules/networking.md` | Discovery, ATS, Local Network permission |
 
-Per-target notes live beside the code: `Sources/{ReachyKit,ReachyUI,ReachyScene}/AGENTS.md` (`CLAUDE.md` is a symlink
-to it). Background reading: `docs/adr/` for accepted decisions, `docs/research/webrtc.md` for 8443 signaling quirks.
+Per-target notes live beside the code: `Sources/{ReachyKit,ReachyUI,ReachyScene,ReachyDesign,ReachyWidgetUI}/AGENTS.md`
+(`CLAUDE.md` is a symlink to it). **`ReachyDesign/AGENTS.md` is the design system's entire rulebook** — the tokens,
+the `SurfaceRole` facade, the four things glass does headless, what a dark reference proves and what it does not, and
+the localization catalogue. Read it before any visual change, not after one moved a reference.
+Background reading: `docs/adr/` for accepted decisions, `docs/research/webrtc.md` for 8443 signaling quirks.

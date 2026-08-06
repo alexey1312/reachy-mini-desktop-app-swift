@@ -39,8 +39,12 @@ struct AppsUnavailableView: View {
 
     private var message: String {
         if isRemote {
-            String(localized: .reachy("The relay carries the robot's commands and its camera, not its app store. "))
-                + String(localized: .reachy("Connect on the same network as the robot to install and start apps."))
+            String(
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "The relay carries the robot's commands and its camera, not its app store. Connect on the same network as the robot to install and start apps."
+                )
+            )
         } else {
             // The catalogue is served by the daemon, not by the Hub — the robot
             // fetches it — so there is genuinely nothing to show without one.

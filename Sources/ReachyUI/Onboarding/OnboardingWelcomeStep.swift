@@ -10,9 +10,11 @@ struct OnboardingWelcomeStep: View {
         OnboardingStepScaffold(
             title: String(localized: .reachy("Before you start")),
             message: String(
-                localized: .reachy("A new robot has no network yet, so the first conversation happens over Bluetooth. ")
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "A new robot has no network yet, so the first conversation happens over Bluetooth. It takes a couple of minutes."
+                )
             )
-                + String(localized: .reachy("It takes a couple of minutes."))
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 requirement(

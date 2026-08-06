@@ -4,10 +4,10 @@
     "3D model": {
       "extractionState": "manual"
     },
-    "A new enough release may not be published yet.": {
+    "A new robot has no network yet, so the first conversation happens over Bluetooth. It takes a couple of minutes.": {
       "extractionState": "manual"
     },
-    "A new robot has no network yet, so the first conversation happens over Bluetooth. ": {
+    "A script answers nothing — the robot's handler crashes encoding its own reply. Watch the journal for what happened.": {
       "extractionState": "manual"
     },
     "About": {
@@ -58,9 +58,6 @@
     "Bluetooth": {
       "extractionState": "manual"
     },
-    "Bluetooth is only here to get it that far.": {
-      "extractionState": "manual"
-    },
     "Bluetooth is switched off": {
       "extractionState": "manual"
     },
@@ -95,9 +92,6 @@
       "extractionState": "manual"
     },
     "Cancel": {
-      "extractionState": "manual"
-    },
-    "Capitals matter, and it is not always digits.": {
       "extractionState": "manual"
     },
     "Check again": {
@@ -136,13 +130,7 @@
     "Connect (handshake)": {
       "extractionState": "manual"
     },
-    "Connect it to the official desktop app over USB to update it.": {
-      "extractionState": "manual"
-    },
     "Connect now": {
-      "extractionState": "manual"
-    },
-    "Connect on the same network as the robot to install and start apps.": {
       "extractionState": "manual"
     },
     "Connect on the same network as the robot to play its recorded moves.": {
@@ -349,12 +337,6 @@
     "It never got as far as trying the network.": {
       "extractionState": "manual"
     },
-    "It restarts when the update finishes.": {
-      "extractionState": "manual"
-    },
-    "It takes a couple of minutes.": {
-      "extractionState": "manual"
-    },
     "It takes about five minutes. Do not power the robot off during it.": {
       "extractionState": "manual"
     },
@@ -502,7 +484,7 @@
     "On the network": {
       "extractionState": "manual"
     },
-    "One-tap sign-in is not available in this build. Create an access token at ": {
+    "One-tap sign-in is not available in this build. Create an access token at huggingface.co/settings/tokens and paste it here.": {
       "extractionState": "manual"
     },
     "Online · wired": {
@@ -775,7 +757,7 @@
     "The last five characters of its serial number": {
       "extractionState": "manual"
     },
-    "The last five characters of the serial number printed on the robot. ": {
+    "The last five characters of the serial number printed on the robot. Capitals matter, and it is not always digits.": {
       "extractionState": "manual"
     },
     "The motors are off, so the robot accepts commands without moving.": {
@@ -787,7 +769,7 @@
     "The password went across encrypted. The robot is trying it now.": {
       "extractionState": "manual"
     },
-    "The relay carries the robot's commands and its camera, not its app store. ": {
+    "The relay carries the robot's commands and its camera, not its app store. Connect on the same network as the robot to install and start apps.": {
       "extractionState": "manual"
     },
     "The robot backend is not running": {
@@ -800,6 +782,9 @@
       "extractionState": "manual"
     },
     "The robot did not say why.": {
+      "extractionState": "manual"
+    },
+    "The robot downloads the update itself, so it needs internet access. It restarts when the update finishes.": {
       "extractionState": "manual"
     },
     "The robot downloads updates itself and restarts when one finishes.": {
@@ -820,10 +805,10 @@
     "The robot is restarting…": {
       "extractionState": "manual"
     },
-    "The robot joins this network and then talks to the app over it. ": {
+    "The robot joins this network and then talks to the app over it. Bluetooth is only here to get it that far.": {
       "extractionState": "manual"
     },
-    "The robot only logs when something happens. A quiet robot ": {
+    "The robot only logs when something happens. A quiet robot sends nothing, and this stays empty.": {
       "extractionState": "manual"
     },
     "The robot refused the password": {
@@ -841,7 +826,7 @@
     "The robot took too long to answer. Check the app list before trying again.": {
       "extractionState": "manual"
     },
-    "The robot's 3D description is served over its own network, ": {
+    "The robot's 3D description is served over its own network, which a relay session cannot reach.": {
       "extractionState": "manual"
     },
     "The robot, powered on": {
@@ -862,7 +847,7 @@
     "This robot": {
       "extractionState": "manual"
     },
-    "This robot cannot update itself over the network. ": {
+    "This robot cannot update itself over the network. Connect it to the official desktop app over USB to update it.": {
       "extractionState": "manual"
     },
     "This robot did not report a hardware id, so it cannot be confirmed. Do not continue.": {
@@ -958,9 +943,6 @@
     "Warnings and above": {
       "extractionState": "manual"
     },
-    "Watch the journal for what happened.": {
-      "extractionState": "manual"
-    },
     "What this does": {
       "extractionState": "manual"
     },
@@ -991,19 +973,10 @@
     "host, host:port, or IP": {
       "extractionState": "manual"
     },
-    "huggingface.co/settings/tokens and paste it here.": {
-      "extractionState": "manual"
-    },
     "no answer": {
       "extractionState": "manual"
     },
-    "sends nothing, and this stays empty.": {
-      "extractionState": "manual"
-    },
     "this robot runs an older one": {
-      "extractionState": "manual"
-    },
-    "which a relay session cannot reach.": {
       "extractionState": "manual"
     }
   },

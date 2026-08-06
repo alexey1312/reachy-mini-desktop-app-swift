@@ -83,8 +83,11 @@ final class ViewportModel {
     /// Why there is no 3D model, where there is a reason rather than a wait.
     var sceneUnavailableReason: String? {
         guard case .remote = source else { return nil }
-        return String(localized: .reachy("The robot's 3D description is served over its own network, "))
-            + String(localized: .reachy("which a relay session cannot reach."))
+        return String(
+            localized: .reachy(
+                "The robot's 3D description is served over its own network, which a relay session cannot reach."
+            )
+        )
     }
 
     /// Re-attaching to the same source is a no-op, so a SwiftUI redraw cannot

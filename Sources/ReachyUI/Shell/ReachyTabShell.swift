@@ -21,20 +21,30 @@ struct ReachyTabShell: View {
     var body: some View {
         @Bindable var router = router
         return TabView(selection: $router.tab) {
-            Tab("Robot", systemImage: "figure.wave", value: ReachyRouter.Tab.robot) {
+            Tab(value: ReachyRouter.Tab.robot) {
                 RobotTab(session: session, router: router)
+            } label: {
+                Label(.reachy("Robot"), systemImage: "figure.wave")
             }
-            Tab("Live", systemImage: "cube.transparent", value: ReachyRouter.Tab.live) {
+            Tab(value: ReachyRouter.Tab.live) {
                 LiveTab(session: session, viewport: viewport, router: router, remoteLink: remoteLink)
+            } label: {
+                Label(.reachy("Live"), systemImage: "cube.transparent")
             }
-            Tab("Moves", systemImage: "music.note", value: ReachyRouter.Tab.moves) {
+            Tab(value: ReachyRouter.Tab.moves) {
                 MovesTab(session: session, router: router)
+            } label: {
+                Label(.reachy("Moves"), systemImage: "music.note")
             }
-            Tab("Apps", systemImage: "square.grid.2x2", value: ReachyRouter.Tab.apps) {
+            Tab(value: ReachyRouter.Tab.apps) {
                 AppsTab(session: session, router: router, findRobot: findRobot)
+            } label: {
+                Label(.reachy("Apps"), systemImage: "square.grid.2x2")
             }
-            Tab("Settings", systemImage: "gearshape", value: ReachyRouter.Tab.settings) {
+            Tab(value: ReachyRouter.Tab.settings) {
                 SettingsTab(session: session, router: router)
+            } label: {
+                Label(.reachy("Settings"), systemImage: "gearshape")
             }
         }
         .tabViewStyle(.sidebarAdaptable)

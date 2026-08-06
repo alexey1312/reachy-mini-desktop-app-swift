@@ -36,15 +36,18 @@ struct DaemonUpdateScreen: View {
             } footer: {
                 Text(
                     requirement.canSelfUpdate
-                        ?
-                        String(
+                        ? String(
                             localized: .reachy(
-                                "The robot downloads the update itself, so it needs internet access. "
+                                // swiftlint:disable:next line_length
+                                "The robot downloads the update itself, so it needs internet access. It restarts when the update finishes."
                             )
                         )
-                        + String(localized: .reachy("It restarts when the update finishes."))
-                        : String(localized: .reachy("This robot cannot update itself over the network. "))
-                        + String(localized: .reachy("Connect it to the official desktop app over USB to update it."))
+                        : String(
+                            localized: .reachy(
+                                // swiftlint:disable:next line_length
+                                "This robot cannot update itself over the network. Connect it to the official desktop app over USB to update it."
+                            )
+                        )
                 )
             }
 

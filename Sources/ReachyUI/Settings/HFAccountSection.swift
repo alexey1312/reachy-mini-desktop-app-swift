@@ -135,8 +135,12 @@ struct HFAccountSection: View {
         } else {
             // Honest about the state of the build rather than showing a button
             // that would open an error page on the Hub.
-            String(localized: .reachy("One-tap sign-in is not available in this build. Create an access token at "))
-                + String(localized: .reachy("huggingface.co/settings/tokens and paste it here."))
+            String(
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "One-tap sign-in is not available in this build. Create an access token at huggingface.co/settings/tokens and paste it here."
+                )
+            )
         }
     }
 

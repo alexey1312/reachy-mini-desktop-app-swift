@@ -13,8 +13,12 @@ struct OnboardingNetworkStep: View {
     var body: some View {
         OnboardingStepScaffold(
             title: String(localized: .reachy("Choose a network")),
-            message: String(localized: .reachy("The robot joins this network and then talks to the app over it. "))
-                + String(localized: .reachy("Bluetooth is only here to get it that far."))
+            message: String(
+                localized: .reachy(
+                    // swiftlint:disable:next line_length
+                    "The robot joins this network and then talks to the app over it. Bluetooth is only here to get it that far."
+                )
+            )
         ) {
             if model.isAlreadyOnNetwork {
                 alreadyConnected
