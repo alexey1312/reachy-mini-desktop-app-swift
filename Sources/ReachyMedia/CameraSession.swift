@@ -3,10 +3,10 @@ import Observation
 import ReachyKit
 @preconcurrency import WebRTC
 
+// iOS only: the audio *session* is an iOS concept, and asking to record moved to
+// `MicrophonePermission`, which carries the cross-platform fork now.
 #if os(iOS)
     import AVFAudio
-#else
-    import AVFoundation
 #endif
 
 /// Owns one WebRTC session to the robot: consumes `CameraSignalingClient`
@@ -29,6 +29,12 @@ public final class CameraSession {
     public private(set) var phase: Phase = .connecting
     public private(set) var videoTrack: RTCVideoTrack?
     public private(set) var isMicEnabled = false
+
+    /// What the OS says about recording. Published because a refusal used to be
+    /// swallowed here: `setMicEnabled(true)` returned early and wrote nothing, so the
+    /// button redrew itself unchanged and unmuting did nothing, forever, unexplained.
+    /// The viewport reads this to say why instead.
+    public private(set) var micPermission: PermissionState = .undetermined
 
     /// The session's control surface. Exists from construction and stays the same
     /// object across re-negotiations, so a `RemoteControlChannel` built on it
@@ -82,6 +88,9 @@ public final class CameraSession {
 
     public func start() {
         guard eventsTask == nil else { return }
+        // Read before anyone can tap, so a mic already refused in Settings shows as
+        // refused rather than as an ordinary muted button waiting to be pressed.
+        micPermission = MicrophonePermission.current
         configureAudioSession()
         eventsTask = Task { [signaling, connection] in
             // Sim registers no producer until media is acquired; harmless elsewhere.
@@ -109,7 +118,8 @@ public final class CameraSession {
             return
         }
         Task {
-            guard await Self.requestMicPermission() else { return }
+            micPermission = await MicrophonePermission.request()
+            guard micPermission == .granted else { return }
             isMicEnabled = true
             micTrack?.isEnabled = true
         }
@@ -278,13 +288,6 @@ public final class CameraSession {
         #endif
     }
 
-    private static func requestMicPermission() async -> Bool {
-        #if os(iOS)
-            await AVAudioApplication.requestRecordPermission()
-        #else
-            await AVCaptureDevice.requestAccess(for: .audio)
-        #endif
-    }
 }
 
 /// Bridges nonisolated WebRTC delegate callbacks onto the MainActor session.
@@ -342,11 +345,16 @@ private final class PeerConnectionDelegateAdapter: NSObject, RTCPeerConnectionDe
         /// signaling socket and builds the peer connection, and it is never called here.
         ///
         /// `phase` is `private(set)`, so this has to live in the same file.
-        static func preview(_ phase: Phase) -> CameraSession {
+        ///
+        /// `micPermission` is a parameter because a refused microphone is a state the
+        /// viewport renders differently and no preview could otherwise reach: the real
+        /// value is only ever written by `start()`, which a preview must not call.
+        static func preview(_ phase: Phase, micPermission: PermissionState = .undetermined) -> CameraSession {
             // A well-formed host cannot fail to produce a signaling client, and nothing dials it.
             // swiftlint:disable:next force_try
             let session = try! CameraSession(address: RobotAddress(host: "192.168.1.42"))
             session.phase = phase
+            session.micPermission = micPermission
             return session
         }
     }

@@ -20,6 +20,18 @@ Transport + domain core. No UI imports (SwiftUI/UIKit forbidden here). Swift 6 s
 - Provisioning is written against `WiFiProvisioningTransport`, not against BLE: `BLEProvisioningTransport` and
   `RobotConnection` both implement it, so the sealing and the screens are shared and the HTTP path is available if the
   ~260-byte sealed payload turns out not to fit one ATT write. `WiFiConfigClient` adds the settings-only routes.
+- **`Permissions/` answers "may we", never "can we", and the two are not the same question.**
+  `BluetoothPermission` reads the *class* property `CBCentralManager.authorization`, which builds no
+  central and so raises no prompt — the only way to report Bluetooth on a screen that must not ask. It
+  cannot report a switched-off radio or absent hardware: `CBManagerAuthorization` has no such case, and a
+  Simulator with no radio still answers `.notDetermined`. That axis stays `BLEAvailability`, and it costs a
+  live central, which costs the prompt. Local Network has no status API at all, so `LocalNetworkProbe`
+  observes one instead — and **`NWBrowser` reaching `.ready` is not a grant**: it gets there while the
+  system prompt is still on screen. Only `PolicyDenied` proves refusal and only an arriving browse result
+  proves consent; `.ready`, an empty result set and the timeout all resolve `.undetermined`. So a granted
+  permission on a robot-less network reads as unknown, which is deliberate — the screen says so in words
+  rather than guessing. `looksPolicyDenied` lives there and `RobotBrowser.permissionLooksDenied` forwards
+  to it; there is one copy of that string match.
 - `RemoteDataChannel` is the seam under a remote session, and the **end of `messages()` is terminal**:
   `RemoteControlChannel` reads it as "the session is over" and fails every waiter with `.closed`. A peer being
   replaced must therefore not end it — every WebRTC negotiation replaces the peer, the _first offer included_, so

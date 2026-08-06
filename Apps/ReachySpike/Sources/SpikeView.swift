@@ -1,5 +1,8 @@
 import ReachyDesign
 import ReachyKit
+// For `PrivacySettingsButton` alone — the one deep link to the system's privacy
+// settings, which used to be copied into this file with its own `#if os(iOS)`.
+import ReachyUI
 import SwiftUI
 
 /// Phase 0.4 device-check screen: discovery, manual connect, stream counter.
@@ -44,13 +47,7 @@ struct SpikeView: View {
             if discovery.permissionLooksDenied {
                 Label(.reachy("Local Network permission denied"), systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
-                #if os(iOS)
-                    Button(.reachy("Open Settings")) {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    }
-                #endif
+                PrivacySettingsButton(pane: .localNetwork)
             }
             if discovery.services.isEmpty {
                 Text(.reachy("No robots found")).foregroundStyle(.secondary)

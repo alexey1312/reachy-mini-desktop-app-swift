@@ -185,7 +185,11 @@ enum PreviewScene {
             browser: browser ?? .preview(names: []),
             manualInput: manualInput,
             knownRobots: knownRobots ?? .preview([]),
-            route: route
+            route: route,
+            // Always supplied, unlike `showRemoteRobots`: the gate always offers this
+            // and there is no state in which it should be missing, so a reference
+            // without the row would be defending a screen the app never draws.
+            showPermissions: {}
         )
         .preview()
     }

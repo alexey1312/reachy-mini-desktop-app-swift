@@ -61,6 +61,10 @@ struct BLEConsoleScreen: View {
                     Label(.reachy("Bluetooth is switched off"), systemImage: "antenna.radiowaves.left.and.right.slash")
                 case .unauthorized:
                     Label(.reachy("This app can't use Bluetooth"), systemImage: "hand.raised")
+                    // Its onboarding twin has always offered this; here the label sat
+                    // alone, on the one screen reached *because* something is already
+                    // broken.
+                    PrivacySettingsButton(pane: .bluetooth)
                 case .unsupported:
                     Label(
                         .reachy("This device has no Bluetooth"),

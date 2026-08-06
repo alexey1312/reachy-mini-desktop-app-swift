@@ -36,12 +36,11 @@ public final class RobotBrowser {
         servicesByType.values.flatMap(\.self).sorted { $0.id < $1.id }
     }
 
+    /// Denial as this screen can see it: whichever browser last reported a state, read
+    /// through the same rule `LocalNetworkProbe` applies. A discovery list that is
+    /// merely empty says nothing, which is the whole reason this property exists.
     public var permissionLooksDenied: Bool {
-        browserStates.values.contains(where: Self.stateLooksPolicyDenied)
-    }
-
-    nonisolated static func stateLooksPolicyDenied(_ state: String) -> Bool {
-        state.contains("PolicyDenied") || state.contains("-65570")
+        browserStates.values.contains(where: LocalNetworkProbe.looksPolicyDenied)
     }
 
     nonisolated static func acceptsService(name: String, type: String) -> Bool {

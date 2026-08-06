@@ -25,7 +25,13 @@
     "All set": {
       "extractionState": "manual"
     },
+    "Allow": {
+      "extractionState": "manual"
+    },
     "Allow Bluetooth for this app in Settings, then come back.": {
+      "extractionState": "manual"
+    },
+    "Allowed": {
       "extractionState": "manual"
     },
     "Antennas": {
@@ -38,6 +44,9 @@
       "extractionState": "manual"
     },
     "Apps need the local network": {
+      "extractionState": "manual"
+    },
+    "Asking…": {
       "extractionState": "manual"
     },
     "Automatic reconnect paused": {
@@ -55,10 +64,16 @@
     "Before you start": {
       "extractionState": "manual"
     },
+    "Blocked by device policy": {
+      "extractionState": "manual"
+    },
     "Bluetooth": {
       "extractionState": "manual"
     },
     "Bluetooth is switched off": {
+      "extractionState": "manual"
+    },
+    "Bluetooth is switched off. Turn it on in Control Centre or Settings.": {
       "extractionState": "manual"
     },
     "Bluetooth's job is done. The app will pick the robot up on the network from here.": {
@@ -94,6 +109,9 @@
     "Cancel": {
       "extractionState": "manual"
     },
+    "Check": {
+      "extractionState": "manual"
+    },
     "Check again": {
       "extractionState": "manual"
     },
@@ -101,6 +119,9 @@
       "extractionState": "manual"
     },
     "Checking for updates…": {
+      "extractionState": "manual"
+    },
+    "Checking looks for a robot on this Wi-Fi, and asks for permission if it has not yet.": {
       "extractionState": "manual"
     },
     "Choose a network": {
@@ -256,6 +277,9 @@
     "Find the robot": {
       "extractionState": "manual"
     },
+    "Finds your robot on this Wi-Fi and talks to it. Without it the robot cannot be reached at all.": {
+      "extractionState": "manual"
+    },
     "Finished": {
       "extractionState": "manual"
     },
@@ -385,6 +409,9 @@
     "Live view, hidden": {
       "extractionState": "manual"
     },
+    "Local network": {
+      "extractionState": "manual"
+    },
     "Local Network permission denied": {
       "extractionState": "manual"
     },
@@ -392,6 +419,12 @@
       "extractionState": "manual"
     },
     "Manual address": {
+      "extractionState": "manual"
+    },
+    "Microphone": {
+      "extractionState": "manual"
+    },
+    "Microphone access is turned off": {
       "extractionState": "manual"
     },
     "Minimize": {
@@ -463,6 +496,12 @@
     "None linked to your Hugging Face account are online.": {
       "extractionState": "manual"
     },
+    "Not allowed": {
+      "extractionState": "manual"
+    },
+    "Not asked yet": {
+      "extractionState": "manual"
+    },
     "Not available on this robot": {
       "extractionState": "manual"
     },
@@ -470,6 +509,9 @@
       "extractionState": "manual"
     },
     "Not installed": {
+      "extractionState": "manual"
+    },
+    "Not known yet": {
       "extractionState": "manual"
     },
     "Not linked": {
@@ -521,6 +563,12 @@
       "extractionState": "manual"
     },
     "Place head from pose": {
+      "extractionState": "manual"
+    },
+    "Privacy": {
+      "extractionState": "manual"
+    },
+    "Privacy permissions": {
       "extractionState": "manual"
     },
     "Private": {
@@ -643,6 +691,9 @@
     "Set up a robot": {
       "extractionState": "manual"
     },
+    "Sets up a new robot's Wi-Fi, and recovers one that has dropped off the network.": {
+      "extractionState": "manual"
+    },
     "Setting a robot up needs Bluetooth.": {
       "extractionState": "manual"
     },
@@ -698,6 +749,9 @@
       "extractionState": "manual"
     },
     "Someone is driving this robot over Hugging Face.": {
+      "extractionState": "manual"
+    },
+    "Speaks to people near the robot through its speaker.": {
       "extractionState": "manual"
     },
     "Start": {
@@ -965,6 +1019,9 @@
       "extractionState": "manual"
     },
     "Wi-Fi password": {
+      "extractionState": "manual"
+    },
+    "Without it this app cannot find the robot or reach it at a typed address.": {
       "extractionState": "manual"
     },
     "You can give the robot a name in Settings once it is connected.": {

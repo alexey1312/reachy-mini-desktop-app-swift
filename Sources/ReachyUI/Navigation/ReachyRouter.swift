@@ -28,6 +28,11 @@ final class ReachyRouter {
     /// The account button sits in every tab's bar and they all open the same sheet,
     /// so the state is here and the sheet is mounted once.
     var showsAccount = false
+    /// Privacy permissions. Presented from the root for the same reason as the list
+    /// above: the connection screen needs it — two of the three permissions are what
+    /// connecting takes — and the Settings tab, which also offers it, does not exist
+    /// until a robot has answered.
+    var showsPermissions = false
 
     init(tab: Tab = .robot) {
         self.tab = tab
