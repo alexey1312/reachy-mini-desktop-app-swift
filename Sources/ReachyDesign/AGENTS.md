@@ -87,10 +87,21 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 ## Not here yet, and why
 
 - **A glass tier on `reachyButton`.** Not deferred for taste — it blanks the capture (see the rules above). Revisit
-  only with evidence that a screen carrying one snapshots whole.
+  only with evidence that a screen carrying one snapshots whole. `ButtonEmphasis` did gain a third case,
+  `quiet` (`.borderless`), and that one is not a glass question: it exists because three bordered capsules in a row
+  broke their labels across two lines on an iPhone, and stacking them gave a ragged column of three different widths.
+  Both were recorded as references before being read. `.borderless` rather than `.plain` — plain drops the tint, and a
+  tintless label beside a blue one reads as disabled.
 - **`glassEffectID` morphing between screens.** Worth having only once a layout is built around it, and there is no
   equivalent below the floor.
-- **A reduce-motion resolver.** Out of scope; do not read one into `Motion`'s names.
+- **A blanket reduce-motion resolver.** Still absent, and `dock` / `springBack` / `stateChange` still resolve nothing:
+  each is a one-shot response to something the reader did or something that changed, which is not what the setting is
+  about. `Motion.waiting(reduceMotion:)` is the single exception and covers the app's only endlessly repeating
+  animation — the connection rail's turning arc. It takes the flag as a **parameter**: this module reads no
+  environment, so `\.accessibilityReduceMotion` stays the caller's to look up. Returning `nil` is the whole mechanism,
+  because `withAnimation` and `animation(_:value:)` already take an optional. A caller that stops moving must still
+  render a distinguishable resting state — `ConnectRailNode` draws a static arc, which is also what every reference
+  image records, so the resting state is the one under regression cover.
 - **The App Intents strings.** `RobotAppIntents`, `RobotPowerIntents`, `RobotAppsConfigurationIntent`,
   `RobotAppEntity`, `ReachyShortcuts` and the two widget `configurationDisplayName`s stay bare
   `LocalizedStringResource` against the main bundle. `AppIntent.title` and `DisplayRepresentation` are baked into

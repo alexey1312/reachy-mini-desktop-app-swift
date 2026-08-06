@@ -27,6 +27,9 @@ public struct ReachyRootView<Developer: View>: View {
     /// Held for as long as the remote session is: dropping it would close the peer
     /// connection the session is talking over.
     @State private var remoteLink: RemoteRobotLink?
+    /// What the gate's rail is showing. Owned here rather than by the gate because
+    /// the fork below is what destroys the gate, and this is what defers that fork.
+    @State private var progress: ConnectProgressModel
 
     private let developer: Developer
 
@@ -45,9 +48,11 @@ public struct ReachyRootView<Developer: View>: View {
         runningApp: RunningAppModel? = nil,
         tab: ReachyRouter.Tab = .robot,
         remoteLink: RemoteRobotLink? = nil,
+        progress: ConnectProgressModel? = nil,
         @ViewBuilder developer: () -> Developer
     ) {
         _session = State(initialValue: session)
+        _progress = State(initialValue: progress ?? ConnectProgressModel())
         _viewport = State(initialValue: viewport)
         _floating = State(initialValue: floating ?? FloatingViewportModel())
         _runningApp = State(initialValue: runningApp ?? RunningAppModel())
@@ -72,7 +77,7 @@ public struct ReachyRootView<Developer: View>: View {
                     findRobot: findRobotButtonTapped
                 )
             } else {
-                ConnectGate(session: session, router: router)
+                ConnectGate(session: session, router: router, progress: progress)
             }
         }
         // Opacity and nothing geometric. Crossing this line throws the whole tree
@@ -98,12 +103,21 @@ public struct ReachyRootView<Developer: View>: View {
         )
     }
 
-    /// Exactly the fork the old `robotTab` made, kept word for word. `.unreachable`
+    /// The fork the old `robotTab` made, with one condition added. `.unreachable`
     /// stays on the shell side deliberately: a network blip must not pull the tab
     /// bar out from under a finger, and the robot screen already says so in place.
+    ///
+    /// **`progress.holdsGate` is the addition, and it only ever delays.** Crossing
+    /// this line throws the gate away, so without it the rail would be destroyed in
+    /// the same tick it finally drew three checkmarks — the connection would still
+    /// read as an unexplained flash, which is the thing the rail was built to fix.
+    /// The model releases on a ceiling that depends on nothing (`maxHold`), so no
+    /// state it can reach keeps the reader out of a connected app; and at `dwell:
+    /// .zero` it never holds at all, which is why every reference image behaves
+    /// exactly as it did before this existed.
     private var isConnectedEnough: Bool {
         switch session.phase {
-        case .connected, .unreachable: true
+        case .connected, .unreachable: !progress.holdsGate
         case .idle, .connecting: false
         }
     }

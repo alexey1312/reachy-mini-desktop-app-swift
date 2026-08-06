@@ -1,11 +1,19 @@
 import SwiftUI
 
 /// How much a button insists.
-public enum ButtonEmphasis: Sendable {
+public enum ButtonEmphasis: Sendable, CaseIterable {
     /// The action the screen is there for. One per screen, at most.
     case prominent
     /// An action beside it.
     case standard
+    /// A way out, or an alternative the reader is not being steered towards.
+    ///
+    /// Added for the connection rail's decisions, where three bordered capsules of
+    /// different widths stacked into a ragged column — legible, and plainly wrong.
+    /// A borderless label carries no width of its own, so several sit on one line
+    /// without competing with the action above them and without clipping when the
+    /// text grows.
+    case quiet
 }
 
 public extension View {
@@ -40,6 +48,9 @@ private struct ReachyButtonStyle: ViewModifier {
         switch emphasis {
         case .prominent: content.buttonStyle(.borderedProminent)
         case .standard: content.buttonStyle(.bordered)
+        // `.borderless` rather than `.plain`: plain drops the tint too, and a
+        // tintless label beside a blue one reads as disabled.
+        case .quiet: content.buttonStyle(.borderless)
         }
     }
 }

@@ -12,8 +12,13 @@ public enum Metrics {
     /// A store row's artwork, and the smaller tile the dock and the widget draw.
     public static let artwork: CGFloat = 52
     public static let artworkCompact: CGFloat = 30
-    /// The gutter that keeps a stepper's symbols on one optical axis.
-    public static let stepperIconColumn: CGFloat = 18
+    /// A node on the connection rail. Fixed by the glyph it has to hold — a
+    /// checkmark, a cross, a turning arc — and not by anything around it.
+    ///
+    /// It replaces `stepperIconColumn`, the gutter the vertical connection stepper
+    /// was meant to align on. That token had no call site: the stepper it was
+    /// written for spelled the same number as a literal, and the stepper is gone.
+    public static let railNode: CGFloat = 22
     /// The live view floating over the interface — wide enough to read what the
     /// robot is doing, narrow enough to leave a list legible beside it.
     public static let floatingViewport = CGSize(width: 160, height: 112)

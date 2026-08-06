@@ -108,6 +108,27 @@ import SwiftUI
     }
 }
 
+// `reachyButton` had fourteen call sites and no capture at all until a third tier
+// was added for the connection rail's decisions. The row carries one long label and
+// one short one because that is what the tiers are for: `prominent` and `standard`
+// draw a capsule around whatever they are given, so a long label makes them wide,
+// while `quiet` carries no width of its own — which is the property that let three
+// actions share a line instead of stacking into a ragged column.
+#Preview("Design — buttons", traits: .sizeThatFitsLayout) {
+    TokenGallery(title: "ButtonEmphasis") {
+        ForEach(ButtonEmphasis.allCases, id: \.self) { emphasis in
+            TokenRow(name: DesignGallery.name(of: emphasis), value: "") {
+                HStack(spacing: Space.sm) {
+                    Button("Start robot backend") {}
+                        .reachyButton(emphasis)
+                    Button("Cancel") {}
+                        .reachyButton(emphasis)
+                }
+            }
+        }
+    }
+}
+
 // The effect layer is absent from this capture — neither glass nor a material
 // renders headless. What it does prove is the rule that makes the rest of the
 // suite worth having: each role's opaque fill covers the gradient behind it.

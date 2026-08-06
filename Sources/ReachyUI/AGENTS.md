@@ -22,6 +22,23 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   unavailable state inside its own tab instead.
 - **`.unreachable` belongs to the shell, not the gate.** Only `.idle` and `.connecting` show the gate. A network blip
   must not pull the tab bar out from under a finger, and the robot screen already reports the state in place.
+- **The gate's fork has a second condition, and it only ever delays.** `isConnectedEnough` reads
+  `!progress.holdsGate` alongside the phase. Crossing that line throws the gate's whole subtree away, so a rail drawn
+  off `session.phase` alone is destroyed in the same tick it finally shows three checkmarks — on a local network the
+  three stages resolve in tens of milliseconds and the connection reads as an unexplained flash.
+  `ConnectProgressModel` therefore lives in the root, not in the gate: it holds each stage on screen for a floor of
+  `dwell`, holds one further `dwell` after the last frame, and releases on a `maxHold` ceiling that depends on
+  nothing. At `dwell: .zero` it never holds at all, which is what every preview injects and why the reference images
+  behave as they did before it existed.
+- **Anything conditional on "an attempt is running" mounts and unmounts every 10 s.** The candidate sweep beats on
+  that period and an automatic attempt falls back to `.idle` rather than `.failed`, so the phase walks
+  `idle → handshaking → idle` forever while nothing answers. This was a reported bug — the screen visibly compressed
+  and expanded — and it had **two** sources, not one: the connection stepper as a form section, and the `lastError`
+  section, because `beginAttempt` clears `lastError` while `failAttempt` sets it for automatic attempts too (its
+  `guard !automatically` comes after the assignment). Fixing only the first leaves the symptom intact. The rail is now
+  mounted for the whole life of the gate, its detail slot reserves one caption line whether or not there is anything
+  to say, and `lastError` is shown only once `automaticConnectionAllowed` is false. Before adding anything to this
+  screen, ask what it does on that heartbeat.
 - Leaves stay injectable rather than reading the router: `ConnectionScreen.showRemoteRobots` is optional because its
   absence is what hides `YourReachiesSection` in previews. The router is the shell's business.
 - All robot interaction goes through `RobotSession` / `RobotBrowser` from ReachyKit — no direct URLSession here.

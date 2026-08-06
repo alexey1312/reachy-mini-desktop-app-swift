@@ -43,15 +43,26 @@ enum PreviewScene {
         .preview()
     }
 
-    static func stepper(
+    /// The rail with its header, on its own. Worth capturing apart from the screen:
+    /// on a full gate capture it is a strip a tenth of the frame tall, and the seven
+    /// states it distinguishes are the whole reason it exists.
+    static func rail(
         _ step: RobotSession.ConnectionStep,
         powerTransition: RobotSession.PowerTransition? = nil
     ) -> some View {
-        Form {
-            ConnectionStepper(session: .preview(phase: .connecting(step), powerTransition: powerTransition))
-        }
-        .formStyle(.grouped)
+        ConnectHeader(
+            session: .preview(phase: .connecting(step), powerTransition: powerTransition),
+            displayed: .connecting(step)
+        )
         .preview()
+    }
+
+    /// The two ends of the walk, which no `ConnectionStep` can express: nothing
+    /// attempted yet, and every stage done. The second is the frame `holdsGate`
+    /// exists to keep on screen.
+    static func rail(_ phase: RobotSession.ConnectionPhase) -> some View {
+        ConnectHeader(session: .preview(phase: phase), displayed: phase)
+            .preview()
     }
 
     /// The model defaults are `nil` rather than `.preview()`: a default argument is evaluated in a
@@ -154,17 +165,27 @@ enum PreviewScene {
             .preview()
     }
 
+    /// `route` is a parameter because the segments are now the screen's shape: a
+    /// capture of one says nothing about the other two.
+    ///
+    /// The progress model is always zero-dwell. With a real one the screen's
+    /// `onChange` would queue the phase and the capture would land on whichever
+    /// frame the drain happened to be on — the same timing dependence the spinner
+    /// previews already have, and avoidable here.
     static func connection(
         _ session: RobotSession,
+        route: ConnectRoute = .network,
         browser: RobotBrowser? = nil,
         manualInput: String = "",
         knownRobots: KnownRobotsModel? = nil
     ) -> some View {
         ConnectionScreen(
             session: session,
+            progress: ConnectProgressModel(dwell: .zero),
             browser: browser ?? .preview(names: []),
             manualInput: manualInput,
-            knownRobots: knownRobots ?? .preview([])
+            knownRobots: knownRobots ?? .preview([]),
+            route: route
         )
         .preview()
     }

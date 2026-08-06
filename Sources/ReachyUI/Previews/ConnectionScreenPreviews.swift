@@ -2,6 +2,10 @@ import ReachyKit
 @testable import ReachyUI
 import SwiftUI
 
+// The segments are the screen's shape now, so `route` is part of what a capture
+// says: the two manual-address previews below verify nothing without it, because
+// the section they are about is not on screen in the default segment.
+
 #Preview("Connection — searching") {
     PreviewScene.connection(.preview(phase: .idle, status: nil, address: nil))
 }
@@ -23,8 +27,9 @@ import SwiftUI
     PreviewScene.connection(.preview(phase: .connecting(.handshaking), status: nil, address: nil))
 }
 
-// A decision the user has to make hides discovery entirely: the list underneath would only
-// compete with start / continue / cancel.
+// The decision no longer replaces the screen. The rail stays where it is, the buttons appear under
+// it, and the list below goes inert rather than disappearing — which is what stops the layout
+// jumping at the moment the reader is trying to read a failure.
 #Preview("Connection — needs a decision") {
     PreviewScene.connection(
         .preview(
@@ -45,9 +50,19 @@ import SwiftUI
     )
 }
 
+// `automaticConnectionAllowed: false` is what makes this state reachable at all, not
+// preview dressing: while the sweep is running it rewrites `lastError` every 10 s, so
+// the section is suppressed. Cancelling is what stops the sweep and lets the last
+// failure stand still long enough to be read.
 #Preview("Connection — error") {
     PreviewScene.connection(
-        .preview(phase: .idle, status: nil, address: nil, error: "The daemon refused the handshake."),
+        .preview(
+            phase: .idle,
+            status: nil,
+            address: nil,
+            error: "The daemon refused the handshake.",
+            automaticConnectionAllowed: false
+        ),
         browser: .preview()
     )
 }
@@ -86,9 +101,17 @@ import SwiftUI
     )
 }
 
+// The Hugging Face segment renders nothing without a way to present the list, which is the seam
+// that hides it in previews. Its content therefore gets its own reference in `YourReachiesPreviews`;
+// what this one covers is the empty segment plus the Bluetooth row that survives every segment.
+#Preview("Connection — Hugging Face segment") {
+    PreviewScene.connection(.preview(phase: .idle, status: nil, address: nil), route: .account)
+}
+
 #Preview("Connection — manual address typed") {
     PreviewScene.connection(
         .preview(phase: .idle, status: nil, address: nil),
+        route: .manual,
         browser: .preview(names: []),
         manualInput: "192.168.1.42"
     )
@@ -97,6 +120,7 @@ import SwiftUI
 #Preview("Connection — manual address invalid") {
     PreviewScene.connection(
         .preview(phase: .idle, status: nil, address: nil),
+        route: .manual,
         browser: .preview(names: []),
         manualInput: "not an address"
     )
