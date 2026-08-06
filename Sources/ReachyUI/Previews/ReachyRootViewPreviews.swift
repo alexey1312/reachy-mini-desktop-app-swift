@@ -85,8 +85,14 @@ import SwiftUI
 
 // The reason the dock was hoisted out of the Apps tab: it is the same strip here, and the store below
 // it no longer carries a second copy of the same control.
+// No viewport source, so no floating window over it: this capture is about the strip,
+// and `Root — floating viewport over the dock` is the one about the two together.
 #Preview("Root — dock on the apps tab") {
-    PreviewScene.root(.preview(runningApp: .preview(.running)), tab: .apps)
+    PreviewScene.root(
+        .preview(runningApp: .preview(.running)),
+        viewport: .preview(address: nil),
+        tab: .apps
+    )
 }
 
 // A crashed app keeps the strip until it has been read, and offers Dismiss rather than Stop.
@@ -136,6 +142,7 @@ import SwiftUI
 #Preview("Root — relay moves tab") {
     PreviewScene.root(
         .preview(address: nil, link: .remote, client: PreviewRemoteRobotClient()),
+        viewport: .preview(address: nil),
         tab: .moves,
         hfAccount: PreviewScene.account(in: .signedIn(username: "alexey1312"))
     )
@@ -146,6 +153,7 @@ import SwiftUI
 #Preview("Root — apps need the local network") {
     PreviewScene.root(
         .preview(address: nil, link: .remote, client: PreviewRemoteRobotClient()),
+        viewport: .preview(address: nil),
         tab: .apps,
         hfAccount: PreviewScene.account(in: .signedIn(username: "alexey1312"))
     )

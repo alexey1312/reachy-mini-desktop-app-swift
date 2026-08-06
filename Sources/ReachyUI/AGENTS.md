@@ -4,10 +4,17 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 
 - Adaptive layouts, not per-platform copies; `#if os(iOS)` only for platform-exclusive APIs (Settings deep link etc.).
 - `horizontalSizeClass` is unavailable on macOS — guard size-class branching with `#if os(macOS)` (always regular there).
-  **Nothing in this target branches on it any more.** The root used to build a two-column `HStack` for a regular width
-  and hide the Live tab on a compact one; `.tabViewStyle(.sidebarAdaptable)` does that adaptation itself, and it is
-  iOS 18 / macOS 15, not an iOS 26 API. Reaching for the size class again is a sign the layout is being forked rather
-  than adapted.
+  The root used to build a two-column `HStack` for a regular width and hide the Live tab on a compact one;
+  `.tabViewStyle(.sidebarAdaptable)` does that adaptation itself, and it is iOS 18 / macOS 15, not an iOS 26 API.
+  Reaching for the size class to fork a _layout_ is still a sign the layout is being forked rather than adapted.
+- **There is exactly one size-class branch, in `FloatingViewportModifier`, and it is not a layout fork.** The floating
+  viewport asks a different question: not "how wide is this" but **"does the shell draw a tab bar or a sidebar"**. A
+  sidebar keeps the Live tab beside every other destination, so there is nothing to float out of it and no second
+  place the viewport could go; a tab bar hides it, which is the whole reason the window exists. `.sidebarAdaptable`
+  makes that decision on the size class and offers no way to ask what it decided, so the modifier reads the same input
+  and writes `FloatingViewportModel.hasTabBar`. False collapses `placement` to `.inline` everywhere — the exact
+  behaviour this target had before the window existed, including `viewportIsOnScreen`. This entry used to say nothing
+  in the target branched on the size class; do not "restore" it by deleting the branch.
 - **Navigation is `ReachyRouter` plus two destinations.** `ReachyRootView` owns what outlives a screen and picks the
   gate or the shell; `Navigation/` holds the router, the effect cluster and the sheet stack; `Shell/` holds the five
   tabs. The five are unconditional — a tab that comes and goes forces the shell to catch its disappearance and drag

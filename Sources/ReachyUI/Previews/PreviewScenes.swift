@@ -121,6 +121,30 @@ enum PreviewScene {
             .preview()
     }
 
+    /// The floating window over a screen-shaped hole, so the corner it rests in is
+    /// part of the capture rather than something to take on trust.
+    ///
+    /// `bounds` comes from the container rather than from a real safe area: the
+    /// placement arithmetic is covered by `FloatingViewportModelTests`, and what a
+    /// reference adds is the window's own size, shape and chrome.
+    static func floatingViewport(
+        _ model: FloatingViewportModel,
+        viewport: ViewportModel? = nil,
+        session: RobotSession? = nil
+    ) -> some View {
+        GeometryReader { geometry in
+            FloatingViewport(
+                model: model,
+                viewport: viewport ?? .preview(),
+                session: session ?? .preview(),
+                bounds: CGRect(origin: .zero, size: geometry.size),
+                open: {}
+            )
+        }
+        .frame(width: 320, height: 460)
+        .preview()
+    }
+
     /// The viewport fills whatever it is given, so previews of its inner panes need a frame or
     /// they collapse to nothing on a `sizeThatFits` capture.
     static func pane(@ViewBuilder _ content: () -> some View) -> some View {
@@ -151,6 +175,7 @@ enum PreviewScene {
     static func root(
         _ session: RobotSession,
         viewport: ViewportModel? = nil,
+        floating: FloatingViewportModel? = nil,
         tab: ReachyRouter.Tab = .robot,
         hfAccount: HFAccount? = nil,
         remoteLink: RemoteRobotLink? = nil
@@ -158,6 +183,7 @@ enum PreviewScene {
         ReachyRootView(
             session: session,
             viewport: viewport ?? .preview(),
+            floating: floating,
             hfAccount: hfAccount,
             tab: tab,
             remoteLink: remoteLink

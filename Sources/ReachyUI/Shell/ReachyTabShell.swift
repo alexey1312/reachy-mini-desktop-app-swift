@@ -13,6 +13,7 @@ import SwiftUI
 struct ReachyTabShell: View {
     let session: RobotSession
     let viewport: ViewportModel
+    let floating: FloatingViewportModel
     let runningApp: RunningAppModel
     let router: ReachyRouter
     let remoteLink: RemoteRobotLink?
@@ -27,7 +28,13 @@ struct ReachyTabShell: View {
                 Label(.reachy("Robot"), systemImage: "figure.wave")
             }
             Tab(value: ReachyRouter.Tab.live) {
-                LiveTab(session: session, viewport: viewport, router: router, remoteLink: remoteLink)
+                LiveTab(
+                    session: session,
+                    viewport: viewport,
+                    floating: floating,
+                    router: router,
+                    remoteLink: remoteLink
+                )
             } label: {
                 Label(.reachy("Live"), systemImage: "cube.transparent")
             }
@@ -52,6 +59,18 @@ struct ReachyTabShell: View {
         // up. iPhone only, and the fork lives in `ReachyChrome` — a sidebar has
         // nothing to minimise.
         .reachyMinimizingTabBar()
+        // Above `runningAppDock` on purpose: the dock is a bottom `safeAreaInset`,
+        // and applying it afterwards is what shrinks the area the window comes to
+        // rest in. The other order parks the window on the dock's buttons.
+        //
+        // The router is read here rather than inside the model: `placement` is a
+        // function of which tab is showing, and this is the one place that knows.
+        .onChange(of: router.tab, initial: true) { _, tab in
+            floating.isLiveTabSelected = tab == .live
+        }
+        .floatingViewport(model: floating, viewport: viewport, session: session) {
+            router.tab = .live
+        }
         // Applied to the `TabView` itself — see `runningAppDock` for why that is the
         // whole trick. It is not mounted in the gate: with no connection
         // `RunningAppModel.canPoll` is false and the dock draws `EmptyView`, so the

@@ -14,6 +14,10 @@ import SwiftUI
 public struct ReachyRootView<Developer: View>: View {
     @State private var session: RobotSession
     @State private var viewport: ViewportModel
+    /// Where that viewport is drawn. It outlives the shell for the same reason the
+    /// viewport does — a corner the user chose must survive a network blip — and it
+    /// is read by the lifecycle, which is above the shell.
+    @State private var floating: FloatingViewportModel
     /// One Hugging Face session for the whole app, restored from the Keychain on
     /// launch and handed down through the environment — the account outlives any
     /// one robot connection, and several screens read it.
@@ -36,6 +40,7 @@ public struct ReachyRootView<Developer: View>: View {
     init(
         session: RobotSession,
         viewport: ViewportModel = ViewportModel(),
+        floating: FloatingViewportModel? = nil,
         hfAccount: HFAccount? = nil,
         runningApp: RunningAppModel? = nil,
         tab: ReachyRouter.Tab = .robot,
@@ -44,6 +49,7 @@ public struct ReachyRootView<Developer: View>: View {
     ) {
         _session = State(initialValue: session)
         _viewport = State(initialValue: viewport)
+        _floating = State(initialValue: floating ?? FloatingViewportModel())
         _runningApp = State(initialValue: runningApp ?? RunningAppModel())
         _router = State(initialValue: ReachyRouter(tab: tab))
         _remoteLink = State(initialValue: remoteLink)
@@ -59,6 +65,7 @@ public struct ReachyRootView<Developer: View>: View {
                 ReachyTabShell(
                     session: session,
                     viewport: viewport,
+                    floating: floating,
                     runningApp: runningApp,
                     router: router,
                     remoteLink: remoteLink,
@@ -82,6 +89,7 @@ public struct ReachyRootView<Developer: View>: View {
             RootLifecycle(
                 session: session,
                 viewport: viewport,
+                floating: floating,
                 hfAccount: hfAccount,
                 runningApp: runningApp,
                 router: router,
