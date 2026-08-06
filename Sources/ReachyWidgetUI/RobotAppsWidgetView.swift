@@ -92,15 +92,7 @@ struct RobotAppTileView: View {
                 artwork: AppArtwork(emoji: tile.emoji, gradient: tile.gradient, key: tile.id),
                 size: 30
             )
-            .overlay {
-                if tile.state == .running {
-                    Image(systemName: "stop.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.white)
-                        .padding(4)
-                        .background(.black.opacity(0.45), in: Circle())
-                }
-            }
+            .overlay { badge }
             VStack(alignment: .leading, spacing: 1) {
                 Text(tile.title)
                     .font(.caption)
@@ -109,7 +101,7 @@ struct RobotAppTileView: View {
                 if let caption {
                     Text(caption)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(captionStyle)
                         .lineLimit(1)
                 }
             }
@@ -125,6 +117,26 @@ struct RobotAppTileView: View {
         .invalidatableContent(isPending)
     }
 
+    /// The one signal that survives a tile too narrow for its caption: what the app
+    /// is doing, on the artwork itself. A stop target on the one holding the robot,
+    /// a warning on the one that died on it.
+    @ViewBuilder
+    private var badge: some View {
+        switch tile.state {
+        case .running: badgeSymbol("stop.fill", background: .black.opacity(0.45))
+        case .failed: badgeSymbol("exclamationmark", background: .red)
+        default: EmptyView()
+        }
+    }
+
+    private func badgeSymbol(_ name: String, background: Color) -> some View {
+        Image(systemName: name)
+            .font(.caption2)
+            .foregroundStyle(.white)
+            .padding(4)
+            .background(background, in: Circle())
+    }
+
     private var caption: String? {
         switch tile.state {
         case .idle, .blocked: nil
@@ -132,13 +144,26 @@ struct RobotAppTileView: View {
         case .starting: "Starting…"
         case .stopping: "Stopping…"
         case .notInstalled: "Not installed"
+        // One word, because that is all the room there is. The notice under the
+        // grid carries what the daemon actually said.
+        case .failed: "Failed"
         }
     }
 
-    private var background: AnyShapeStyle {
-        tile.state == .running ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.fill.quaternary)
+    private var captionStyle: AnyShapeStyle {
+        tile.state == .failed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary)
     }
 
+    private var background: AnyShapeStyle {
+        switch tile.state {
+        case .running: AnyShapeStyle(.tint.opacity(0.18))
+        case .failed: AnyShapeStyle(.red.opacity(0.12))
+        default: AnyShapeStyle(.fill.quaternary)
+        }
+    }
+
+    /// A failed tile is not dimmed: dimming says "somebody else has the robot", and
+    /// this one is the opposite — the thing the user most needs to see.
     private var isDimmed: Bool {
         tile.state == .blocked || tile.state == .notInstalled
     }

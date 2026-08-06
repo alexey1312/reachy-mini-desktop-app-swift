@@ -153,16 +153,31 @@ private extension RobotSession {
 
     func recordRunning(_ status: RobotAppStatus?) {
         runningApp = status
-        // The snapshot keeps the narrower reading: a widget offering "Stop" for an
-        // app that already died would be worse than one showing nothing.
+        // The snapshot keeps the two apart: a widget offering "Stop" for an app that
+        // already died would be worse than one showing nothing, so only a live app
+        // is named as running — and a dead one still travels, on its own field and
+        // its own window, because a tile that quietly returns to idle explains
+        // nothing at all.
         let running = status.flatMap { $0.isBusy ? $0 : nil }
         let identity = connectedIdentity
         snapshots.recordRunningApp(
             title: running?.app.title,
             name: running?.app.name,
+            failed: status.flatMap(Self.failure),
             robotID: identity?.deduplicationKey,
             robotName: identity?.name,
             isAwake: isAwake
+        )
+    }
+
+    /// A finished app is not a failure: `done` is what an app that ran to
+    /// completion reports, and the dock leaves as quietly as the widget should.
+    static func failure(in status: RobotAppStatus) -> RobotSnapshot.FailedApp? {
+        guard status.state == .error else { return nil }
+        return RobotSnapshot.FailedApp(
+            name: status.app.name,
+            title: status.app.title,
+            error: status.error
         )
     }
 

@@ -126,6 +126,7 @@ struct RobotSnapshotTests {
         #expect(current.isAwake)
         #expect(current.runningApp == nil)
         #expect(current.runningAppName == nil)
+        #expect(current.failedApp == nil)
         #expect(current.takenAt == now)
     }
 
@@ -183,6 +184,98 @@ struct RobotSnapshotTests {
         store.recordRunningApp(title: nil, name: nil, isAwake: false, at: now)
 
         #expect(store.current?.isAwake == false)
+    }
+
+    // MARK: - A crash
+
+    /// A tile that quietly returns to idle explains nothing, so the crash travels
+    /// too — but never as the app that is running, which would dim every other tile
+    /// on behalf of a process that no longer exists.
+    @Test("a crash is recorded apart from the running app")
+    func recordsAFailure() throws {
+        let store = try store()
+
+        store.recordRunningApp(
+            title: nil,
+            name: nil,
+            failed: .init(name: "reachy_mini_dance", title: "Dance Party", error: "ImportError"),
+            at: now
+        )
+
+        let current = try #require(store.current)
+        #expect(current.runningAppName == nil)
+        #expect(current.failedApp?.name == "reachy_mini_dance")
+        #expect(current.failedApp?.title == "Dance Party")
+        #expect(current.failedApp?.error == "ImportError")
+        // Dated, or there would be nothing to expire it against.
+        #expect(current.runningAppTakenAt == now)
+        #expect(current.failedApp(at: now)?.name == "reachy_mini_dance")
+    }
+
+    /// The daemon keeps returning a terminal status, and the UI keeps polling it.
+    /// Treating every answer as a new crash would postpone this window forever.
+    @Test("polling the same crash does not renew its expiry")
+    func doesNotRenewARepeatedFailure() throws {
+        let store = try store()
+        let failed = RobotSnapshot.FailedApp(name: "reachy_mini_dance", error: "ImportError")
+        store.recordRunningApp(title: nil, name: nil, failed: failed, at: now)
+        let repeatedAt = now.addingTimeInterval(5 * 60)
+
+        store.recordRunningApp(title: nil, name: nil, failed: failed, at: repeatedAt)
+
+        let repeated = try #require(store.current)
+        #expect(repeated.runningAppTakenAt == now)
+        #expect(repeated.takenAt == repeatedAt)
+        #expect(repeated.failedApp(at: now.addingTimeInterval(RobotSnapshotStore.failureFreshness + 1)) == nil)
+
+        let changedAt = repeatedAt.addingTimeInterval(1)
+        store.recordRunningApp(
+            title: nil,
+            name: nil,
+            failed: .init(name: "reachy_mini_dance", error: "OSError"),
+            at: changedAt
+        )
+        #expect(store.current?.runningAppTakenAt == changedAt)
+    }
+
+    /// One reading of one question: a caller that saw a live app has thereby seen
+    /// no crash.
+    @Test("recording a running app clears the crash before it")
+    func clearsAFailure() throws {
+        let store = try store()
+        store.recordRunningApp(title: nil, name: nil, failed: .init(name: "reachy_mini_dance"), at: now)
+
+        store.recordRunningApp(title: "Dance Party", name: "reachy_mini_dance", at: now)
+
+        #expect(store.current?.failedApp == nil)
+    }
+
+    /// Nothing will ever arrive to say a crash is over, so it has to expire on its
+    /// own — and sooner than a reading of a live robot, which at least goes wrong
+    /// for a reason outside the app's control.
+    @Test("a crash expires on its own, shorter window")
+    func expiresAFailure() {
+        let snapshot = RobotSnapshot(
+            robotName: "kitchen",
+            isAwake: true,
+            runningApp: nil,
+            failedApp: .init(name: "reachy_mini_dance", error: "boom"),
+            runningAppTakenAt: now,
+            takenAt: now
+        )
+        let window = RobotSnapshotStore.failureFreshness
+
+        #expect(RobotSnapshotStore.failureFreshness < RobotSnapshotStore.freshness)
+        #expect(snapshot.failedApp(at: now.addingTimeInterval(window)) != nil)
+        #expect(snapshot.failedApp(at: now.addingTimeInterval(window + 1)) == nil)
+        // The reading as a whole is still fresh at that point — only the crash has
+        // stopped being worth repeating.
+        #expect(snapshot.takenAt.addingTimeInterval(RobotSnapshotStore.freshness) > now.addingTimeInterval(window))
+    }
+
+    @Test("a reading with no crash has nothing to expire")
+    func hasNoFailureExpiryWithoutAFailure() {
+        #expect(snapshot(runningApp: "Dance Party").failedAppExpiresAt == nil)
     }
 
     @Test("a running app expires independently of a newer daemon reading")

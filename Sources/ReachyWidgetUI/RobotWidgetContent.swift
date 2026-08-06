@@ -58,10 +58,15 @@ public struct RobotWidgetContent: Equatable, Sendable {
     }
 
     /// A running app is the most useful thing there is to say, so it displaces
-    /// the plain awake reading rather than crowding in beside it.
+    /// the plain awake reading rather than crowding in beside it — and an app that
+    /// just died displaces it for the same reason. Falling silently back to "Awake"
+    /// would be this widget's version of pretending nothing happened.
     private static func activity(of snapshot: RobotSnapshot, at date: Date) -> String {
         if let runningApp = snapshot.runningAppTitle(at: date) {
             return runningApp
+        }
+        if let failed = snapshot.failedApp(at: date) {
+            return "\(failed.title ?? failed.name) stopped"
         }
         return snapshot.isAwake ? "Awake" : "Asleep"
     }
@@ -69,6 +74,9 @@ public struct RobotWidgetContent: Equatable, Sendable {
     private static func symbol(for snapshot: RobotSnapshot, at date: Date) -> String {
         if snapshot.runningAppTitle(at: date) != nil {
             return "square.grid.2x2.fill"
+        }
+        if snapshot.failedApp(at: date) != nil {
+            return "exclamationmark.triangle.fill"
         }
         return snapshot.isAwake ? "figure.wave" : "moon.zzz.fill"
     }

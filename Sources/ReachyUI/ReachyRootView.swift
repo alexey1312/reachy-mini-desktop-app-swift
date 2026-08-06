@@ -176,6 +176,12 @@ public struct ReachyRootView<Developer: View>: View {
             switch link {
             case .robot: tab = .robot
             case .apps: tab = .apps
+            case .runningApp:
+                // The tab under the sheet, and where the request lands if there is
+                // no running app to open — which is where someone who asked for one
+                // would look for it anyway.
+                tab = .apps
+                runningApp.requestExpansion(for: session)
             }
         }
         .widgetReload(session: session, isPreview: previewMode)

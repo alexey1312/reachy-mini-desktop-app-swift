@@ -9,6 +9,13 @@ import Foundation
 public enum ReachyDeepLink: String, CaseIterable, Sendable {
     case robot
     case apps
+    /// The app holding the robot, rather than the catalogue it came from — its
+    /// logs, its restart and its stop, or the traceback it died with.
+    ///
+    /// Hyphenated rather than camel-cased because the destination is a URL *host*,
+    /// which is case-insensitive and normalised as such; a raw value that survives
+    /// that normalisation is one that carries no case to lose.
+    case runningApp = "running-app"
 
     public static let scheme = "reachy-mini-swift"
 

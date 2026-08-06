@@ -14,13 +14,17 @@ struct RobotWidgetContentTests {
         name: String? = "kitchen",
         isAwake: Bool = true,
         runningApp: String? = nil,
+        failedApp: RobotSnapshot.FailedApp? = nil,
         ageInMinutes: Double = 0
     ) -> RobotSnapshot {
-        RobotSnapshot(
+        let takenAt = now.addingTimeInterval(-ageInMinutes * 60)
+        return RobotSnapshot(
             robotName: name,
             isAwake: isAwake,
             runningApp: runningApp,
-            takenAt: now.addingTimeInterval(-ageInMinutes * 60)
+            failedApp: failedApp,
+            runningAppTakenAt: runningApp == nil && failedApp == nil ? nil : takenAt,
+            takenAt: takenAt
         )
     }
 
@@ -78,5 +82,28 @@ struct RobotWidgetContentTests {
         let content = RobotWidgetContent(state: .fresh(snapshot(runningApp: "Hand Tracker")), at: now)
 
         #expect(content.detail.contains("Hand Tracker"))
+    }
+
+    /// Falling silently back to "Awake" would be this widget's way of pretending
+    /// nothing happened — the same gap the launcher's idle tile used to leave.
+    @Test("an app that died displaces the plain state too")
+    func namesACrashedApp() {
+        let crashed = RobotSnapshot.FailedApp(name: "hand_tracker", title: "Hand Tracker", error: "boom")
+
+        let content = RobotWidgetContent(state: .fresh(snapshot(failedApp: crashed)), at: now)
+
+        #expect(content.detail.contains("Hand Tracker"))
+        #expect(content.detail.localizedCaseInsensitiveContains("awake") == false)
+    }
+
+    /// On its own, shorter window: nothing will ever arrive to say a crash is over.
+    @Test("an old crash gives the plain state back")
+    func forgetsAnOldCrash() {
+        let crashed = RobotSnapshot.FailedApp(name: "hand_tracker", title: "Hand Tracker")
+        let age = (RobotSnapshotStore.failureFreshness + 60) / 60
+
+        let content = RobotWidgetContent(state: .fresh(snapshot(failedApp: crashed, ageInMinutes: age)), at: now)
+
+        #expect(content.detail.localizedCaseInsensitiveContains("awake"))
     }
 }

@@ -45,12 +45,18 @@ enum AppsPreview {
         RobotAppsCache(robotID: "preview", installed: installed ?? all, takenAt: date)
     }
 
-    static func snapshot(running: RobotAppSummary?) -> RobotSnapshotState {
+    static func snapshot(
+        running: RobotAppSummary?,
+        failed: RobotAppSummary? = nil,
+        error: String? = nil
+    ) -> RobotSnapshotState {
         .fresh(RobotSnapshot(
             robotName: "kitchen",
             isAwake: true,
             runningApp: running?.title,
             runningAppName: running?.name,
+            failedApp: failed.map { .init(name: $0.name, title: $0.title, error: error) },
+            runningAppTakenAt: running == nil && failed == nil ? nil : robotWidgetPreviewDate,
             takenAt: robotWidgetPreviewDate
         ))
     }
@@ -182,6 +188,37 @@ func reachyAppsPreviewCard(_ content: RobotAppsWidgetContent, size: CGSize) -> s
             limit: 4
         ),
         size: AppsPreviewSize.medium
+    )
+}
+
+// The app died on the robot rather than at the user's hand. The tile says that
+// much, the notice says what the daemon said, and the tap falls through to the
+// page carrying the logs — a tile quietly back at idle would explain nothing.
+#Preview("Apps — one crashed", traits: .sizeThatFitsLayout) {
+    reachyAppsPreviewCard(
+        AppsPreview.content(
+            configured: AppsPreview.all,
+            snapshot: AppsPreview.snapshot(
+                running: nil,
+                failed: AppsPreview.dance,
+                error: "ImportError: no module named cv2"
+            ),
+            limit: 4
+        ),
+        size: AppsPreviewSize.medium
+    )
+}
+
+// The same on the smallest family, where the caption is all there is room for and
+// the badge is what carries the news.
+#Preview("Apps — crashed, small", traits: .sizeThatFitsLayout) {
+    reachyAppsPreviewCard(
+        AppsPreview.content(
+            configured: [AppsPreview.dance, AppsPreview.faces],
+            snapshot: AppsPreview.snapshot(running: nil, failed: AppsPreview.dance),
+            limit: 2
+        ),
+        size: AppsPreviewSize.small
     )
 }
 

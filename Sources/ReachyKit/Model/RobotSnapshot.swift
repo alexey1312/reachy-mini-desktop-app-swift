@@ -7,6 +7,26 @@ import Foundation
 /// wrote the last time it was connected — and `takenAt` is what keeps that
 /// honest rather than merely confident.
 public struct RobotSnapshot: Codable, Sendable, Equatable {
+    /// An app that died on the robot, as the last reading found it.
+    ///
+    /// Deliberately not folded into `runningApp`: a dead process holds nothing, and
+    /// naming it there would have every other tile dim itself on behalf of
+    /// something that no longer exists.
+    public struct FailedApp: Codable, Sendable, Equatable {
+        /// The installed name — the identity `start-app` is keyed by, and therefore
+        /// the only thing that finds the tile this belongs to.
+        public let name: String
+        public let title: String?
+        /// The daemon's own last line, when it gave one.
+        public let error: String?
+
+        public init(name: String, title: String? = nil, error: String? = nil) {
+            self.name = name
+            self.title = title
+            self.error = error
+        }
+    }
+
     /// Stable identity of the robot that produced this reading. Optional only so
     /// snapshots written before identity was persisted still decode.
     public let robotID: String?
@@ -24,8 +44,12 @@ public struct RobotSnapshot: Codable, Sendable, Equatable {
     /// Defaulted so a blob written before this field existed decodes as a robot
     /// running nothing identifiable rather than failing.
     public let runningAppName: String?
-    /// When the running app itself was checked. Status polling refreshes
-    /// `takenAt`, but cannot refresh this without another robot round trip.
+    /// The app the same reading found dead. Mutually exclusive with the two above —
+    /// one app holds the robot at a time, and a crashed one holds it no longer.
+    public let failedApp: FailedApp?
+    /// When the app situation was last checked, running or crashed. Status polling
+    /// refreshes `takenAt`, but cannot refresh this without another robot round
+    /// trip.
     public let runningAppTakenAt: Date?
     /// When the app saw this. Not decoration: everything below turns on it.
     public let takenAt: Date
@@ -36,6 +60,7 @@ public struct RobotSnapshot: Codable, Sendable, Equatable {
         isAwake: Bool,
         runningApp: String?,
         runningAppName: String? = nil,
+        failedApp: FailedApp? = nil,
         runningAppTakenAt: Date? = nil,
         takenAt: Date
     ) {
@@ -44,6 +69,7 @@ public struct RobotSnapshot: Codable, Sendable, Equatable {
         self.isAwake = isAwake
         self.runningApp = runningApp
         self.runningAppName = runningAppName
+        self.failedApp = failedApp
         self.runningAppTakenAt = runningAppTakenAt
         self.takenAt = takenAt
     }
@@ -61,9 +87,23 @@ public struct RobotSnapshot: Codable, Sendable, Equatable {
         return runningApp ?? runningAppName
     }
 
+    /// The crash, while it is still worth reporting.
+    ///
+    /// On its own window, which is much the shorter of the two — see
+    /// `RobotSnapshotStore.failureFreshness`.
+    public func failedApp(at date: Date) -> FailedApp? {
+        guard let expiry = failedAppExpiresAt, date <= expiry else { return nil }
+        return failedApp
+    }
+
     public var runningAppExpiresAt: Date? {
         guard runningApp != nil || runningAppName != nil else { return nil }
         return (runningAppTakenAt ?? takenAt).addingTimeInterval(RobotSnapshotStore.freshness)
+    }
+
+    public var failedAppExpiresAt: Date? {
+        guard failedApp != nil else { return nil }
+        return (runningAppTakenAt ?? takenAt).addingTimeInterval(RobotSnapshotStore.failureFreshness)
     }
 
     private func runningAppIsFresh(at date: Date) -> Bool {
@@ -96,6 +136,17 @@ public struct RobotSnapshotStore {
     /// phone put down mid-session and short enough that a widget does not
     /// describe yesterday's robot in the present tense.
     public static let freshness: TimeInterval = 30 * 60
+
+    /// How long a crash is worth repeating, which is far less.
+    ///
+    /// "It is running" goes wrong because the robot left without saying so. "It
+    /// crashed" goes wrong for the opposite reason: it is a fact about a moment,
+    /// and nothing will ever arrive to contradict it — a widget still reporting
+    /// this morning's traceback is exactly as unhelpful as one still reporting this
+    /// morning's running app. Fifteen minutes is what the launcher already gives a
+    /// failure the user caused (`RobotAppLaunchState.failureWindow`, which cannot be
+    /// named from here); one they did not deserves no longer.
+    public static let failureFreshness: TimeInterval = 15 * 60
 
     private let defaults: UserDefaults
 
@@ -140,9 +191,19 @@ public struct RobotSnapshotStore {
     /// what was already there. The `true` floor is only reached when no reading
     /// exists at all, and every caller here has just commanded a robot
     /// successfully — which a parked one does not answer.
+    ///
+    /// `failed` is written the same way and for the same reason: this is one
+    /// reading of one question, so a caller that saw a live app has thereby seen no
+    /// crash, and a nil here clears the last one rather than leaving it standing
+    /// behind a robot that has moved on.
+    ///
+    /// Re-reading the same failure does not make the crash new. Its original date
+    /// is preserved so polling a terminal daemon status cannot keep the widget's
+    /// shorter failure window alive forever; a changed failure starts a new window.
     public func recordRunningApp(
         title: String?,
         name: String?,
+        failed: RobotSnapshot.FailedApp? = nil,
         robotID: String? = nil,
         robotName: String? = nil,
         isAwake: Bool? = nil,
@@ -151,14 +212,21 @@ public struct RobotSnapshotStore {
         let previous = current
         let resolvedID = robotID ?? previous?.robotID
         let sameRobot = robotID == nil || previous?.robotID == robotID
-        let hasRunningApp = title != nil || name != nil
+        let sawAnApp = title != nil || name != nil || failed != nil
+        let repeatsFailure = failed != nil && sameRobot && previous?.failedApp == failed
+        let appTakenAt: Date? = if repeatsFailure {
+            previous.map { $0.runningAppTakenAt ?? $0.takenAt }
+        } else {
+            sawAnApp ? date : nil
+        }
         write(RobotSnapshot(
             robotID: resolvedID,
             robotName: robotName ?? (sameRobot ? previous?.robotName : nil),
             isAwake: isAwake ?? (sameRobot ? previous?.isAwake : nil) ?? true,
             runningApp: title,
             runningAppName: name,
-            runningAppTakenAt: hasRunningApp ? date : nil,
+            failedApp: failed,
+            runningAppTakenAt: appTakenAt,
             takenAt: date
         ))
     }
