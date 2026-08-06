@@ -115,8 +115,14 @@ struct ConnectionScreen: View {
                 )
                 .disabled(!session.phase.acceptsConnectionChoice)
             case .account:
+                // The one segment with no `disabled` on it, which is what its own
+                // doc comment has always claimed. A robot reached through Hugging
+                // Face is not on this Wi-Fi, so a sweep of this one says nothing
+                // about whether it can be reached — and the sweep walks the phase
+                // through `idle → handshaking → idle` every 10 s, so gating on it
+                // made the only way to a remote robot go dead under a finger on a
+                // beat the reader cannot see.
                 YourReachiesSection(show: showRemoteRobots)
-                    .disabled(!session.phase.acceptsConnectionChoice)
             case .manual:
                 ManualAddressSection(input: $manualInput, connect: connectManually)
                     .disabled(!session.phase.acceptsConnectionChoice)

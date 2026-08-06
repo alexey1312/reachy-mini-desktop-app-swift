@@ -30,33 +30,70 @@ public final class YourReachiesModel {
     /// why it did not change.
     public private(set) var lastRefreshError: String?
 
+    /// Changes whenever the Hugging Face session changes, so a presented screen
+    /// restarts the load that belongs to the new account.
+    private(set) var accountGeneration = 0
+
     private let listing: any CentralRobotListing
     private let isSignedIn: @MainActor () -> Bool
     private var attemptedLoad = false
+    /// Which request is allowed to write back, and whether one is running.
+    ///
+    /// Two are easy to have in flight at once — the screen's `.task` and a
+    /// pull-to-refresh land on the same model — and central answers them in
+    /// whatever order it likes. Without this the *older* answer wins simply by
+    /// arriving second, which is how a list of robots turns into "none online" a
+    /// moment after it appeared. Same rule as `RobotSession.connectionAttemptID`: a
+    /// superseded request never writes back. An account change bumps it too, so an
+    /// answer that lands afterwards cannot repopulate a list the account no longer
+    /// owns.
+    ///
+    /// Named for the newest rather than shadowed by a local of the same name inside
+    /// `fetch`: `self.` would be load-bearing there, and swiftformat's
+    /// `redundantSelf` is exactly the kind of rule that decides otherwise.
+    private var latestAttempt = 0
+    private var isFetching = false
 
     public init(listing: any CentralRobotListing, isSignedIn: @escaping @MainActor () -> Bool) {
         self.listing = listing
         self.isSignedIn = isSignedIn
     }
 
-    /// The model is created as the sheet opens. A signed-in account therefore has
-    /// pending content before `.task` gets its first turn, even though `state` has not
-    /// entered `.loading` yet.
+    /// Drops account-scoped data before another Hugging Face session can see it.
+    /// Incrementing the generation also restarts a presented screen's load.
+    func accountChanged() {
+        latestAttempt += 1
+        isFetching = false
+        state = .signedOut
+        lastRefreshError = nil
+        attemptedLoad = false
+        accountGeneration += 1
+    }
+
+    /// A signed-in account has pending content before `.task` gets its first turn,
+    /// even though `state` has not entered `.loading` yet — which is the first frame
+    /// the sheet draws, and it must not be an empty-state.
     var isContentLoading: Bool {
         isSignedIn() && !state.hasRobots && (state == .loading || !attemptedLoad)
     }
 
+    /// The screen's own load, on presentation. A second one while the first is
+    /// still in flight would spend a round trip asking central the same question.
     public func load() async {
-        guard state != .loading else { return }
+        guard !isFetching else { return }
         await fetch(showingSpinner: !state.hasRobots)
     }
 
+    /// Pull to refresh. Always asks — the user asked — and supersedes whatever was
+    /// in flight rather than queueing behind it.
     public func refresh() async {
         await fetch(showingSpinner: !state.hasRobots)
     }
 
     private func fetch(showingSpinner: Bool) async {
         guard isSignedIn() else {
+            latestAttempt += 1
+            isFetching = false
             state = .signedOut
             lastRefreshError = nil
             attemptedLoad = false
@@ -66,11 +103,21 @@ public final class YourReachiesModel {
         if showingSpinner {
             state = .loading
         }
+        latestAttempt += 1
+        let attempt = latestAttempt
+        isFetching = true
+        defer {
+            if attempt == latestAttempt {
+                isFetching = false
+            }
+        }
         do {
             let robots = try await listing.robots()
+            guard attempt == latestAttempt else { return }
             state = robots.isEmpty ? .empty : .listed(robots)
             lastRefreshError = nil
         } catch {
+            guard attempt == latestAttempt else { return }
             report(error)
         }
     }
