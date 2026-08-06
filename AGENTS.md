@@ -208,6 +208,10 @@ not what renders; install iOS 26.2 from Xcode → Settings → Components. `snap
 any other runtime rather than silently re-rendering all 1060 files, which is how that mismatch used to be found.
 `test:snapshots` compares the images either side of the run and fails if any had to be written — Prefire generates
 `record: .missing`, so a reference that does not exist yet is created rather than compared.
+Verifying there is the only thing that compiles a preview under CI at all: `ci.yml`'s two app-build steps
+both build `-scheme ReachySpike`, whose sources are `ReachySpike/Sources/**`, while `Sources/*/Previews/**`
+belongs to the `ReachyStorybook` and `ReachyUISnapshotTests` targets and no job built those. A preview that
+did not compile — a `private` helper Prefire cannot copy, a `@MainActor` default argument — went green.
 The record job pushes LFS objects **explicitly** (`git lfs push`) instead of relying on the `pre-push` hook:
 `core.hooksPath` only points at `.githooks/` once mise's enter hook has run, which is not guaranteed on a runner,
 and a push without the objects leaves pointers with nothing behind them. It commits with `GITHUB_TOKEN`, and a push

@@ -1,21 +1,5 @@
 name: Snapshots
 
-# The preview and reference images, which the main CI workflow cannot see at all:
-# both of its app-build steps build `-scheme ReachySpike`, whose sources are
-# `ReachySpike/Sources/**`, while `Sources/*/Previews/**` is compiled only by the
-# ReachyStorybook and ReachyUISnapshotTests targets. A broken preview therefore went
-# green until someone ran the snapshots on a Mac.
-#
-# `record` rewrites the references and pushes them, so it never runs by itself: it
-# takes either a manual dispatch or the `record-snapshots` label on a pull request.
-# Both are deliberate acts. A push made with GITHUB_TOKEN does not trigger workflows,
-# so the commit it makes cannot loop back into this job.
-#
-# The label exists because dispatch alone cannot bootstrap: GitHub only registers a
-# `workflow_dispatch` trigger once the file is on the default branch, so a branch that
-# *adds* this workflow could never dispatch it — while `pull_request` runs the workflow
-# from the PR's own head. Without the label, the first recording would have to wait for
-# a merge that `verify` is meanwhile failing.
 on:
   workflow_dispatch:
     inputs:
@@ -27,8 +11,6 @@ on:
   pull_request:
     branches: ["main"]
     types: [opened, synchronize, reopened, labeled]
-    # Everything that can move a reference. A ReachyKit-only change cannot, and
-    # should not pay for a macOS runner.
     paths:
       - "Sources/ReachyUI/**"
       - "Sources/ReachyDesign/**"
@@ -49,42 +31,26 @@ env:
 
 jobs:
   snapshots:
-    # Any other label on a pull request is none of this workflow's business.
     if: >-
       github.event.action != 'labeled' || github.event.label.name == 'record-snapshots'
     name: Snapshots
     runs-on: macos-15
     timeout-minutes: 90
     permissions:
-      # `record` commits the rewritten references back to the branch it ran on.
       contents: write
-      # …and takes the label off again, so the next one re-fires.
       pull-requests: write
     env:
-      # Deliberately Xcode's own Swift with no swift.org toolchain overlaid, for the
-      # reason the app-build job gives: xcodebuild cannot load the local package's
-      # manifest under one.
       DEVELOPER_DIR: "/Applications/Xcode_26.2.app/Contents/Developer"
-      # The runtime is what draws every pixel, so this is the pin the references
-      # belong to. 26.2 is the newest the macos-15 image carries — see
-      # `snapshots:_run` in mise.toml, which refuses to run on anything else.
       REACHY_SNAPSHOT_OS: "26.2"
       REACHY_SNAPSHOT_SIM: "iPhone 17 Pro"
       MODE: >-
         ${{ (inputs.mode == 'record' || github.event.label.name == 'record-snapshots') && 'record' || 'verify' }}
-      # Where a recording gets pushed. `head_ref` is set for a pull request and empty
-      # for a dispatch, where the run's own ref is the branch.
       TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
 
     steps:
       - uses: actions/checkout@v7
         with:
-          # The head branch itself, not the merge ref a pull request checks out by
-          # default: the references belong to the branch, and `record` has to be able
-          # to commit onto it rather than onto a detached merge commit.
           ref: ${{ github.head_ref || github.ref }}
-          # Without this the references check out as text pointers and every
-          # comparison fails against a file that is not an image.
           lfs: true
 
       - uses: jdx/mise-action@v4
@@ -98,9 +64,6 @@ jobs:
           echo "Runtime pin: iOS ${REACHY_SNAPSHOT_OS} on ${REACHY_SNAPSHOT_SIM}"
           xcrun simctl list runtimes | grep "iOS" || true
 
-      # Through the mise task, not a copy of its commands: GitHub runs `run:` under
-      # `bash -e` without pipefail, so a piped `xcodebuild … | xcsift` would report
-      # xcsift's exit 0 and a failed run would land as a green job.
       - name: Verify references
         if: env.MODE != 'record'
         run: ./bin/mise run test:snapshots
@@ -127,8 +90,6 @@ jobs:
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # A pull request from a fork gets a read-only token, so there is nothing to push
-      # to and saying so beats a confusing 403 at the end of a 40-minute run.
       - name: Commit and push the references
         if: >-
           env.MODE == 'record'
@@ -147,14 +108,9 @@ jobs:
             -m "chore(snapshots): re-record references on the CI-pinned runtime" \
             -m "Recorded on iOS ${REACHY_SNAPSHOT_OS} / ${REACHY_SNAPSHOT_SIM}." \
             -m "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          # Upload the LFS objects explicitly rather than trusting a pre-push hook:
-          # `core.hooksPath` points at `.githooks/` only once mise's enter hook has run,
-          # and a push without the objects leaves pointers with nothing behind them.
           git lfs push origin HEAD
           git push origin "HEAD:${TARGET_BRANCH}"
 
-      # So the next `record-snapshots` is a fresh event rather than a no-op on a label
-      # that is already there. Never worth failing the run over.
       - name: Take the label back off
         if: always() && github.event.action == 'labeled'
         continue-on-error: true
@@ -163,9 +119,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # A verify failure is the interesting one, and the reference alone does not
-      # explain it. swift-snapshot-testing attaches the expected/actual pair to the
-      # xcresult; a reference that was simply missing shows up as a written file.
       - name: Collect failure evidence
         if: failure() && env.MODE != 'record'
         run: |
