@@ -19,6 +19,22 @@ final class TeleopDriver {
     let mapping: JoystickMapping
     private(set) var bodyYawRate: Double = 0
 
+    /// Whether the robot has been left facing somewhere other than forward.
+    ///
+    /// Body yaw is the only axis a joystick gesture leaves behind: releasing the
+    /// knob sends `apply(.zero)`, which puts head yaw and pitch back at neutral,
+    /// while a turn integrated in a rotation zone persists until something clears
+    /// it. So this is what "not in its default position" means on a screen that
+    /// offers nothing but the pad.
+    ///
+    /// A threshold rather than `!= 0`, because `ControllerScreen` binds a slider to
+    /// this same property and a gesture can leave float dust behind. `reset()`
+    /// assigns a fresh target, so the reset path is exact either way.
+    var isBodyTurned: Bool {
+        abs(target.bodyYaw) > Self.turnedThreshold
+    }
+
+    private static let turnedThreshold = 0.5 * .pi / 180
     private static let tick = Duration.milliseconds(20)
     private var client: (any TeleopChannel)?
     private var rotationTask: Task<Void, Never>?

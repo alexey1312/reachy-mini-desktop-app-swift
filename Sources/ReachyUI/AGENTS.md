@@ -103,8 +103,15 @@ Adding a screen (project rule 8) means: a preview per state in `Previews/<Screen
   (`SettingsPreviews`, `MovesScreenPreviews`) and capture _placement_ from a state that needs no `.task` at all
   (`Root — relay moves tab`, which renders `MovesUnavailableView`). A blank or half-drawn reference is worse than a
   missing one: it reads as coverage and passes any change.
-- Not covered, deliberately: `SceneViewport` in `.ready` (a bare `RealityView`) and `CameraViewport` in `.streaming`
-  (Metal-backed `RTCMTLVideoView`). Neither renders anything meaningful headless — snapshot their overlay phases.
+- Not covered, deliberately: `SceneViewport` in `.ready` — a bare `RealityView`, which renders nothing meaningful
+  headless, so its overlay phases are what get snapshotted.
+- **`CameraViewport` in `.streaming` used to be on that list and is not any more.** The reasoning was that the video
+  is a Metal-backed `RTCMTLVideoView` and captures as an empty rectangle — true, and beside the point once the phase
+  grew chrome of its own. The joystick and the return-to-neutral button draw over that empty rectangle perfectly
+  well, and the button is _conditional_: a reference for the turned state alone cannot tell a conditional control
+  from a permanent one, so `Camera — facing forward` exists to capture its **absence**. A black frame with controls
+  on it is the intended image. The rule this leaves behind: a phase is uncapturable only while nothing but the
+  unrenderable layer is in it.
 - One `RobotSceneModel` per preview: `ReachyScene/AGENTS.md` requires exactly one live `RealityView` per model.
 - **Navigation chrome does not stay inside a preview card.** SwiftUI hoists `.toolbar` and
   `.searchable` out of the storybook's scaled cards into the app's own bars, even though each

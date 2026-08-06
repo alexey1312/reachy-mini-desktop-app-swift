@@ -6,7 +6,9 @@ import SwiftUI
 /// Robot camera + two-way audio over WebRTC. Video and robot audio play as soon
 /// as the session negotiates; the mic button unmutes the client → robot audio
 /// uplink (robot speaker). A joystick drives head yaw/pitch so you can look
-/// around without leaving the video, and held sideways it turns the body.
+/// around without leaving the video, and held sideways it turns the body — which
+/// is the one thing it leaves behind, so a button beside it undoes that turn once
+/// there is one to undo.
 struct CameraViewport: View {
     let session: CameraSession
     /// `nil` hides the joystick outright rather than showing one that cannot move
@@ -29,7 +31,7 @@ struct CameraViewport: View {
     var body: some View {
         CameraVideoView(track: session.videoTrack)
             .overlay(alignment: .center) { status }
-            .safeAreaInset(edge: .bottom) { joystick }
+            .safeAreaInset(edge: .bottom) { teleopControls }
             .onAppear { connectTeleop() }
             .onDisappear { driver.stop() }
     }
@@ -56,15 +58,48 @@ struct CameraViewport: View {
         }
     }
 
+    /// The pad, and beside it the way back from where the pad can leave you.
+    ///
+    /// Both sit in the bottom inset rather than in `ViewportView`'s floating
+    /// cluster: that cluster is built a level up, which does not own this driver
+    /// and covers the 3D scene too, where teleop does not apply. Here they also
+    /// land under the thumb that just turned the robot.
     @ViewBuilder
-    private var joystick: some View {
+    private var teleopControls: some View {
         // No factory means this connection carries no teleop at all, so the
         // joystick is absent rather than offered inert.
         if session.phase == .streaming, makeTeleop != nil {
-            JoystickPad(mapping: driver.mapping) { driver.apply($0) }
-                .frame(width: 140, height: 140)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding()
+            HStack(spacing: Space.md) {
+                recenterButton
+                JoystickPad(mapping: driver.mapping) { driver.apply($0) }
+                    .frame(width: 140, height: 140)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding()
+            .animation(Motion.stateChange, value: driver.isBodyTurned)
+        }
+    }
+
+    /// Offered only once the body is actually turned — at neutral there is nothing
+    /// to return from, and this screen has no other readout of where the robot is
+    /// facing, so the button appearing *is* the notice that it has been left off
+    /// centre.
+    ///
+    /// The return is smooth without anything here doing so: `reset()` moves a
+    /// goal, and both transports walk their emitted pose toward it under
+    /// `TargetSlewLimiter`. Easing it a second time on this side would fight the
+    /// pacer that already does it.
+    @ViewBuilder
+    private var recenterButton: some View {
+        if driver.isBodyTurned {
+            Button {
+                driver.reset()
+            } label: {
+                Label(.reachy("Reset to neutral"), systemImage: "arrow.counterclockwise")
+                    .labelStyle(.iconOnly)
+            }
+            .viewportControlStyle()
+            .transition(.scale.combined(with: .opacity))
         }
     }
 

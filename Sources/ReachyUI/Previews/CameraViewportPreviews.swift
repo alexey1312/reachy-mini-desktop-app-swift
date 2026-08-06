@@ -2,8 +2,11 @@ import ReachyMedia
 @testable import ReachyUI
 import SwiftUI
 
-// `.streaming` is deliberately absent: the video layer is a Metal-backed `RTCMTLVideoView` and
-// captures as an empty rectangle. The three phases that draw an overlay are covered.
+// The video layer is a Metal-backed `RTCMTLVideoView` and captures as an empty rectangle, so the
+// three phases that draw an overlay carry this screen's cover. `.streaming` is here anyway, twice:
+// its chrome is not the video and does render, and the return-to-neutral button is conditional —
+// a reference for the turned state alone could not tell it apart from a permanent one. Expect a
+// black frame with controls on it, which is exactly what is under test.
 
 #Preview("Camera — connecting") {
     PreviewScene.pane {
@@ -20,5 +23,21 @@ import SwiftUI
 #Preview("Camera — unavailable") {
     PreviewScene.pane {
         CameraViewport(session: .preview(.failed("The robot closed the signaling socket.")))
+    }
+}
+
+#Preview("Camera — facing forward") {
+    PreviewScene.pane {
+        CameraViewport(session: .preview(.streaming), makeTeleop: PreviewScene.teleopFactory)
+    }
+}
+
+#Preview("Camera — body turned") {
+    PreviewScene.pane {
+        CameraViewport(
+            session: .preview(.streaming),
+            makeTeleop: PreviewScene.teleopFactory,
+            driver: TeleopDriver(target: .init(bodyYaw: 1.2))
+        )
     }
 }
