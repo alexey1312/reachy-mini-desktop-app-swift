@@ -37,32 +37,43 @@ private struct SurfaceBacking<S: Shape>: ViewModifier {
 
     /// `.glassEffect` is multiplatform, so there is no `#if os(…)` here and
     /// macOS 26 gets real glass — which an iOS-only backport never could.
+    ///
+    /// A role with neither takes its fill and nothing else.
     @ViewBuilder
     private func effect(_ content: Content) -> some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            content.glassEffect(role.glass, in: shape)
+        if #available(iOS 26.0, macOS 26.0, *), let glass = role.glass {
+            content.glassEffect(glass, in: shape)
+        } else if let material = role.material {
+            content.background(material, in: shape)
         } else {
-            content.background(role.material, in: shape)
+            content
         }
     }
 }
 
 extension SurfaceRole {
-    var material: Material {
+    var material: Material? {
         switch self {
         case .chrome, .card: .regular
-        case .badge: .thin
         case .scrim: .bar
+        case .badge: nil
         }
     }
 
+    /// A badge gets no glass, and the reason is not restraint. `glassEffect`
+    /// renders what it wraps vibrantly: measured on the iOS 26 simulator, red,
+    /// orange, green and secondary all flatten to black inside one, and `.tint`
+    /// is the single style that survives. Carrying a colour is a badge's whole
+    /// job, so glass would take away the only thing it does. Nor does it need
+    /// any: a badge sits inside a card, not floating over arbitrary content.
     @available(iOS 26.0, macOS 26.0, *)
-    var glass: Glass {
+    var glass: Glass? {
         switch self {
         // Only the chrome is touched. The rest are backdrops, and interactive
         // glass on one would react to every scroll passing under it.
         case .chrome: .regular.interactive()
-        case .card, .badge, .scrim: .regular
+        case .card, .scrim: .regular
+        case .badge: nil
         }
     }
 

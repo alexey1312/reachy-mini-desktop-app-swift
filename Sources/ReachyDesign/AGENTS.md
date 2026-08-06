@@ -17,21 +17,35 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 | `Metrics.swift`       | Sizes fixed by what they represent rather than by their text                 |
 | `StatusTone.swift`    | `StatusTone` + `ReachyStatusLabel`, the one shape a state caption renders in |
 | `ReachySurface.swift` | `SurfaceRole` + `reachySurface(_:in:)`                                       |
+| `ReachyBadge.swift`   | A word in a capsule, on the `.badge` surface                                 |
 
 ## Rules
 
 - **A call site names a role, never a material, a glass or an OS version.** `.reachySurface(.chrome, in: .capsule)`,
   not `.background(.regularMaterial, in: Capsule())`. The availability fork lives in one file.
 - **Every role lays an opaque `baseFill` first, then the effect on top.** Neither glass nor a material renders in a
-  headless snapshot (`RunningAppDock.swift:180-187` records the same about `.bar`). Without a fill that _does_ render,
+  headless snapshot (`RunningAppDock.swift:172-178` records the same about `.bar`). Without a fill that _does_ render,
   every surface would be invisible to the reference images and the layout and text on each card would silently lose
   their regression cover. Do not "simplify" the fill away because it looks redundant on device.
+- **Glass is invisible headless, but what it wraps is not.** `glassEffect` renders its content vibrantly, and that
+  _does_ come out in a reference image: measured on the iOS 26 simulator, `.red`, `.orange`, `.green` and `.secondary`
+  text inside one all render black, while `.tint` survives. Modifier order makes no difference — inside or outside the
+  surface, the result is identical. So applying a role to anything carrying a colour costs that colour. `.badge`
+  therefore takes no glass and no material at all: a marker inside a card does not float over anything, and carrying a
+  colour is the whole of its job.
 - **No `@ScaledMetric` on `Space`.** The app is 98 `Section`s over 18 `Form`s and SwiftUI already scales list metrics;
   what clips at AX5 is a fixed _size_. So each component that reads a `Metrics` constant gets its own `@ScaledMetric`
   — and at the default text size the multiplier is 1, so adopting one moves no reference image.
 - **Optical adjustments stay literals.** `Space` governs the rhythm of a layout; a 1 pt gap inside the dock or a 3 pt
   inset on the joystick's arc is not rhythm. A grid that swallowed the optics would be worse than no grid.
 - Nothing in this module renders a domain type. `ReachyStatusLabel` takes a `String`.
+- **A `Tone` colours a foreground, not a fill.** `ReachyBadge` puts the tone on its text and takes the `.badge`
+  surface underneath, which is what let the app's one pinned `.foregroundStyle(.white)` go: white read only against a
+  capsule filled with `.tint`, and a light tint in a dark appearance left white on light. Filling a shape with a tone
+  brings the pinned foreground back with it.
+- **A `static func` returning one of these views needs `@MainActor`.** `View` carries that isolation in Swift 6, so a
+  nonisolated factory building a `ReachyStatusLabel` compiles with an `ActorIsolatedCall` warning
+  (`RunningAppCaption.label`). The value-only mappings beside it stay off the actor.
 
 ## Not here yet, and why
 

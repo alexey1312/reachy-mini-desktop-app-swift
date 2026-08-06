@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyWidgetUI
 import SwiftUI
@@ -11,12 +12,12 @@ struct AppStoreRow: View {
     var isStartupApp = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.md) {
             AppArtworkTile(app: app)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Text(app.title)
-                        .font(.headline)
+                        .font(Typography.rowTitle)
                         .lineLimit(1)
                     if app.isOfficial {
                         Image(systemName: "checkmark.seal.fill")
@@ -44,10 +45,10 @@ struct AppStoreRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: Space.sm)
             trailing
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Space.xs)
     }
 
     private var subtitle: String? {
@@ -79,12 +80,7 @@ struct AppStoreRow: View {
                 .symbolEffect(.variableColor.iterative)
                 .accessibilityLabel("Running")
         } else if hasUpdate {
-            Text("Update")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(.tint, in: .capsule)
-                .foregroundStyle(.white)
+            ReachyBadge("Update")
         } else if isInstalled {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.secondary)

@@ -5,6 +5,10 @@ import SwiftUI
 public enum Typography {
     public static let screenTitle: Font = .title2
     public static let rowTitle: Font = .headline
+    /// The same title on a strip 56 pt tall that carries a caption under it.
+    public static let rowTitleCompact: Font = .subheadline
+    /// And on a widget tile, which is narrower again — a caption doing a title's job.
+    public static let tileTitle: Font = .caption
     public static let detail: Font = .callout
     public static let status: Font = .caption
     /// The same caption where a widget tile has no room for `.caption`.

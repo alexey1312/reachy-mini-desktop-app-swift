@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -8,26 +9,41 @@ import SwiftUI
 /// surfaces render it: a user who reads "Stopping…" on the strip and "Running" in
 /// the sheet has been told the robot is in two states at once.
 ///
+/// A caption rather than a view of its own: the dock passes it to `AppRowLabel`,
+/// which takes a `ReachyStatusLabel` and would have no use for a wrapper around
+/// one. The shape of the label belongs to `ReachyDesign`; what belongs here is the
+/// mapping from the daemon's process states onto a tone and a phrase.
+///
 /// The daemon's vocabulary is deliberately thin — five process states and nothing
 /// about what the app is *doing*. A semantic state ("listening", "thinking") comes
 /// from the app's own port, not from here, and slots in as a further case once that
 /// channel exists.
-struct RunningAppStatusChip: View {
-    let status: RobotAppStatus
-    /// The robot went quiet. The app may well still be running — we simply cannot
-    /// say, and a confident "Running" would be a guess.
-    var isReachable = true
-    var font: Font = .caption
-
-    var body: some View {
-        Text(Self.description(of: status, isReachable: isReachable))
-            .font(font)
-            .foregroundStyle(isError ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-            .lineLimit(2)
+enum RunningAppCaption {
+    /// The dock's caption line, and the value of the sheet's `LabeledContent`.
+    ///
+    /// Two lines, because that is what the strip allows and what a crash needs.
+    ///
+    /// `@MainActor` because it builds a `View`, and `View` carries that isolation;
+    /// the mappings below are plain values and stay off it.
+    @MainActor
+    static func label(
+        of status: RobotAppStatus,
+        isReachable: Bool = true,
+        font: Font = Typography.status
+    ) -> ReachyStatusLabel {
+        ReachyStatusLabel(
+            text: description(of: status, isReachable: isReachable),
+            tone: tone(of: status),
+            font: font,
+            lineLimit: 2
+        )
     }
 
-    private var isError: Bool {
-        status.state == .error
+    /// Only a crash is coloured. "Running" stays quiet: the strip is on screen
+    /// solely because something is running, so saying it again in green would tell
+    /// the reader nothing they cannot already see.
+    static func tone(of status: RobotAppStatus) -> StatusTone {
+        status.state == .error ? .failed : .idle
     }
 
     /// The state in one phrase, with no failure detail. What the sheet puts in a

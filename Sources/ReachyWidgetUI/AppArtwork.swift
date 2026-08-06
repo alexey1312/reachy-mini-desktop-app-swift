@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -74,28 +75,30 @@ public struct AppArtworkTile: View {
     private let artwork: AppArtwork
     private let size: CGFloat
 
-    public init(artwork: AppArtwork, size: CGFloat = 52) {
+    public init(artwork: AppArtwork, size: CGFloat = Metrics.artwork) {
         self.artwork = artwork
         self.size = size
     }
 
-    public init(app: RobotApp, size: CGFloat = 52) {
+    public init(app: RobotApp, size: CGFloat = Metrics.artwork) {
         self.init(artwork: AppArtwork(app: app), size: size)
     }
 
     public var body: some View {
-        RoundedRectangle(cornerRadius: size / 4.5, style: .continuous)
+        Radius.rect(Radius.tile(side: size))
             .fill(
                 LinearGradient(colors: artwork.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
             )
             .frame(width: size, height: size)
             .overlay {
+                // The one place `.font(.system(size:))` is right: these are artwork,
+                // and have to track the tile rather than the reader's text size.
                 if let emoji = artwork.emoji {
                     Text(emoji)
-                        .font(.system(size: size * 0.5))
+                        .font(.system(size: size * IconRatio.emoji))
                 } else {
                     Image(systemName: "app.dashed")
-                        .font(.system(size: size * 0.42))
+                        .font(.system(size: size * IconRatio.symbol))
                         .foregroundStyle(.white.opacity(0.9))
                 }
             }

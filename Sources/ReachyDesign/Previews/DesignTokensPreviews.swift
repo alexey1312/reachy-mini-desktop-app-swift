@@ -94,6 +94,20 @@ import SwiftUI
     }
 }
 
+// One caller today — the store's Update capsule — so the gallery varies the tone
+// over that same word rather than inventing labels the app does not use. What the
+// row shows is that the colour lives in the *text*: the capsule under it is the
+// `.badge` surface, the same for every tone.
+#Preview("Design — badge", traits: .sizeThatFitsLayout) {
+    TokenGallery(title: "ReachyBadge") {
+        ForEach(Tone.allCases, id: \.self) { tone in
+            TokenRow(name: DesignGallery.name(of: tone), value: "") {
+                ReachyBadge("Update", tone: tone)
+            }
+        }
+    }
+}
+
 // The effect layer is absent from this capture — neither glass nor a material
 // renders headless. What it does prove is the rule that makes the rest of the
 // suite worth having: each role's opaque fill covers the gradient behind it.
