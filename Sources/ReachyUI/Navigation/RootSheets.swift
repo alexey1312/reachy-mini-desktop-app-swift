@@ -6,9 +6,19 @@ import SwiftUI
 /// The sheets the whole interface shares, mounted once above both the gate and the
 /// shell so that connecting — which throws the tree below it away — does not
 /// dismiss one mid-flight.
+///
+/// **Nothing stateful may be constructed in a sheet's content closure.** SwiftUI
+/// re-runs that closure on every update of the view the sheet hangs off, which
+/// here means every `RobotSession.phase` change — and the candidate sweep produces
+/// one every 10 s while the gate is up. Whatever a model was holding is thrown
+/// away with it, and a `.task` that filled it does not run a second time. Both
+/// models below are therefore handed in already built: `remoteRobots` by the root,
+/// `HFSignInModel` by `HFAccountSection`, which adopts the first one it is given
+/// into `@State` and ignores every replacement.
 struct RootSheets: ViewModifier {
     let session: RobotSession
     let hfAccount: HFAccount
+    let remoteRobots: YourReachiesModel
     let router: ReachyRouter
     let connect: (CentralRobot) -> Void
 
@@ -28,18 +38,7 @@ struct RootSheets: ViewModifier {
             .sheet(isPresented: $router.showsRemoteRobots) {
                 NavigationStack {
                     YourReachiesScreen(
-                        model: YourReachiesModel(
-                            listing: CentralRelayClient { [hfAccount] in await hfAccount.currentToken() },
-                            // `.needsReauth` also carries a username, so the state is
-                            // the question, not whether a name is known.
-                            isSignedIn: { [hfAccount] in
-                                if case .signedIn = hfAccount.state {
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                        ),
+                        model: remoteRobots,
                         connect: connect,
                         // Pushed inside this sheet rather than sending the user to
                         // the robot's Settings tab: that tab does not exist until a

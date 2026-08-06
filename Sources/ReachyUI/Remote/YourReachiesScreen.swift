@@ -9,16 +9,34 @@ import SwiftUI
 /// than listed as offline: central sweeps a peer whose lease lapsed, so presence
 /// in the list *is* the online signal.
 struct YourReachiesScreen<SignIn: View>: View {
-    let model: YourReachiesModel
+    /// `@State`, not a `let`, for the same reason `HFAccountSection` holds its own:
+    /// this screen is presented from a `.sheet`, and SwiftUI re-runs a sheet's
+    /// content closure on every update of the view it hangs off. Adopting the first
+    /// model and ignoring later ones is what stops a rebuilt, empty one from
+    /// blanking a list the user is reading. The root hands in a stable model as
+    /// well — belt and braces, because replacing the model does not restart the
+    /// task that fills it. Account changes use a generation on the stable model to
+    /// restart that task separately.
+    @State private var model: YourReachiesModel
     @Environment(\.reachyPreviewMode) private var previewMode
     /// Called with the robot the user picked. The session is built by whoever
     /// presented this screen — it owns the WebRTC half.
-    var connect: (CentralRobot) -> Void
+    private let connect: (CentralRobot) -> Void
     /// Pushed rather than presented, so signing in never costs the user the sheet
     /// they opened to find a robot. A view rather than an action because the
     /// account belongs to whoever presented this — this screen lists robots and
     /// has no business knowing what a session or a token is.
-    @ViewBuilder var signIn: () -> SignIn
+    private let signIn: () -> SignIn
+
+    init(
+        model: YourReachiesModel,
+        connect: @escaping (CentralRobot) -> Void,
+        @ViewBuilder signIn: @escaping () -> SignIn
+    ) {
+        _model = State(initialValue: model)
+        self.connect = connect
+        self.signIn = signIn
+    }
 
     var body: some View {
         List {
@@ -53,7 +71,7 @@ struct YourReachiesScreen<SignIn: View>: View {
         .contentLoading(isPresented: model.isContentLoading, title: .reachy("Calling your Reachies home…"))
         .navigationTitle(.reachy("Your Reachies"))
         .refreshable { await model.refresh() }
-        .task {
+        .task(id: model.accountGeneration) {
             guard !previewMode else { return }
             await model.load()
         }

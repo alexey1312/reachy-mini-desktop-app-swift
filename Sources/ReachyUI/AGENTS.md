@@ -40,7 +40,10 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   `guard !automatically` comes after the assignment). Fixing only the first leaves the symptom intact. The rail is now
   mounted for the whole life of the gate, its detail slot reserves one caption line whether or not there is anything
   to say, and `lastError` is shown only once `automaticConnectionAllowed` is false. Before adding anything to this
-  screen, ask what it does on that heartbeat.
+  screen, ask what it does on that heartbeat. **`.disabled(!phase.acceptsConnectionChoice)` is on that heartbeat too**
+  — the Hugging Face segment carried it and went dead every 10 s under a finger, which is the third instance of the
+  same bug and the reason `YourReachiesSection` is now the one segment nothing disables: a robot on the relay is not
+  on this Wi-Fi, so a sweep of this one says nothing about whether it can be reached.
 - **Privacy permissions are one screen and four in-place refusals, and the split is deliberate.**
   `Settings/Permissions/` holds the overview: `PermissionsScreen` reports Bluetooth, Local Network and
   the microphone, and offers each one an action. Its governing rule is that **opening it must never raise
@@ -63,6 +66,14 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 - All robot interaction goes through `RobotSession` / `RobotBrowser` from ReachyKit — no direct URLSession here.
 - Screen logic belongs in a `@MainActor @Observable` model beside the view (`MovesModel`, `LogConsoleModel`), covered
   by `Tests/ReachyUITests`; the view stays thin. `@Observable` does honour `didSet`, so derived caches can live there.
+- **A model must never be constructed inside a `.sheet` content closure.** SwiftUI re-runs that closure on every
+  update of the view the sheet hangs off, so the model is silently replaced by a fresh, empty one — and `.task` does
+  not run a second time, so nothing refills it. `RootSheets` hangs off `ReachyRootView`, whose body reads
+  `session.phase`, and the candidate sweep walks that `idle → handshaking → idle` every 10 s: "Your Reachies" listed
+  the account's robots and then swapped them for a permanent spinner within seconds of opening. The model now lives in
+  the root's `@State` and `YourReachiesScreen` adopts it into `@State` of its own, the way `HFAccountSection` already
+  did — which is why the sign-in card never showed the same symptom despite being built the same way. The rule reads
+  the same for `NavigationLink(destination:)` and for anything else that takes a `@ViewBuilder` the parent re-runs.
 - Content catalogues use `contentLoading(isPresented:title:)` for their initial or uncached load. The model must
   distinguish "never answered" from a real empty result and expose loading before `.task` gets its first turn, so the
   first frame never lies with an empty-state. A refresh keeps any rows already on screen; only a request with no data

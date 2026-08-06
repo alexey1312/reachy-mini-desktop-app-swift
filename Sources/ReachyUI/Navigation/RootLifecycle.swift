@@ -6,13 +6,14 @@ import SwiftUI
 /// Every effect the root runs, in one place.
 ///
 /// Applied with `.modifier(_:)` rather than through a `View` extension like its
-/// neighbours: the cluster needs six collaborators, and a helper taking six
+/// neighbours: the cluster needs seven collaborators, and a helper taking seven
 /// arguments is a SwiftLint violation while a memberwise initialiser is not.
 struct RootLifecycle: ViewModifier {
     let session: RobotSession
     let viewport: ViewportModel
     let floating: FloatingViewportModel
     let hfAccount: HFAccount
+    let remoteRobots: YourReachiesModel
     let runningApp: RunningAppModel
     let router: ReachyRouter
     @Binding var remoteLink: RemoteRobotLink?
@@ -25,6 +26,10 @@ struct RootLifecycle: ViewModifier {
             .task {
                 guard !previewMode else { return }
                 hfAccount.restore()
+            }
+            .onChange(of: hfAccount.state, initial: true) { _, _ in
+                guard !previewMode else { return }
+                remoteRobots.accountChanged()
             }
             .task(id: viewportTarget) {
                 guard !previewMode else { return }
