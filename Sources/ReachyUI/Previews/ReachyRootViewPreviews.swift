@@ -15,6 +15,19 @@ import SwiftUI
     PreviewScene.root(.preview(phase: .connecting(.handshaking), status: nil, address: nil))
 }
 
+// The gate's other branch: start / continue / cancel, with the discovery list suppressed. The
+// orienting line goes with it — a decision the user has to make is not something to talk over — and
+// the readable width still holds, which is what this capture is for on iPad.
+#Preview("Root — gate needs a decision") {
+    PreviewScene.root(
+        .preview(
+            phase: .connecting(.backendUnavailable(.preview, daemonMessage: "Backend not running")),
+            status: nil,
+            address: nil
+        )
+    )
+}
+
 #Preview("Root — connected") {
     PreviewScene.root(.preview(), viewport: .preview(sceneModel: .preview(.buildingScene)))
 }
@@ -55,13 +68,9 @@ import SwiftUI
     )
 }
 
-// The move library at the root of a tab, where it used to be two taps into the robot screen's form.
-#Preview("Root — moves tab") {
-    PreviewScene.root(.preview(), tab: .moves)
-}
-
-// Settings has no root capture on purpose — see `AGENTS.md`. `SettingsPreviews` covers the screen in
-// four states, including the daemon log that moved off the robot screen to join it.
+// Neither Moves-over-the-network nor Settings has a root capture, and both for the same reason —
+// see `AGENTS.md`. `MovesScreenPreviews` and `SettingsPreviews` cover those screens; that they sit at
+// the root of a tab is what `Root — relay moves tab` below shows, from a state that needs no `.task`.
 
 // The dock, in place. These are the captures that verify it lands *below* the tab bar and shrinks the
 // interface rather than floating over it — which no unit test can see. Under `.sidebarAdaptable` the

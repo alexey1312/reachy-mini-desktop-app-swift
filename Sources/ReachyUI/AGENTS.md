@@ -79,12 +79,16 @@ Adding a screen (project rule 8) means: a preview per state in `Previews/<Screen
   is the CoreBluetooth call a preview must not make, so the factory assigns it.
 - A screen whose `.task` guards on `model == nil` needs no `reachyPreviewMode` check — injecting the model is what
   makes it inert. Add the guard only where the effect runs unconditionally (`WiFiSettingsCard`, `LogConsoleScreen`).
-- **There is no `Root — settings tab` preview, and adding one back needs a seam first.** Inside the shell that tab
-  captures pure white on iPhone while the same screen renders on iPad and `SettingsPreviews` renders it standalone on
-  both. The tell is in the image: the tab bar comes out as bare glyphs rather than with its labels, so the frame was
-  taken before the tab settled. `MovesTab` survives the same treatment only because its loading state _is_ a final
-  frame, while `SettingsScreen` builds `SystemUpdateCard(session:)` itself and has no way to be handed a settled one.
-  A blank reference is worse than a missing one — it reads as coverage and passes any change.
+- **A tab whose content is loaded by a `.task` has no usable root capture, only a standalone one.** The shell builds
+  all five tabs at once, and whichever loses that race is caught mid-layout. Settings comes out pure white on iPhone
+  while rendering fine on iPad; Moves came out on iPad with its spinner but with the caption under it missing, and
+  only a later run — one preview added elsewhere, timings shifted — produced the full frame. The tell is in the
+  image: bare tab-bar glyphs instead of labels, or a state missing half of itself. Neither `SettingsScreen` nor
+  `MovesTab` can be handed a settled model from `PreviewScene.root`, because the root builds the shell and the shell
+  builds the tab — threading a seam through both for a preview is not worth it. So capture those screens standalone
+  (`SettingsPreviews`, `MovesScreenPreviews`) and capture _placement_ from a state that needs no `.task` at all
+  (`Root — relay moves tab`, which renders `MovesUnavailableView`). A blank or half-drawn reference is worse than a
+  missing one: it reads as coverage and passes any change.
 - Not covered, deliberately: `SceneViewport` in `.ready` (a bare `RealityView`) and `CameraViewport` in `.streaming`
   (Metal-backed `RTCMTLVideoView`). Neither renders anything meaningful headless — snapshot their overlay phases.
 - One `RobotSceneModel` per preview: `ReachyScene/AGENTS.md` requires exactly one live `RealityView` per model.
