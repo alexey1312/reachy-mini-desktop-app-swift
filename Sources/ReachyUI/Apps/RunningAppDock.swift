@@ -169,13 +169,17 @@ struct RunningAppDockContent: View {
     /// full-bleed bar with a hairline divider says the opposite — that it is part of
     /// the screen it is pinned to.
     ///
-    /// Two fills, and the lower one is load-bearing: nothing may show through a
-    /// window. `.bar` alone is translucent — on iPad the Disconnect card behind it
-    /// read straight through — and it does not render at all in a headless snapshot,
+    /// The `.window` role is this strip's own two-fill backing, generalised: an
+    /// opaque base under the material, because nothing may show through a window.
+    /// `.bar` alone is translucent — on iPad the Disconnect card behind it read
+    /// straight through — and it does not render at all in a headless snapshot,
     /// which is the same reason the tab bar's glass is absent from every root
-    /// capture. `.background` is the semantic style, not a pinned colour, so it
-    /// follows the appearance and avoids the trap `ReachyUI/AGENTS.md` records for
-    /// `Color.black` under adaptive chrome.
+    /// capture. The role exists as its own case rather than as `.scrim` because
+    /// this shape crosses the safe-area edge, where glass has nothing to refract.
+    ///
+    /// It is placed as a fill rather than applied to the strip's content, so the
+    /// caption keeps its colour: a crashed app says so in red, and glass renders
+    /// what it wraps vibrantly.
     ///
     /// The shape reaches past the home indicator so the fill runs to the screen
     /// edge; only its top corners are rounded, since the rest is off-screen.
@@ -187,9 +191,7 @@ struct RunningAppDockContent: View {
             topTrailingRadius: Radius.window,
             style: .continuous
         )
-        return shape
-            .fill(.background)
-            .overlay { shape.fill(.bar) }
+        return ReachySurfaceFill(.window, in: shape)
             .shadow(color: .black.opacity(0.15), radius: 10, y: -1)
             .ignoresSafeArea(edges: .bottom)
     }
@@ -201,7 +203,7 @@ struct RunningAppDockContent: View {
             Label("Restart", systemImage: "arrow.clockwise")
                 .labelStyle(.iconOnly)
         }
-        .buttonStyle(.bordered)
+        .reachyButton()
         .buttonBorderShape(.circle)
         .disabled(busy || !isReachable)
     }
@@ -213,7 +215,7 @@ struct RunningAppDockContent: View {
             Label("Stop", systemImage: "stop.fill")
                 .labelStyle(.iconOnly)
         }
-        .buttonStyle(.borderedProminent)
+        .reachyButton(.prominent)
         .buttonBorderShape(.circle)
         .tint(.red)
         .disabled(busy || !isReachable)
@@ -226,7 +228,7 @@ struct RunningAppDockContent: View {
             Label("Dismiss", systemImage: "xmark")
                 .labelStyle(.iconOnly)
         }
-        .buttonStyle(.bordered)
+        .reachyButton()
         .buttonBorderShape(.circle)
     }
 }

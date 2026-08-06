@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -47,7 +48,7 @@ struct OnboardingNetworkStep: View {
             Button("Send to the robot") {
                 Task { await model.join() }
             }
-            .buttonStyle(.borderedProminent)
+            .reachyButton(.prominent)
             .frame(maxWidth: .infinity)
             .disabled(!model.canJoin)
             OnboardingBackButton(model: model)

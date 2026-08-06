@@ -12,41 +12,95 @@ public enum SurfaceRole: Sendable, CaseIterable {
     case badge
     /// The backdrop behind a header, a footer or a console.
     case scrim
+    /// A window sitting under the whole interface — the running-app strip, and so
+    /// far only that.
+    ///
+    /// Separate from `.scrim` because it takes no glass, and for a measured
+    /// reason: the strip's shape reaches past the safe area, and glass over an
+    /// edge with nothing behind it renders in the iOS 26 simulator as a
+    /// black-red-green smear. The same glass over the viewport's chrome, which
+    /// stays inside the screen, renders cleanly. It also wants none — the whole
+    /// point of a window is that nothing shows through it.
+    case window
+}
+
+/// A role's surface as a view you place yourself.
+///
+/// Its root is the shape, not a `Color`: a `Color` is flexible in both axes, and
+/// one carrying `ignoresSafeArea` expands to the whole safe-area container rather
+/// than to the thing it is backing. Mounted under a `safeAreaInset` — which draws
+/// over the content — that painted the entire screen in the window colour. Two
+/// reference images caught it as blank captures.
+public struct ReachySurfaceFill<S: Shape>: View {
+    private let role: SurfaceRole
+    private let shape: S
+
+    public init(_ role: SurfaceRole, in shape: S) {
+        self.role = role
+        self.shape = shape
+    }
+
+    public var body: some View {
+        effect
+    }
+
+    private var base: some View {
+        shape.fill(role.baseFill)
+    }
+
+    /// **The effect goes under the content, never around it.**
+    ///
+    /// `glassEffect` renders what it *wraps* vibrantly, and that comes out in a
+    /// reference image: measured on the iOS 26 simulator, red, orange, green and
+    /// secondary text inside one all render black, and `.tint` is the only style
+    /// that survives. Wrapping would therefore have cost the dock its red crash
+    /// line and the BLE console its orange warning — two places where the colour
+    /// *is* the message. Every ad-hoc site this replaces already put its material
+    /// in a `.background`, so backing it is also what keeps them unchanged.
+    ///
+    /// The glass wraps the opaque fill, not empty space. Laid over a `Color.clear`
+    /// instead it has no backdrop to refract and the iOS 26 simulator renders it as
+    /// a black-red-green smear — which is what the dock's reference image caught.
+    ///
+    /// `.glassEffect` is multiplatform, so there is no `#if os(…)` and macOS 26
+    /// gets real glass — which an iOS-only backport never could.
+    @ViewBuilder
+    private var effect: some View {
+        if #available(iOS 26.0, macOS 26.0, *), let glass = role.glass {
+            base.glassEffect(glass, in: shape)
+        } else if let material = role.material {
+            base.overlay { shape.fill(material) }
+        } else {
+            base
+        }
+    }
 }
 
 public extension View {
-    /// Two tiers, one call: real glass from iOS 26 / macOS 26, a material below.
+    /// Backs this view with a role's surface: real glass from iOS 26 / macOS 26,
+    /// a material below, over an opaque fill.
     ///
-    /// The opaque `baseFill` underneath the effect is what keeps the snapshot
-    /// suite meaningful. Neither glass nor a material renders headless — the dock
-    /// records the same about `.bar` — so without a fill that does render, every
-    /// surface in the app would be invisible to the reference images, and the
-    /// layout and text on each card would quietly lose their regression cover.
+    /// The opaque `baseFill` under the effect is what keeps the snapshot suite
+    /// meaningful. Neither glass nor a material renders headless — the dock records
+    /// the same about `.bar` — so without a fill that does render, every surface in
+    /// the app would be invisible to the reference images, and the layout and text
+    /// on each card would quietly lose their regression cover.
     func reachySurface(_ role: SurfaceRole, in shape: some Shape = .rect) -> some View {
-        modifier(SurfaceBacking(role: role, shape: shape))
-    }
-}
-
-private struct SurfaceBacking<S: Shape>: ViewModifier {
-    let role: SurfaceRole
-    let shape: S
-
-    func body(content: Content) -> some View {
-        effect(content).background { shape.fill(role.baseFill) }
+        background { ReachySurfaceFill(role, in: shape) }
     }
 
-    /// `.glassEffect` is multiplatform, so there is no `#if os(…)` here and
-    /// macOS 26 gets real glass — which an iOS-only backport never could.
+    /// A `.scrim` that paints the inset beside it as well.
     ///
-    /// A role with neither takes its fill and nothing else.
-    @ViewBuilder
-    private func effect(_ content: Content) -> some View {
-        if #available(iOS 26.0, macOS 26.0, *), let glass = role.glass {
-            content.glassEffect(glass, in: shape)
-        } else if let material = role.material {
-            content.background(material, in: shape)
-        } else {
-            content
+    /// `background(_:)` taking a `ShapeStyle` defaults to `ignoresSafeAreaEdges:
+    /// .all`, and every bar this replaces relied on that without saying so: a strip
+    /// mounted as a `safeAreaInset` has to run to the edge of the screen, or the
+    /// home indicator sits on a stripe of window colour. `reachySurface` uses the
+    /// `ViewBuilder` form of `background`, which stops at the safe area — so the
+    /// bars that need the old behaviour ask for it by name.
+    func reachyScrim(ignoringSafeArea edges: Edge.Set = .all) -> some View {
+        background {
+            ReachySurfaceFill(.scrim, in: .rect)
+                .ignoresSafeArea(edges: edges)
         }
     }
 }
@@ -55,17 +109,14 @@ extension SurfaceRole {
     var material: Material? {
         switch self {
         case .chrome, .card: .regular
-        case .scrim: .bar
+        case .scrim, .window: .bar
         case .badge: nil
         }
     }
 
-    /// A badge gets no glass, and the reason is not restraint. `glassEffect`
-    /// renders what it wraps vibrantly: measured on the iOS 26 simulator, red,
-    /// orange, green and secondary all flatten to black inside one, and `.tint`
-    /// is the single style that survives. Carrying a colour is a badge's whole
-    /// job, so glass would take away the only thing it does. Nor does it need
-    /// any: a badge sits inside a card, not floating over arbitrary content.
+    /// A badge takes no effect at all: it sits inside a card and floats over
+    /// nothing, so there is nothing behind it for glass to refract or a material
+    /// to blur. Its fill alone is the surface.
     @available(iOS 26.0, macOS 26.0, *)
     var glass: Glass? {
         switch self {
@@ -73,7 +124,7 @@ extension SurfaceRole {
         // glass on one would react to every scroll passing under it.
         case .chrome: .regular.interactive()
         case .card, .scrim: .regular
-        case .badge: nil
+        case .badge, .window: nil
         }
     }
 
@@ -81,7 +132,7 @@ extension SurfaceRole {
     /// and `.background` there would punch a hole straight through to the screen.
     var baseFill: AnyShapeStyle {
         switch self {
-        case .chrome, .card, .scrim: AnyShapeStyle(.background)
+        case .chrome, .card, .scrim, .window: AnyShapeStyle(.background)
         case .badge: AnyShapeStyle(.fill.quaternary)
         }
     }

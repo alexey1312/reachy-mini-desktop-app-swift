@@ -7,17 +7,20 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 
 ## What is here
 
-| File                  | Holds                                                                        |
-| --------------------- | ---------------------------------------------------------------------------- |
-| `Space.swift`         | The 4-point layout rhythm, and the two rules for adopting it                 |
-| `Radius.swift`        | Corner radii plus `Radius.rect(_:)`, the only rounded rectangle handed out   |
-| `Tone.swift`          | Semantic colour roles over system styles — no palette, no `.xcassets`        |
-| `Typography.swift`    | Text roles from semantic `Font`s, and `IconRatio` for glyph-as-artwork       |
-| `Motion.swift`        | The three animations the app runs, named                                     |
-| `Metrics.swift`       | Sizes fixed by what they represent rather than by their text                 |
-| `StatusTone.swift`    | `StatusTone` + `ReachyStatusLabel`, the one shape a state caption renders in |
-| `ReachySurface.swift` | `SurfaceRole` + `reachySurface(_:in:)`                                       |
-| `ReachyBadge.swift`   | A word in a capsule, on the `.badge` surface                                 |
+| File                       | Holds                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `Space.swift`              | The 4-point layout rhythm, and the two rules for adopting it                 |
+| `Radius.swift`             | Corner radii plus `Radius.rect(_:)`, the only rounded rectangle handed out   |
+| `Tone.swift`               | Semantic colour roles over system styles — no palette, no `.xcassets`        |
+| `Typography.swift`         | Text roles from semantic `Font`s, and `IconRatio` for glyph-as-artwork       |
+| `Motion.swift`             | The three animations the app runs, named                                     |
+| `Metrics.swift`            | Sizes fixed by what they represent rather than by their text                 |
+| `StatusTone.swift`         | `StatusTone` + `ReachyStatusLabel`, the one shape a state caption renders in |
+| `ReachySurface.swift`      | `SurfaceRole` + `reachySurface(_:in:)`                                       |
+| `ReachyBadge.swift`        | A word in a capsule, on the `.badge` surface                                 |
+| `ReachySurfaceGroup.swift` | `GlassEffectContainer` where there is one, the content itself below          |
+| `ReachyButton.swift`       | `ButtonEmphasis` + `reachyButton(_:)` — and why it has no glass tier         |
+| `ReachyChrome.swift`       | The iOS 26 bar behaviours, each a no-op below the floor                      |
 
 ## Rules
 
@@ -30,9 +33,24 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 - **Glass is invisible headless, but what it wraps is not.** `glassEffect` renders its content vibrantly, and that
   _does_ come out in a reference image: measured on the iOS 26 simulator, `.red`, `.orange`, `.green` and `.secondary`
   text inside one all render black, while `.tint` survives. Modifier order makes no difference — inside or outside the
-  surface, the result is identical. So applying a role to anything carrying a colour costs that colour. `.badge`
-  therefore takes no glass and no material at all: a marker inside a card does not float over anything, and carrying a
-  colour is the whole of its job.
+  surface, the result is identical. So the effect goes **under** the content, never around it, and `.badge` takes
+  neither glass nor material: a marker inside a card floats over nothing, and carrying a colour is the whole of its job.
+- **Three more things glass does headless, each measured rather than assumed.** They are why this module looks more
+  conservative than the plan:
+  1. **`.buttonStyle(.glass)` blanks the whole capture.** Not "does not render" — a screen carrying one comes out
+     empty apart from its toolbar, which is a separate pass. Recorded the onboarding suite twice to confirm: every
+     reference blank with it, every reference complete without it, nothing else changed. `reachyButton` therefore has
+     no glass tier, and roughly sixty references keep their cover.
+  2. **Glass over an edge with nothing behind it renders as a black-red-green smear.** The dock's shape crosses the
+     safe area, and its reference caught exactly that. The same glass over the viewport's chrome, which stays inside
+     the screen, is clean. Hence `.window`, a role that is `.scrim` minus the glass.
+  3. **Glass laid over a `Color.clear` does the same** — there is no backdrop to refract. It goes over the opaque
+     `baseFill`, which is where `ReachySurfaceFill` puts it.
+- **A surface is a shape, not a `Color`.** A `Color` is flexible in both axes, so one carrying `ignoresSafeArea`
+  expands to the entire safe-area container rather than to the thing it backs. Mounted under a `safeAreaInset` — which
+  draws over the content — that painted whole screens in the window colour. Use `ReachySurfaceFill`, or `reachyScrim`,
+  which asks for the inset by name because `reachySurface` uses the `ViewBuilder` form of `background` and stops at
+  the safe area where `background(_:)` taking a `ShapeStyle` did not.
 - **No `@ScaledMetric` on `Space`.** The app is 98 `Section`s over 18 `Form`s and SwiftUI already scales list metrics;
   what clips at AX5 is a fixed _size_. So each component that reads a `Metrics` constant gets its own `@ScaledMetric`
   — and at the default text size the multiplier is 1, so adopting one moves no reference image.
@@ -49,19 +67,22 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 
 ## Not here yet, and why
 
-- **`ReachySurfaceGroup` / `GlassEffectContainer`** — a container only means something once several surfaces sit
-  inside one; it belongs with the PR that applies the roles, not with the one that defines them.
-- **`reachyButton` / `.buttonStyle(.glass)`** — it changes button metrics, and the snapshot simulator runs iOS 26, so
-  it moves reference images. Deliberately kept out of the PR that moves none.
+- **A glass tier on `reachyButton`.** Not deferred for taste — it blanks the capture (see the rules above). Revisit
+  only with evidence that a screen carrying one snapshots whole.
+- **`glassEffectID` morphing between screens.** Worth having only once a layout is built around it, and there is no
+  equivalent below the floor.
 - **A reduce-motion resolver.** Out of scope; do not read one into `Motion`'s names.
 - **A localization catalogue.** Planned to land here (both bundles link this target, so one catalogue serves the app
   and the widget), but not yet present.
 
-## Applying a role — what to expect
+## Applying a role — what happened
 
-- `ViewportView.swift:136` builds its shape with `RoundedRectangle(cornerRadius: 12)`, whose default style is
-  `.circular`. `Radius.rect(.md)` is `.continuous`, so that one site moves its reference image when it adopts the
-  token. That is the intended correction, not a regression.
+All seven ad-hoc sites now name a role: the viewport's three pieces of chrome (`.chrome`), the log console, the BLE
+console and the onboarding footer (`reachyScrim`), and the running-app strip (`.window`). What to expect from the next
+one:
+
+- `ViewportStatus.loading` moved its reference image because `Radius.rect` is `.continuous` where
+  `RoundedRectangle(cornerRadius: 12)` defaulted to `.circular`. That is the intended correction, not a regression.
 - `background(_:in:)` taking a `ShapeStyle` defaults to `ignoresSafeAreaEdges: .all`; `reachySurface` uses the
   `ViewBuilder` form, which does not. A scrim that today paints into the safe area (`LogConsoleView`,
   `OnboardingFlow`, `BLEConsoleScreen`) needs its own `.ignoresSafeArea` when it adopts the role.

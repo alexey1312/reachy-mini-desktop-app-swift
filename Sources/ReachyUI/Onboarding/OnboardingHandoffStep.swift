@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -45,7 +46,7 @@ struct OnboardingHandoffStep: View {
             Button("Done") {
                 onFinish(model.finish())
             }
-            .buttonStyle(.borderedProminent)
+            .reachyButton(.prominent)
             .frame(maxWidth: .infinity)
         }
     }

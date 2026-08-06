@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -51,7 +52,7 @@ struct OnboardingScanStep: View {
                 Button("Connect to this robot") {
                     Task { await model.connect(to: only.id) }
                 }
-                .buttonStyle(.borderedProminent)
+                .reachyButton(.prominent)
                 .frame(maxWidth: .infinity)
                 .disabled(model.isBusy)
             }
@@ -97,7 +98,7 @@ struct OnboardingScanStep: View {
                     Label(robot.name, systemImage: "dot.radiowaves.left.and.right")
                 }
             }
-            .buttonStyle(.bordered)
+            .reachyButton()
             .disabled(model.isBusy)
         }
     }

@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -30,12 +31,18 @@ struct ViewportView: View {
 
     /// Every floating control hugs the leading edge: on iPad the tab bar floats
     /// over the top centre, and anything trailing-aligned ends up underneath it.
+    ///
+    /// The group is what lets two neighbouring pieces of chrome be one sheet of
+    /// glass rather than two — it costs nothing below iOS 26, where it renders its
+    /// content unchanged.
     private var chrome: some View {
-        HStack(spacing: 12) {
-            switcher
-            contentControls
+        ReachySurfaceGroup(spacing: Space.md) {
+            HStack(spacing: Space.md) {
+                switcher
+                contentControls
+            }
         }
-        .padding(12)
+        .padding(Space.md)
     }
 
     @ViewBuilder
@@ -112,16 +119,22 @@ struct ViewportView: View {
             // (seen in dark mode). It now carries its own backing like every other
             // floating control here — which is the rule stated at the bottom of this
             // file, and the reason it holds regardless of theme or what is behind it.
+            //
+            // 3 pt is optical, not rhythm: it is what stops the segmented track from
+            // touching the capsule around it.
             .padding(3)
-            .background(.regularMaterial, in: Capsule())
+            .reachySurface(.chrome, in: .capsule)
         }
     }
 }
 
 /// Shared chrome so the scene and the camera report progress the same way.
 enum ViewportStatus {
+    /// `@MainActor` because it builds a surface, and `ViewModifier` carries that
+    /// isolation in Swift 6.
+    @MainActor
     static func loading(_ title: String, progress: Double?) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Space.md) {
             if let progress {
                 ProgressView(value: progress)
                     .frame(maxWidth: 220)
@@ -129,20 +142,28 @@ enum ViewportStatus {
                 ProgressView()
             }
             Text(title)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(Typography.detail)
+                .foregroundStyle(Tone.quiet.style)
         }
         .padding(20)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        // `Radius.rect` is `.continuous`; this shape used to default to `.circular`,
+        // so the reference image moves here. That is the correction, not a
+        // regression — `ReachyDesign/AGENTS.md` records it as expected.
+        .reachySurface(.chrome, in: Radius.rect(Radius.md))
     }
 }
 
 extension View {
     /// Floating controls sit on top of video and 3D alike, so they carry their own
     /// backing rather than relying on whatever is behind them for contrast.
+    ///
+    /// `@MainActor` because `reachySurface` is: a `ViewModifier`'s initialiser
+    /// carries that isolation in Swift 6, and a nonisolated helper cannot return
+    /// what it builds.
+    @MainActor
     func viewportControlStyle() -> some View {
         font(.title3)
-            .padding(8)
-            .background(.regularMaterial, in: Circle())
+            .padding(Space.sm)
+            .reachySurface(.chrome, in: .circle)
     }
 }

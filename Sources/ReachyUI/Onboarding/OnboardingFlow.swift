@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -84,7 +85,7 @@ struct OnboardingStepScaffold<Content: View, Actions: View>: View {
             }
             .padding()
             .frame(maxWidth: .infinity)
-            .background(.bar)
+            .reachyScrim(ignoringSafeArea: .bottom)
         }
     }
 }

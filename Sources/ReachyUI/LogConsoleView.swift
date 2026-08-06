@@ -1,3 +1,4 @@
+import ReachyDesign
 import SwiftUI
 
 /// The console proper: tailing list, level filter, search, pause, copy and export.
@@ -64,6 +65,9 @@ struct LogConsoleView: View {
                     .onDisappear { atBottom = false }
             }
             .listStyle(.plain)
+            // The one list in the app dense enough to want it: monospaced lines with
+            // no grouping to end on, running straight under the navigation bar.
+            .reachySoftScrollEdge(.top)
             .onChange(of: model.visible.last?.id) {
                 guard atBottom else { return }
                 proxy.scrollTo(Anchor.bottom, anchor: .bottom)
@@ -84,11 +88,11 @@ struct LogConsoleView: View {
                     .buttonStyle(.borderless)
             }
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
+        .font(Typography.status)
+        .foregroundStyle(Tone.quiet.style)
+        .padding(.horizontal, Space.md)
         .padding(.vertical, 6)
-        .background(.bar)
+        .reachyScrim(ignoringSafeArea: .bottom)
     }
 
     private var statusText: String {
@@ -122,12 +126,25 @@ struct LogConsoleView: View {
         .listRowInsets(.init(top: 1, leading: 8, bottom: 1, trailing: 8))
     }
 
+    /// Two groups, not three buttons in a row: pausing acts on the feed, the other
+    /// two act on what it has already collected. From iOS 26 `ToolbarSpacer` is what
+    /// makes that split visible — each group becomes its own pane of glass — and
+    /// below the floor the two groups simply sit next to each other, as they did.
+    ///
+    /// This is the only toolbar in the app with enough in it to divide. The plan
+    /// named `RobotScreen`, `AppStoreScreen` and `MovesScreen`; the first lost its
+    /// toolbar with the gear in PR 2, and the other two carry a single Refresh.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup {
+        ToolbarItem {
             Button(model.paused ? "Resume" : "Pause", systemImage: model.paused ? "play" : "pause") {
                 model.paused.toggle()
             }
+        }
+        if #available(iOS 26.0, macOS 26.0, *) {
+            ToolbarSpacer(.fixed)
+        }
+        ToolbarItemGroup {
             ShareLink(item: model.export(address: source), preview: SharePreview("Log")) {
                 Label("Export", systemImage: "square.and.arrow.up")
             }

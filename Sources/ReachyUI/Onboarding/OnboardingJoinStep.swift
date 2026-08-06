@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -40,13 +41,13 @@ struct OnboardingJoinStep: View {
                 Button("Continue") {
                     model.continueAfterJoin()
                 }
-                .buttonStyle(.borderedProminent)
+                .reachyButton(.prominent)
                 .frame(maxWidth: .infinity)
             case .gaveUp, .refused:
                 Button("Try again") {
                     model.editNetwork()
                 }
-                .buttonStyle(.borderedProminent)
+                .reachyButton(.prominent)
                 .frame(maxWidth: .infinity)
             }
         }

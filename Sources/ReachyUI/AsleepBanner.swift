@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -27,7 +28,7 @@ struct AsleepBanner: View {
                 Button("Wake up") {
                     Task { await session.wake() }
                 }
-                .buttonStyle(.borderedProminent)
+                .reachyButton(.prominent)
             }
         }
     }

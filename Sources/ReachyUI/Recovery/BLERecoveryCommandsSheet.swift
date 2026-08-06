@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -59,7 +60,7 @@ struct BLERecoveryCommandsSheet: View {
             #endif
                 .onSubmit(submit)
             Button("Unlock the robot", action: submit)
-                .buttonStyle(.borderedProminent)
+                .reachyButton(.prominent)
                 .frame(maxWidth: .infinity)
                 .disabled(!model.canSubmitPIN)
             if let error = model.errorMessage {

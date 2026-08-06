@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -58,7 +59,7 @@ struct OnboardingPINStep: View {
             Button("Unlock") {
                 submit()
             }
-            .buttonStyle(.borderedProminent)
+            .reachyButton(.prominent)
             .frame(maxWidth: .infinity)
             .disabled(!model.canSubmitPIN)
             OnboardingBackButton(model: model)

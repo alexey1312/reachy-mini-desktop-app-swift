@@ -92,6 +92,7 @@ enum DesignGallery {
         case .card: "card"
         case .badge: "badge"
         case .scrim: "scrim"
+        case .window: "window"
         }
     }
 }

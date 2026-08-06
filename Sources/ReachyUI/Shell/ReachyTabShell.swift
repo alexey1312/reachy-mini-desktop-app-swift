@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyMedia
 import SwiftUI
@@ -37,6 +38,10 @@ struct ReachyTabShell: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        // The bar gets out of the way while reading a list and comes back on the way
+        // up. iPhone only, and the fork lives in `ReachyChrome` — a sidebar has
+        // nothing to minimise.
+        .reachyMinimizingTabBar()
         // Applied to the `TabView` itself — see `runningAppDock` for why that is the
         // whole trick. It is not mounted in the gate: with no connection
         // `RunningAppModel.canPoll` is false and the dock draws `EmptyView`, so the

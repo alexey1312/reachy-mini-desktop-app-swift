@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -85,7 +86,7 @@ struct MovesScreen: View {
                     }
                     .frame(minWidth: 120)
                 }
-                .buttonStyle(.borderedProminent)
+                .reachyButton(.prominent)
                 .buttonBorderShape(.capsule)
                 .controlSize(.large)
                 .tint(.red)

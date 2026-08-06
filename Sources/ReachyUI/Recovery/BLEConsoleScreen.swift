@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import SwiftUI
 
@@ -131,7 +132,7 @@ struct BLEConsoleScreen: View {
         .padding(.horizontal)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.bar)
+        .reachyScrim(ignoringSafeArea: .top)
     }
 
     /// The robot's own `journalctl` exited. Nothing on this side can prevent it, and the

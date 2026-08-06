@@ -1,3 +1,4 @@
+import ReachyDesign
 import SwiftUI
 
 /// Stands between opening the flow and the first CoreBluetooth call, so the system's
@@ -38,7 +39,7 @@ struct OnboardingWelcomeStep: View {
             Button("Start") {
                 model.beginScan()
             }
-            .buttonStyle(.borderedProminent)
+            .reachyButton(.prominent)
             .frame(maxWidth: .infinity)
         }
     }
