@@ -14,7 +14,7 @@ import SwiftUI
 // Neither reference has a navigation bar in it, and that is the harness rather
 // than the screen: here it is the root of `NavigationHost`'s stack, where an
 // inline title with no toolbar item beside it has nothing to hold the bar open,
-// while the app pushes it out of `RunningAppSheet` and the back button keeps the
+// while the app pushes it out of `AppDetailSheet` and the back button keeps the
 // bar — with the title in it. So the blank strip at the top is neither a missing
 // `navigationTitle` nor proof that one is missing; `Running app — conversation`
 // is the reference that shows the row this is pushed from.

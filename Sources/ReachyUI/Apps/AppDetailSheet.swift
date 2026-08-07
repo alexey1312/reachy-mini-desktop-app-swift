@@ -3,7 +3,21 @@ import ReachyKit
 import ReachyWidgetUI
 import SwiftUI
 
-/// One app, and everything that can be done to it.
+/// One app, and everything that can be done to it — **the only page about an
+/// app there is**.
+///
+/// It used to be two. A store card carried install, update, remove and
+/// start-on-wake-up; a separate running-app sheet carried the process state,
+/// restart, stop and the app's own settings. They were split because the store
+/// card needs models the root does not own — which is a fact about this file's
+/// dependencies, not about the app the user is looking at. From the reader's side
+/// there was one object with two pages, each missing half of it, and the running
+/// one was missing the half that identifies it: the icon, the title and the
+/// description all live in metadata the daemon leaves off a running-app status
+/// (`RobotSession.describedFromInstalled`).
+///
+/// So the store row and the dock now open this, and which sections appear is
+/// decided by the app's state rather than by which surface asked.
 ///
 /// The job runs here rather than behind the sheet: an install takes a minute of
 /// `uv pip install` output, and a user who dismissed the sheet would have nothing
@@ -13,15 +27,52 @@ struct AppDetailSheet: View {
     let model: AppStoreModel
     let session: RobotSession
     let install: AppInstallModel
+    let runningApp: RunningAppModel
     let dismiss: () -> Void
 
     @State private var confirmingRemoval = false
     @Environment(\.reachyPreviewMode) private var previewMode
 
+    /// The running app, but only when it is *this* one.
+    ///
+    /// Read off the session rather than through `model.isRunning(_:)`, which needs
+    /// the installed list: opened from the dock this sheet may be the first thing
+    /// on screen, before the store has ever loaded. The name is the daemon's own
+    /// join key, and `matches(installed:)` covers a catalogue entry whose Space
+    /// slug differs from its Python entry point.
+    private var runningStatus: RobotAppStatus? {
+        guard let status = runningApp.visibleStatus(for: session),
+              status.app.name == app.name || app.matches(installed: status.app)
+        else { return nil }
+        return status
+    }
+
+    private var isReachable: Bool {
+        runningApp.isReachable(session)
+    }
+
+    /// The app's own settings page, when there is one to offer.
+    ///
+    /// `session.appSettingsURL(for:)` already answers nil without a declared port
+    /// and without a LAN address; the two conditions added here are this screen's
+    /// own. **Only while it is running**, because the process serving that page is
+    /// the process that would have died — a crashed app takes its settings down
+    /// with it, which is at its worst exactly when a bad setting is what crashed
+    /// it. And only while the robot answers, so the row does not lead to a spinner
+    /// that can never resolve.
+    private var settingsURL: URL? {
+        guard let status = runningStatus, status.state == .running, isReachable else { return nil }
+        return session.appSettingsURL(for: status.app)
+    }
+
     var body: some View {
         Form {
             Section {
                 AppIdentityHeader(app: app)
+            }
+
+            if let status = runningStatus {
+                statusSection(status)
             }
 
             if let job = jobForThisApp {
@@ -41,6 +92,18 @@ struct AppDetailSheet: View {
                 }
             } else {
                 actions
+            }
+
+            if let settingsURL {
+                Section {
+                    NavigationLink {
+                        AppSettingsScreen(url: settingsURL)
+                    } label: {
+                        Label(.reachy("Settings"), systemImage: "slider.horizontal.3")
+                    }
+                } footer: {
+                    Text(.reachy("The app's own page, served by the robot on this network."))
+                }
             }
 
             if let summary = app.summary {
@@ -65,12 +128,20 @@ struct AppDetailSheet: View {
         #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(.reachy("Done")) {
+                    // "Minimize" while the app holds the robot: closing this page
+                    // leaves it running, and only Stop ends it. That is the
+                    // contract a Telegram Mini App has, and the dock is where it
+                    // minimises to.
+                    Button(runningStatus == nil ? .reachy("Done") : .reachy("Minimize")) {
                         install.dismiss()
                         dismiss()
                     }
                     .disabled(install.isBusy)
                 }
+            }
+            .task {
+                guard !previewMode else { return }
+                await model.loadInstalledIfNeeded(session: session)
             }
             .interactiveDismissDisabled(install.isBusy)
             .confirmationDialog(
@@ -86,21 +157,96 @@ struct AppDetailSheet: View {
             }
     }
 
+    /// What the robot is doing with this app right now, and the two controls that
+    /// change it. Stop lives here rather than among the install actions: it acts on
+    /// the process, not on the copy installed on the robot.
+    private func statusSection(_ status: RobotAppStatus) -> some View {
+        Section(.reachy("Status")) {
+            LabeledContent(.reachy("State")) {
+                // `.body` and not a `Typography` role: here the state is the
+                // *value* of a form row, so it takes the size the row's own
+                // label already has.
+                //
+                // `.shownSeparately` because `failureRow` is right below with
+                // the whole tail in it — inlining the crash here printed the
+                // same text twice, once cut off after two lines.
+                RunningAppCaption.label(
+                    of: status,
+                    failure: .shownSeparately,
+                    conversationTurn: runningApp.conversationTurn,
+                    isReachable: isReachable,
+                    font: .body
+                )
+            }
+            if !isReachable {
+                Text(
+                    .reachy(
+                        // swiftlint:disable:next line_length
+                        "The robot stopped answering. The app may still be running — these controls cannot reach it."
+                    )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            if let error = status.error {
+                failureRow(error)
+            }
+            if let lastError = runningApp.lastError {
+                Text(lastError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            processControls(status)
+        }
+    }
+
+    /// The last thing the app printed before it died. The daemon keeps ten stderr
+    /// lines here, and on a robot whose journal is not served over the network this
+    /// is the only crash output there is.
+    private func failureRow(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(.reachy("Last output"))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(error)
+                .font(.caption.monospaced())
+                .textSelection(.enabled)
+        }
+    }
+
+    @ViewBuilder
+    private func processControls(_ status: RobotAppStatus) -> some View {
+        if status.state == .error {
+            Button(.reachy("Dismiss"), systemImage: "xmark") {
+                runningApp.dismissFailure(session)
+            }
+        } else {
+            Button(.reachy("Restart"), systemImage: "arrow.clockwise") {
+                Task { await runningApp.restart(session: session) }
+            }
+            .disabled(runningApp.busy || !isReachable)
+
+            Button(.reachy("Stop"), systemImage: "stop.fill", role: .destructive) {
+                Task { await runningApp.stop(session: session) }
+            }
+            .disabled(runningApp.busy || !isReachable)
+        }
+    }
+
     private var actions: some View {
         Section {
             if let installed = installedApp {
-                if model.isRunning(app) {
-                    Button(.reachy("Stop"), systemImage: "stop.fill", role: .destructive) {
-                        Task { await model.stop(session: session) }
-                    }
-                } else {
+                // `isBusy`, not "has a status": a crashed app keeps one so its
+                // output stays readable, and starting it again is the whole reason
+                // somebody is on this page.
+                if runningStatus?.isBusy != true {
                     Button(.reachy("Start"), systemImage: "play.fill") {
                         Task { await model.start(app, session: session) }
                     }
                     // Starting evicts whatever holds the robot; the daemon refuses
                     // with a 400 rather than taking it, and a remote session is not
                     // ours to take at all.
-                    .disabled(model.busy || model.isHeldRemotely || model.runningApp != nil)
+                    .disabled(model.busy || model.isHeldRemotely || model.runningApp?.isBusy == true)
                 }
 
                 if model.hasUpdate(app) {

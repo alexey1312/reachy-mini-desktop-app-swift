@@ -7,6 +7,9 @@ import SwiftUI
 /// running right now.
 struct AppStoreScreen: View {
     let session: RobotSession
+    /// The dock's model, adopted rather than owned: a row opens the same page the
+    /// dock does, and that page carries Restart and Stop.
+    let runningApp: RunningAppModel
 
     @State private var model: AppStoreModel
     @State private var install: AppInstallModel
@@ -15,8 +18,14 @@ struct AppStoreScreen: View {
 
     /// `model` is `nil` rather than a defaulted value: it now needs `session`, and a
     /// default argument cannot read another parameter.
-    init(session: RobotSession, model: AppStoreModel? = nil, install: AppInstallModel? = nil) {
+    init(
+        session: RobotSession,
+        runningApp: RunningAppModel,
+        model: AppStoreModel? = nil,
+        install: AppInstallModel? = nil
+    ) {
         self.session = session
+        self.runningApp = runningApp
         _model = State(initialValue: model ?? AppStoreModel(session: session))
         _install = State(initialValue: install ?? AppInstallModel(session: session))
     }
@@ -88,7 +97,13 @@ struct AppStoreScreen: View {
         }
         .sheet(item: $selected) { app in
             NavigationStack {
-                AppDetailSheet(app: app, model: model, session: session, install: install) { selected = nil }
+                AppDetailSheet(
+                    app: app,
+                    model: model,
+                    session: session,
+                    install: install,
+                    runningApp: runningApp
+                ) { selected = nil }
             }
             .presentationDetents([.medium, .large])
         }

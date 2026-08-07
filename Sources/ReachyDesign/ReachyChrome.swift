@@ -15,11 +15,18 @@ public extension View {
     /// `TabBarMinimizeBehavior`, `.onScrollDown` included, is
     /// `@available(macOS, unavailable)`. The method compiles there and has nothing
     /// to pass it. Which is fitting: macOS has no tab bar to minimise.
+    ///
+    /// `isEnabled` is `.never` rather than a dropped modifier, so the behaviour can
+    /// be switched off for as long as something else is pinned to the bottom of the
+    /// window. A minimised bar and a bar that stepped aside are indistinguishable
+    /// once an opaque strip occupies the row it would have shrunk into — which is
+    /// what the running-app dock does, and how the tab bar came to be missing from
+    /// the whole interface for as long as an app was running.
     @ViewBuilder
-    func reachyMinimizingTabBar() -> some View {
+    func reachyMinimizingTabBar(_ isEnabled: Bool = true) -> some View {
         #if os(iOS)
             if #available(iOS 26.0, *) {
-                tabBarMinimizeBehavior(.onScrollDown)
+                tabBarMinimizeBehavior(isEnabled ? .onScrollDown : .never)
             } else {
                 self
             }

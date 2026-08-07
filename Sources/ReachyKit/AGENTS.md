@@ -54,6 +54,15 @@ Transport + domain core. No UI imports (SwiftUI/UIKit forbidden here). Swift 6 s
   never by text, and unwrap `ClientError` first. **Never call `describe` to fill a message slot**; it does not
   filter, and a second path around `message(for:)` is worth exactly as much as no filter at all. It stays public only
   for App Intents, which have no slot to fill.
+- **The daemon says almost nothing about the app it is running, so the session joins it back.**
+  `AppManager.start_app` files the status as `AppInfo(name=app_name, source_kind=INSTALLED)` and no `extra` at all —
+  no title, no emoji, no description, no `custom_app_url`. Every one of those is in
+  `list-available/installed`, keyed by the same entry point name, so `describedFromInstalled` looks it up and
+  `recordRunning` never sees the bare version. The cost is one extra call per connection: the lookup is skipped when
+  `card` is already filled, and `installedAppsCache` lives exactly as long as install, remove and `reset-apps` let
+  it. An unmatched name passes through untouched — a local app with no Hub card is still an app, and a wrong match
+  would put somebody else's settings port on this one. Nothing above this layer should re-derive it:
+  `RobotSession.runningApp`, the dock, the app page and the widget snapshot all read the joined value.
 - **`robotError` is the robot's connection and power, and nothing else.** It was `lastError`, every funnel in the
   session wrote to it, and that is the second half of the same bug: a genuine Apps failure surfaced on the Robot tab
   too. Now `withClient`, `withAppsClient`, `withWiFiClient`, `withHFAuthClient` and `withUpdateClient` only throw —

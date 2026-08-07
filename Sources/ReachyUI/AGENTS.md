@@ -20,6 +20,12 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   tabs. The five are unconditional — a tab that comes and goes forces the shell to catch its disappearance and drag
   the selection elsewhere, which is what `onChange(of: offersLiveTab)` used to do. An unavailable feature renders an
   unavailable state inside its own tab instead.
+- **The tab bar does not minimise while the running-app dock is up, and that is not a preference.** The dock is an
+  opaque strip in the bottom safe area; `tabBarMinimizeBehavior(.onScrollDown)` shrinks the bar into the row that
+  strip occupies, so scrolling any list down with an app running took the _whole_ tab bar off screen — it read as
+  the dock having replaced it. `reachyMinimizingTabBar(_:)` takes the flag and passes `.never`. The recorded
+  references could not have caught this: nothing scrolls in a snapshot, so `Root — dock on the apps tab` shows the
+  bar exactly where the layout puts it when the bar is expanded, which is also where it is now.
 - **`.unreachable` belongs to the shell, not the gate.** Only `.idle` and `.connecting` show the gate. A network blip
   must not pull the tab bar out from under a finger, and the robot screen already reports the state in place.
 - **The gate's fork has progress conditions, and they only ever delay.** For `.connected`, `isConnectedEnough` waits
@@ -122,12 +128,34 @@ on the Robot tab.
   `RobotAppStatus.error` opens with the daemon's own `Process exited with code 1` and carries the app's last stderr
   lines under it — uvicorn's logging interleaved with a Python traceback. `RunningAppCaption.label` therefore takes
   `Failure`: the dock passes `.inline` because its one caption line is the only place a crash can be read, and
-  `RunningAppSheet` passes `.shownSeparately` because `failureRow` prints the whole tail two rows below. It used to
+  `AppDetailSheet` passes `.shownSeparately` because `failureRow` prints the whole tail two rows below. It used to
   inline there too, so "State" read `Process exited with code 1 / INFO: connection rejected (403 For…` — the first
   two lines of the very text underneath it, under a heading that promised a state.
   **The references passed over that for as long as it shipped**, because `RobotAppStatus.previewCrashed` was a
   single `ModuleNotFoundError` line, and a one-line tail renders identically whether a surface prints it once or
   twice. It is several lines now, on purpose; do not shorten it back.
+
+## One page per app
+
+**`AppDetailSheet` is the only page about an app, and both surfaces open it** — a store row and the dock's expand
+button. It used to be two views: this one for a catalogue entry (install, update, remove, start-on-wake-up) and
+`RunningAppSheet` for the process (state, restart, stop, settings). The split was real but it was about _models_,
+not about apps: the store card needs `AppStoreModel` and `AppInstallModel`, which the root did not own. The reader
+got one object with two half-pages, and a crashed app had no way back — the running half offered Dismiss and no
+Start.
+
+- **The two models live in `ReachyTabShell`, not in `AppStoreScreen`.** The dock is mounted on the `TabView` and
+  expands from every tab, so a model built inside the Apps tab would be a second copy: install something from the
+  dock's page and the store would go on offering "Install". `AppStoreScreen` adopts them into its own `@State`, the
+  way `YourReachiesScreen` adopts the root's.
+- **Which sections appear is decided by the app's state, never by which surface asked.** `runningStatus` is read off
+  the session and matched against this app by name (`matches(installed:)` covers a Space slug that differs from its
+  Python entry point) — not through `model.isRunning(_:)`, which needs the installed list the dock's page may not
+  have loaded yet. `loadInstalledIfNeeded` fills that in without the catalogue's Hugging Face round trip.
+- **Start is gated on `isBusy`, not on "has a status".** A crashed app keeps its status so its output stays
+  readable; hiding Start for it is what left the merged page with no way to try again, and the reference caught it.
+- The toolbar button reads "Minimize" while the app holds the robot and "Done" otherwise. Closing the page never
+  stops anything — only Stop does.
 
 ## An app's own settings
 
@@ -138,17 +166,25 @@ written against Conversation App 1.0's `/rpc` and would leave every other app wi
 (`WebAuthenticationBrowser` is **not** a second web view — that is `ASWebAuthenticationSession`, out of process on
 purpose so no Hugging Face credential passes through one of ours.)
 
-- **`RunningAppSheet` decides whether to offer it, not the screen.** `RobotSession.appSettingsURL(for:)` answers nil
-  without a declared port and without a LAN address; the sheet adds `state == .running` and `isReachable`, because
+- **`AppDetailSheet` decides whether to offer it, not the screen.** `RobotSession.appSettingsURL(for:)` answers nil
+  without a declared port and without a LAN address; the page adds `state == .running` and `isReachable`, because
   the process serving the page is the process that crashes. There is no way to reach an app's settings while it is
   down, which is worst precisely when a bad setting is what took it down — say so rather than papering over it.
+- **The row was invisible on every real robot for as long as it shipped, and not because of any of that.** The
+  daemon builds a running-app status as `AppInfo(name=…, source_kind=INSTALLED)` with an empty `extra`, so
+  `customAppPort` was nil for the one app anybody wanted it for. `RobotSession.describedFromInstalled` is the join
+  that fixes it; the previews never caught it because their fixtures carry the metadata a real status does not.
+  When something on this page is missing on hardware and present in a reference, suspect the status rather than the
+  view.
 - **`.ready` has no reference and cannot have one.** The web view renders nothing headless and is not even mounted
   under `reachyPreviewMode`, and unlike `CameraViewport.streaming` this phase grows no chrome to capture over it —
   so it is uncapturable in the sense `SceneViewport.ready` is. `.loading` and `.failed` are both covered.
 - The Settings row's presence and absence are both already under cover, and by accident of the fixtures rather than
   by design: `previewConversation` declares 7860 so `Running app — conversation` shows the row, and
-  `previewInstalled[0]` declares nothing so `Running app — running` shows the sheet without it. Keep it that way —
-  a reference for the offered state alone cannot tell a conditional row from a permanent one.
+  `previewInstalled[0]` declares nothing so `Running app — running` shows the page without it. Keep it that way —
+  a reference for the offered state alone cannot tell a conditional row from a permanent one. `previewInstalled[0]`
+  carrying no metadata at all is not an oversight either: it is what a local app with no Hub card looks like, which
+  is the one case `describedFromInstalled` still cannot describe.
 
 ## Maintenance, and the guard the robot does not have
 
