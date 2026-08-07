@@ -116,7 +116,9 @@ struct MaintenanceCard: View {
         Binding(
             get: { model.confirming != nil },
             set: { presented in
-                if !presented { model.confirming = nil }
+                if !presented {
+                    model.confirming = nil
+                }
             }
         )
     }
@@ -141,11 +143,15 @@ struct MaintenanceCard: View {
             )
         // `.clearHuggingFaceCache` and nil share this arm: the dialog is only on
         // screen while `confirming` is set, and the property has to answer anyway.
-        default:
+        // Spelled out rather than `default`, so a third action is a compile error
+        // here instead of silently inheriting this one's wording.
+        case .clearHuggingFaceCache, .none:
             Confirmation(
                 title: .reachy("Clear cached models?"),
                 // swiftlint:disable:next line_length
-                message: .reachy("Downloaded model weights are deleted. The robot downloads them again when an app needs them."),
+                message: .reachy(
+                    "Downloaded model weights are deleted. The robot downloads them again when an app needs them."
+                ),
                 confirm: .reachy("Clear cache")
             )
         }

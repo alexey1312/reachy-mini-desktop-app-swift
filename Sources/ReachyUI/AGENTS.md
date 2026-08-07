@@ -167,12 +167,23 @@ here, and both sit behind a `confirmationDialog` — but only one of them needs 
   only in punctuation, and the catalogue derives one Swift symbol per key — that pair is a hard `xcstringstool`
   build error, not a warning. Hence `Remove every app?` and `Clear cached models?`.
 - `canPerformMaintenance` gates the whole section, so a Lite robot and a relay session show nothing — the same shape
-  as `canConfigureWiFi`, and `Settings — Lite robot` is the reference that proves it.
+  as `canConfigureWiFi`. **The gate is only under cover because `PreviewRobotClient` conforms to
+  `CacheMaintenanceClient`**, which is why that conformance exists: the gate asks "does this client speak that
+  protocol", so without it the section is absent from every `Settings —` reference and `Settings — Lite robot`
+  certifies nothing at all. `WiFiConfigClient`, `TeleopClient` and `DaemonLogClient` are on the preview client for
+  exactly this reason; a new capability gate needs the same line adding or its screen quietly loses coverage.
+  Which reference shows it is decided by scroll position, not by the gate: **`Settings — backend stopped` is the one**,
+  because a stopped backend drops the audio section and pulls Maintenance up into the frame. `Settings — wireless
+  robot` and `Settings — rename unavailable` pass the gate too and keep the section below the fold, so they did not
+  move when it was added — which is the tell, not a bug. Content lives in the five standalone `Maintenance —`
+  references.
 
 `WiFiSettingsCard` gained "Forget all" on the same principle: one `/wifi/forget_all` rather than a loop over the
 rows, because the per-network route answers 409 while another `nmcli` operation runs and a loop would race itself.
-It appears only above one saved network, which `Wi-Fi — own hotspot` (one network) and `Wi-Fi — on a network`
-(three) already capture either side of.
+It appears only above one saved network — `Wi-Fi — own hotspot` (one) captures its absence, `Wi-Fi — on a network`
+(three) and `Wi-Fi — join failed` (two) its presence. The count is over `known` as the daemon sends it, `Hotspot`
+included, so a robot with one real network saved offers the button as well; that matches the rows, which list every
+entry the same way and let the robot answer 400 for its own hotspot.
 
 ## Strings
 

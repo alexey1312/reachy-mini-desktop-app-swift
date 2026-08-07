@@ -34,12 +34,16 @@ private struct MaintenanceCapableClient: RobotAPIClient, CacheMaintenanceClient 
 
     func clearHuggingFaceCache() async throws {
         recorder.calls.append("clear-hf")
-        if let failure = recorder.failure { throw failure }
+        if let failure = recorder.failure {
+            throw failure
+        }
     }
 
     func resetApps() async throws {
         recorder.calls.append("reset-apps")
-        if let failure = recorder.failure { throw failure }
+        if let failure = recorder.failure {
+            throw failure
+        }
     }
 }
 
@@ -47,7 +51,9 @@ private struct MaintenanceCapableClient: RobotAPIClient, CacheMaintenanceClient 
 @Suite("Robot maintenance", .timeLimit(.minutes(1)))
 struct MaintenanceModelTests {
     private struct Refused: Error, LocalizedError {
-        var errorDescription: String? { "The robot could not delete it." }
+        var errorDescription: String? {
+            "The robot could not delete it."
+        }
     }
 
     private func session(
@@ -66,9 +72,11 @@ struct MaintenanceModelTests {
     func offeredOnlyByAWirelessRobot() {
         #expect(session().canPerformMaintenance)
         #expect(!session(wirelessVersion: false).canPerformMaintenance)
-        // A client that does not speak the protocol at all — every Lite robot and
-        // every relay session.
-        #expect(!RobotSession.preview().canPerformMaintenance)
+        // A client that does not speak the protocol at all. `PreviewRobotClient`
+        // is not that client — it conforms on purpose, so the previews of
+        // `SettingsScreen` render the section the gate lets through — and a relay
+        // is the case that reaches this in production.
+        #expect(!RobotSession.preview(client: PreviewRemoteRobotClient()).canPerformMaintenance)
     }
 
     /// The daemon deletes `/venvs/apps_venv/` without stopping anything first, so

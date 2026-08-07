@@ -46,9 +46,9 @@ struct AppSettingsScreen: View {
     var body: some View {
         content
             .navigationTitle(.reachy("Settings"))
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 
     @ViewBuilder
@@ -117,11 +117,13 @@ private struct AppSettingsWebView {
         /// A cancelled navigation is not a failure — it is a load being replaced
         /// by the next one, and it arrives as `NSURLErrorCancelled`, whose whole
         /// localized description is the word "cancelled". Printing that under
-        /// "Settings unavailable" is the same bug `RobotSession.message(for:)`
-        /// exists to prevent, so the check is by code and never by text.
+        /// "Settings unavailable" is the exact bug `RobotSession.message(for:)`
+        /// exists to prevent, so this goes through it rather than around it:
+        /// `describe` does not filter, and the one log line for a failed call is
+        /// on the other side of that funnel. Recognised by code, never by text.
         private func report(_ error: any Error) {
-            guard !RobotSession.isCancellation(error) else { return }
-            phase?.wrappedValue = .failed(RobotSession.describe(error))
+            guard let message = RobotSession.message(for: error) else { return }
+            phase?.wrappedValue = .failed(message)
         }
     }
 

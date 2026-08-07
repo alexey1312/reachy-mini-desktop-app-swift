@@ -53,8 +53,15 @@ public extension RobotSession {
 
     /// Uninstalls every app. See ``CacheMaintenanceClient/resetApps()`` for what
     /// the daemon does *not* do around it.
+    ///
+    /// Both app caches go with it. They are the same two an install or a remove
+    /// job invalidates, and this deletes the environment every entry in them
+    /// described — a catalogue still marking apps installed would offer Open and
+    /// Remove on rows the robot no longer has.
     func resetApps() async throws {
         try await withMaintenanceClient { try await $0.resetApps() }
+        appCatalogueCache = nil
+        installedAppsCache = nil
     }
 }
 

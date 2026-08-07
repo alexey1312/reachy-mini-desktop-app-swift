@@ -8,10 +8,11 @@ import Testing
 /// Shared rather than private to one suite: what a session writes into the App
 /// Group is checked from more than one angle, and each angle needs a robot that
 /// answers `/api/apps/*`.
-final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked Sendable {
+final class AppsRobotClient: RobotAPIClient, RobotAppsClient, CacheMaintenanceClient, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var catalogueCalls = 0
     private(set) var installedCalls = 0
+    private(set) var resetAppsCalls = 0
     private(set) var removed: [String] = []
     private(set) var running: RobotAppStatus?
     var failsCatalogue = false
@@ -84,6 +85,15 @@ final class AppsRobotClient: RobotAPIClient, RobotAppsClient, @unchecked Sendabl
     func setRunning(_ status: RobotAppStatus?) {
         lock.withLock { running = status }
     }
+
+    /// `/cache/reset-apps` deletes the environment every installed app lives in,
+    /// so a session holding either app cache is holding fiction afterwards. Here
+    /// so `RobotSessionAppsTests` can prove it drops them.
+    func resetApps() async throws {
+        lock.withLock { resetAppsCalls += 1 }
+    }
+
+    func clearHuggingFaceCache() async throws {}
 
     static func status(name: String, state: String = "running", error: String? = nil) -> RobotAppStatus {
         let reason = error.map { "\"\($0)\"" } ?? "null"

@@ -99,6 +99,29 @@ struct RobotSessionAppsTests {
         #expect(client.installedCalls == 2)
     }
 
+    /// `/cache/reset-apps` is `rmtree` over the venv every installed app lives in,
+    /// so both caches describe apps the robot no longer has — and the store would
+    /// go on offering Open and Remove on those rows. The same invalidation an
+    /// install or a remove job does, for the operation that removes all of them.
+    @Test("uninstalling every app makes both caches stale at once")
+    func resetInvalidatesBothCaches() async throws {
+        let client = AppsRobotClient()
+        let session = try await connected(client)
+
+        _ = try await session.appCatalogue()
+        _ = try await session.installedApps()
+        #expect(client.catalogueCalls == 1)
+        #expect(client.installedCalls == 1)
+
+        try await session.resetApps()
+        _ = try await session.appCatalogue()
+        _ = try await session.installedApps()
+
+        #expect(client.resetAppsCalls == 1)
+        #expect(client.catalogueCalls == 2)
+        #expect(client.installedCalls == 2)
+    }
+
     /// Thrown, not reported: the store screen owns this message. Leaving it on the
     /// session is what used to print an Apps failure on the Robot tab.
     @Test("a daemon that refuses throws instead of writing to the session")

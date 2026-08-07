@@ -70,8 +70,11 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
 - **`reset-apps` is `rmtree` and nothing else.** It does not stop the running app, does not ask the daemon to release
   it, and puts no environment back: an app left running has the interpreter it is executing in deleted underneath it.
   Nothing on the robot prevents that, so a client that offers the button owns the guard — `MaintenanceModel`
-  refuses while `runningApp` is busy and names the app to stop. It also invalidates every installed-app answer the
-  session is holding, hence the `refreshCurrentApp()` after it.
+  refuses while `runningApp` is busy and names the app to stop. It also invalidates **every** answer the session is
+  holding about apps, and in two places for two reasons: `RobotSession.resetApps()` drops `appCatalogueCache` and
+  `installedAppsCache` — the same pair an install or a remove job drops, because the store would otherwise go on
+  offering Open and Remove on rows whose venv is gone — and `MaintenanceModel` re-reads the running app after it,
+  which is the one reading the caches do not cover.
 - `GET /api/daemon/hardware-id` answers one key, `{"hardware_id": "<16 hex>"}` = `sha256(usb serial)[:16]` — the same
   string as mDNS TXT `unit_id` and BLE characteristic `…cdef7`. It is a join key: never reshape it.
 

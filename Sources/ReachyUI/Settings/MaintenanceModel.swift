@@ -15,7 +15,9 @@ final class MaintenanceModel {
         case clearHuggingFaceCache
         case resetApps
 
-        var id: Self { self }
+        var id: Self {
+            self
+        }
     }
 
     /// What the confirmation dialog is asking about. Not `private(set)` — the
