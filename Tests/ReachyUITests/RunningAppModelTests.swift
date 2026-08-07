@@ -389,4 +389,21 @@ struct RunningAppModelTests {
             isReachable: false
         ) == "Robot unreachable")
     }
+
+    /// The daemon's `error` is a stderr tail, so a surface that prints it in full
+    /// must not also substitute it for the state phrase: the reader gets the same
+    /// text twice, and the copy on top is cut off after two lines of traceback.
+    /// Only the dock, which has nowhere else to put it, inlines the crash.
+    @Test("a crash is inlined in the caption and never in the state phrase")
+    func crashStaysOutOfTheStatePhrase() {
+        let tail = """
+        Process exited with code 1
+        Traceback (most recent call last):
+        ModuleNotFoundError: No module named 'cv2'
+        """
+        let crashed = status(.error, error: tail)
+
+        #expect(RunningAppCaption.title(of: crashed) == "Stopped with an error")
+        #expect(RunningAppCaption.description(of: crashed) == tail)
+    }
 }

@@ -18,6 +18,22 @@ import SwiftUI
 /// about what the app is *doing*. A semantic state ("listening", "thinking") comes
 /// from the app's own port and arrives separately from the daemon process state.
 enum RunningAppCaption {
+    /// Whether this caption is the only place the crash can be read.
+    ///
+    /// Not a matter of taste, and not a default worth having: the dock is one row
+    /// with a single caption line under the app's name, so a crash there has to
+    /// say what it was. The sheet prints the same output in full two rows below,
+    /// and a caption repeating it renders the *first two lines* of a stderr tail
+    /// under a heading that promised a state — which is how "State" came to read
+    /// `Process exited with code 1 / INFO: connection rejected (403 For…` on a
+    /// screen already showing those very lines.
+    enum Failure {
+        /// Substitute the output for the state phrase.
+        case inline
+        /// Keep the state phrase; the surface shows the output somewhere of its own.
+        case shownSeparately
+    }
+
     /// The dock's caption line, and the value of the sheet's `LabeledContent`.
     ///
     /// Two lines, because that is what the strip allows and what a crash needs.
@@ -27,12 +43,17 @@ enum RunningAppCaption {
     @MainActor
     static func label(
         of status: RobotAppStatus,
+        failure: Failure,
         conversationTurn: ConversationTurn? = nil,
         isReachable: Bool = true,
         font: Font = Typography.status
     ) -> ReachyStatusLabel {
-        ReachyStatusLabel(
-            text: description(of: status, conversationTurn: conversationTurn, isReachable: isReachable),
+        let text = switch failure {
+        case .inline: description(of: status, conversationTurn: conversationTurn, isReachable: isReachable)
+        case .shownSeparately: title(of: status, conversationTurn: conversationTurn, isReachable: isReachable)
+        }
+        return ReachyStatusLabel(
+            text: text,
             tone: tone(of: status),
             font: font,
             lineLimit: 2
@@ -85,8 +106,14 @@ enum RunningAppCaption {
         }
     }
 
-    /// The same, with the failure inlined. The dock has one caption line and no
-    /// room for a second row, so a crash has to say what it was right there.
+    /// The same, with the failure inlined — `Failure.inline`, and only that.
+    /// The dock has one caption line and no room for a second row, so a crash has
+    /// to say what it was right there.
+    ///
+    /// What the daemon hands over is a stderr *tail*, not a single line, so what
+    /// this yields is the first two lines of one. That is the price of the dock
+    /// having nowhere else to put it, and the reason no surface with a row for
+    /// the output calls this.
     static func description(
         of status: RobotAppStatus,
         conversationTurn: ConversationTurn? = nil,

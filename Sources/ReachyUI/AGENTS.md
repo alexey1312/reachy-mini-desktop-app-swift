@@ -118,6 +118,16 @@ on the Robot tab.
   failures, neither of which is a daemon call, and the latter already models cancellation as its own error type.
   `YourReachiesModel` maps relay failures to sentences of its own and so guards on `RobotSession.isCancellation`
   at the top of `report(_:)` instead.
+- **A crashed app's `error` is a stderr _tail_, not a line, and only one surface may inline it.**
+  `RobotAppStatus.error` opens with the daemon's own `Process exited with code 1` and carries the app's last stderr
+  lines under it — uvicorn's logging interleaved with a Python traceback. `RunningAppCaption.label` therefore takes
+  `Failure`: the dock passes `.inline` because its one caption line is the only place a crash can be read, and
+  `RunningAppSheet` passes `.shownSeparately` because `failureRow` prints the whole tail two rows below. It used to
+  inline there too, so "State" read `Process exited with code 1 / INFO: connection rejected (403 For…` — the first
+  two lines of the very text underneath it, under a heading that promised a state.
+  **The references passed over that for as long as it shipped**, because `RobotAppStatus.previewCrashed` was a
+  single `ModuleNotFoundError` line, and a one-line tail renders identically whether a surface prints it once or
+  twice. It is several lines now, on purpose; do not shorten it back.
 
 ## Strings
 

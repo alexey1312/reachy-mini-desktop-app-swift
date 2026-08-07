@@ -32,8 +32,13 @@ struct RunningAppSheet: View {
                     // `.body` and not a `Typography` role: here the state is the
                     // *value* of a form row, so it takes the size the row's own
                     // label already has.
+                    //
+                    // `.shownSeparately` because `failureRow` is right below with
+                    // the whole tail in it — inlining the crash here printed the
+                    // same text twice, once cut off after two lines.
                     RunningAppCaption.label(
                         of: status,
+                        failure: .shownSeparately,
                         conversationTurn: model.conversationTurn,
                         isReachable: isReachable,
                         font: .body
