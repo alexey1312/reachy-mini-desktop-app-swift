@@ -412,6 +412,9 @@
     "Live view, hidden": {
       "extractionState": "manual"
     },
+    "Loading settings…": {
+      "extractionState": "manual"
+    },
     "Local network": {
       "extractionState": "manual"
     },
@@ -706,6 +709,9 @@
     "Settings": {
       "extractionState": "manual"
     },
+    "Settings unavailable": {
+      "extractionState": "manual"
+    },
     "Show installer log": {
       "extractionState": "manual"
     },
@@ -830,6 +836,9 @@
       "extractionState": "manual"
     },
     "The app and its Python environment are deleted from the robot.": {
+      "extractionState": "manual"
+    },
+    "The app's own page, served by the robot on this network.": {
       "extractionState": "manual"
     },
     "The hardware ID never changes.": {

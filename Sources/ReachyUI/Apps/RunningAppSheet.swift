@@ -21,6 +21,20 @@ struct RunningAppSheet: View {
         model.isReachable(session)
     }
 
+    /// The app's own settings page, when there is one to offer.
+    ///
+    /// `session.appSettingsURL(for:)` already answers nil without a declared port
+    /// and without a LAN address; the two conditions added here are this screen's
+    /// own. **Only while it is running**, because the process serving that page is
+    /// the process that would have died — a crashed app takes its settings down
+    /// with it, which is at its worst exactly when a bad setting is what crashed
+    /// it. And only while the robot answers, so the row does not lead to a spinner
+    /// that can never resolve.
+    private var settingsURL: URL? {
+        guard status.state == .running, isReachable else { return nil }
+        return session.appSettingsURL(for: status.app)
+    }
+
     var body: some View {
         Form {
             Section {
@@ -63,6 +77,18 @@ struct RunningAppSheet: View {
                         .foregroundStyle(.red)
                 }
                 controls
+            }
+
+            if let settingsURL {
+                Section {
+                    NavigationLink {
+                        AppSettingsScreen(url: settingsURL)
+                    } label: {
+                        Label(.reachy("Settings"), systemImage: "slider.horizontal.3")
+                    }
+                } footer: {
+                    Text(.reachy("The app's own page, served by the robot on this network."))
+                }
             }
 
             if let summary = status.app.summary {

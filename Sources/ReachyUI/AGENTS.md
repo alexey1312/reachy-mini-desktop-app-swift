@@ -129,6 +129,27 @@ on the Robot tab.
   single `ModuleNotFoundError` line, and a one-line tail renders identically whether a surface prints it once or
   twice. It is several lines now, on purpose; do not shorten it back.
 
+## An app's own settings
+
+`AppSettingsScreen` is **the only `WKWebView` in this app**, and the only screen that is not built out of the design
+system — because there is nothing to build it out of. The daemon carries no route for an app's configuration; it
+reports a port (`extra["custom_app_url"]`) and the app serves its own page there. A native screen could only be
+written against Conversation App 1.0's `/rpc` and would leave every other app with no settings whatsoever.
+(`WebAuthenticationBrowser` is **not** a second web view — that is `ASWebAuthenticationSession`, out of process on
+purpose so no Hugging Face credential passes through one of ours.)
+
+- **`RunningAppSheet` decides whether to offer it, not the screen.** `RobotSession.appSettingsURL(for:)` answers nil
+  without a declared port and without a LAN address; the sheet adds `state == .running` and `isReachable`, because
+  the process serving the page is the process that crashes. There is no way to reach an app's settings while it is
+  down, which is worst precisely when a bad setting is what took it down — say so rather than papering over it.
+- **`.ready` has no reference and cannot have one.** The web view renders nothing headless and is not even mounted
+  under `reachyPreviewMode`, and unlike `CameraViewport.streaming` this phase grows no chrome to capture over it —
+  so it is uncapturable in the sense `SceneViewport.ready` is. `.loading` and `.failed` are both covered.
+- The Settings row's presence and absence are both already under cover, and by accident of the fixtures rather than
+  by design: `previewConversation` declares 7860 so `Running app — conversation` shows the row, and
+  `previewInstalled[0]` declares nothing so `Running app — running` shows the sheet without it. Keep it that way —
+  a reference for the offered state alone cannot tell a conditional row from a permanent one.
+
 ## Strings
 
 Project rule 9 in the root `AGENTS.md` is the whole of it: `.reachy("…")` where SwiftUI takes a
