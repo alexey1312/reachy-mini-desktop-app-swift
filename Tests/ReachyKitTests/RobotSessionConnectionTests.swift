@@ -319,7 +319,7 @@ struct RobotSessionConnectionTests {
         await session.startBackend()
 
         #expect(backendUnavailableMessage(session.phase) != nil)
-        #expect(session.lastError != nil)
+        #expect(session.robotError != nil)
         #expect(session.powerTransition == nil)
         session.disconnect()
     }
@@ -352,7 +352,7 @@ struct RobotSessionConnectionTests {
         // ConnectionScreen's candidate loop and its 10 s rescan both gate on `.idle`;
         // latching here would silently stop the app from ever reconnecting.
         #expect(session.phase == .idle)
-        #expect(session.lastError != nil)
+        #expect(session.robotError != nil)
     }
 
     @Test("disconnecting mid-readiness wins over a late probe result")

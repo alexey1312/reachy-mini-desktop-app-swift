@@ -137,7 +137,7 @@ final class AppStoreModel {
         } catch {
             guard loadID == requestID, !Task.isCancelled else { return }
             attemptedCatalogueLoad = true
-            lastError = Self.describe(error)
+            lastError.recordDaemonFailure(error)
             return
         }
 
@@ -189,12 +189,8 @@ final class AppStoreModel {
             try await work()
             lastError = nil
         } catch {
-            lastError = Self.describe(error)
+            lastError.recordDaemonFailure(error)
         }
-    }
-
-    private static func describe(_ error: any Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }
 

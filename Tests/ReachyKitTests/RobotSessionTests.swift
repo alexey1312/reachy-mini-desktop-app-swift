@@ -200,7 +200,7 @@ struct RobotSessionTests {
         }
         #expect(stage == .connect)
         #expect(!message.isEmpty)
-        #expect(session.lastError != nil)
+        #expect(session.robotError != nil)
         // Retained so the stepper can name the target and offer "Try again".
         #expect(session.address != nil)
     }
@@ -223,7 +223,7 @@ struct RobotSessionTests {
         await session.wake()
         // `wake_up=true` makes the daemon enable the motors and play the animation itself.
         #expect(client.recordedSteps.first == .startDaemon(wakeUp: true))
-        #expect(session.lastError == nil)
+        #expect(session.robotError == nil)
         session.disconnect()
     }
 
@@ -233,7 +233,7 @@ struct RobotSessionTests {
         let session = makeSession(client: client)
         await session.connect(to: RobotAddress(host: "10.0.0.9"))
         await session.wake()
-        #expect(session.lastError == ReachyKitError.backendNotRunning.errorDescription)
+        #expect(session.robotError == ReachyKitError.backendNotRunning.errorDescription)
         #expect(session.powerTransition == nil)
         session.disconnect()
     }
@@ -244,7 +244,7 @@ struct RobotSessionTests {
         let session = makeSession(client: client)
         await session.connect(to: RobotAddress(host: "10.0.0.9"))
         await session.wake()
-        #expect(session.lastError == ReachyKitError.daemonBusy.errorDescription)
+        #expect(session.robotError == ReachyKitError.daemonBusy.errorDescription)
         session.disconnect()
     }
 

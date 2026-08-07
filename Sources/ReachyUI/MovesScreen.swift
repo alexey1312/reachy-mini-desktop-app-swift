@@ -56,7 +56,7 @@ struct MovesScreen: View {
                     }
                 }
             }
-            if let lastError = session.lastError, !model.isContentLoading {
+            if let lastError = model.lastError, !model.isContentLoading {
                 Section {
                     Text(lastError)
                         .font(.caption.monospaced())
@@ -73,7 +73,7 @@ struct MovesScreen: View {
         .safeAreaInset(edge: .bottom) {
             if session.currentMove != nil {
                 Button {
-                    Task { await session.stopMove() }
+                    Task { await model.stop(session: session) }
                 } label: {
                     HStack(spacing: 8) {
                         if session.isStoppingMove {

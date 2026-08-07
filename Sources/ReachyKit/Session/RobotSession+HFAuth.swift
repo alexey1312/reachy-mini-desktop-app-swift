@@ -64,13 +64,6 @@ extension RobotSession {
         guard let authClient = client as? any HFAuthClient else {
             throw ReachyKitError.hfAuthUnavailable
         }
-        do {
-            let result = try await call(authClient)
-            lastError = nil
-            return result
-        } catch {
-            lastError = Self.describe(error)
-            throw error
-        }
+        return try await call(authClient)
     }
 }

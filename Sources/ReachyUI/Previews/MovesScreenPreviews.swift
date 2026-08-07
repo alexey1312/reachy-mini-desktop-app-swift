@@ -43,6 +43,12 @@ import SwiftUI
     PreviewScene.movesScreen(.preview(status: .preview(motorMode: .disabled)))
 }
 
+// The reason lives on the model, not the session: a move the daemon refused is
+// this screen's news, and `RobotSession.robotError` now carries connection and
+// power alone.
 #Preview("Moves — error") {
-    PreviewScene.movesScreen(.preview(error: "The daemon refused the move: 503 Backend not running."))
+    PreviewScene.movesScreen(
+        .preview(),
+        model: .preview(error: "The daemon refused the move: 503 Backend not running.")
+    )
 }

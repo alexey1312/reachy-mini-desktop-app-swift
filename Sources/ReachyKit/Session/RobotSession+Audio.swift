@@ -49,16 +49,12 @@ public extension RobotSession {
 extension RobotSession {
     /// The guard-and-report shape every daemon call shares, factored out because
     /// audio alone would otherwise repeat it five times.
+    /// Throws and says nothing else. `robotError` is for the robot's connection
+    /// and power, and a volume slider failing is neither — the screen that moved
+    /// the slider owns that message, through `RobotSession.message(for:)`.
     func withClient<T>(_ call: (any RobotAPIClient) async throws -> T) async throws -> T {
         guard let client else { throw ReachyKitError.notConnected }
-        do {
-            try assertSupportedDaemon()
-            let result = try await call(client)
-            lastError = nil
-            return result
-        } catch {
-            lastError = Self.describe(error)
-            throw error
-        }
+        try assertSupportedDaemon()
+        return try await call(client)
     }
 }

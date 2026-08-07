@@ -85,7 +85,7 @@ struct WiFiSettingsCard: View {
             joinError = try await session.lastWiFiError()
             loadFailure = nil
         } catch {
-            loadFailure = describe(error)
+            loadFailure.recordDaemonFailure(error)
         }
     }
 
@@ -96,7 +96,7 @@ struct WiFiSettingsCard: View {
             try await session.forgetWiFi(ssid: ssid)
             await load()
         } catch {
-            loadFailure = describe(error)
+            loadFailure.recordDaemonFailure(error)
         }
     }
 
@@ -105,11 +105,7 @@ struct WiFiSettingsCard: View {
             try await session.resetWiFiError()
             joinError = nil
         } catch {
-            loadFailure = describe(error)
+            loadFailure.recordDaemonFailure(error)
         }
-    }
-
-    private func describe(_ error: any Error) -> String {
-        (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }

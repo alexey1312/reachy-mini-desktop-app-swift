@@ -38,13 +38,6 @@ extension RobotSession {
         guard let wifiClient = client as? any WiFiConfigClient else {
             throw ReachyKitError.wirelessFeaturesUnavailable
         }
-        do {
-            let result = try await call(wifiClient)
-            lastError = nil
-            return result
-        } catch {
-            lastError = Self.describe(error)
-            throw error
-        }
+        return try await call(wifiClient)
     }
 }

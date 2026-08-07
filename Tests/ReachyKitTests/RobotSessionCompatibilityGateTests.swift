@@ -129,7 +129,7 @@ struct RobotSessionCompatibilityGateTests {
         _ = try? await session.volume()
 
         #expect(client.sentCommands.isEmpty)
-        #expect(session.lastError?.contains("1.8.0") == true)
+        #expect(session.robotError?.contains("1.8.0") == true)
     }
 
     @Test("a supported daemon is unaffected — the gate only fires below the baseline")

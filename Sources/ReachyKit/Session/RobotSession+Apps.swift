@@ -39,8 +39,9 @@ public extension RobotSession {
         return status
     }
 
-    /// Refreshes the running-app reading for background observers without changing
-    /// the session-wide error shown by user-initiated controls.
+    /// Refreshes the running-app reading for background observers. Unlike
+    /// `currentApp()` it gates on the phase itself: a poll that outlives a
+    /// disconnect must refuse rather than ride whatever client is still attached.
     func refreshCurrentApp() async throws {
         switch phase {
         case .connected, .unreachable: break
@@ -206,14 +207,7 @@ extension RobotSession {
         guard let appsClient = client as? any RobotAppsClient else {
             throw ReachyKitError.appsUnavailable
         }
-        do {
-            let result = try await call(appsClient)
-            lastError = nil
-            return result
-        } catch {
-            lastError = Self.describe(error)
-            throw error
-        }
+        return try await call(appsClient)
     }
 
     private func startingJob(_ call: (any RobotAppsClient) async throws -> String) async throws -> String {

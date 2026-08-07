@@ -43,6 +43,26 @@ Transport + domain core. No UI imports (SwiftUI/UIKit forbidden here). Swift 6 s
 - A bare `Error` enum reaches the UI as `<Module>.<Type> error <n>`, where `n` is the case's **declaration index**:
   `RemoteControlChannel.Failure error 2` is `.closed`, the third case. None of these enums carry `LocalizedError`, so
   counting cases is how a screenshot names a root cause.
+- **A cancelled call is not a failure, and `URLSession` disagrees loudly.** An abandoned task arrives as
+  `NSURLErrorCancelled` (-999) whose entire `localizedDescription` is the word **"cancelled"** — verified against a
+  real cancelled task, not the synthetic `URLError(.cancelled)`, which carries no `userInfo` and prints the generic
+  NSError sentence instead. `describe` passed that word straight through, so leaving the Apps tab before the
+  catalogue arrived printed it in red monospace on the robot screen. **`RobotSession.message(for:)`
+  (`RobotSession+Errors.swift`) is the single filter**, and the only place daemon failures are logged: it answers
+  `nil` for a cancellation, the sentence otherwise. `nil` means _leave what is on screen alone_ — an abandoned call
+  learned nothing, so it may neither report a failure nor clear one still being read. Recognise cancellation by code,
+  never by text, and unwrap `ClientError` first. **Never call `describe` to fill a message slot**; it does not
+  filter, and a second path around `message(for:)` is worth exactly as much as no filter at all. It stays public only
+  for App Intents, which have no slot to fill.
+- **`robotError` is the robot's connection and power, and nothing else.** It was `lastError`, every funnel in the
+  session wrote to it, and that is the second half of the same bug: a genuine Apps failure surfaced on the Robot tab
+  too. Now `withClient`, `withAppsClient`, `withWiFiClient`, `withHFAuthClient` and `withUpdateClient` only throw —
+  no assignment, and **no `robotError = nil` on success either**, because a listed catalogue is no evidence that the
+  robot woke up. `playMove` throws and `stopMove` returns `[String]` for the same reason. The writers are
+  `RobotSession+Power` and `RobotSession+Connect`, through `report(_:)`, and that is the whole list. Connection and
+  power live here because they have no screen of their own — they are the state of the robot rather than of a
+  feature. Everything else belongs to the model behind the screen that asked;
+  `RobotSessionErrorOwnershipTests` is what holds the line.
 - `BLECommand` is the whole set the robot answers — anything else comes back as `ECHO:`. Renaming is **not** in it:
   daemon 1.9.0's dispatch has no `SET_NAME` branch, and it does not mount `POST /api/daemon/robot-name` either — that
   route postdates the release, so on 1.9.0 a robot cannot be renamed at all. `handshake` probes the route and reports

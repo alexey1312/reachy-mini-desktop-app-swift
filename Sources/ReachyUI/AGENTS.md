@@ -35,11 +35,11 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 - **Anything conditional on "an attempt is running" mounts and unmounts every 10 s.** The candidate sweep beats on
   that period and an automatic attempt falls back to `.idle` rather than `.failed`, so the phase walks
   `idle → handshaking → idle` forever while nothing answers. This was a reported bug — the screen visibly compressed
-  and expanded — and it had **two** sources, not one: the connection stepper as a form section, and the `lastError`
-  section, because `beginAttempt` clears `lastError` while `failAttempt` sets it for automatic attempts too (its
+  and expanded — and it had **two** sources, not one: the connection stepper as a form section, and the `robotError`
+  section, because `beginAttempt` clears `robotError` while `failAttempt` sets it for automatic attempts too (its
   `guard !automatically` comes after the assignment). Fixing only the first leaves the symptom intact. The rail is now
   mounted for the whole life of the gate, its detail slot reserves one caption line whether or not there is anything
-  to say, and `lastError` is shown only once `automaticConnectionAllowed` is false. Before adding anything to this
+  to say, and `robotError` is shown only once `automaticConnectionAllowed` is false. Before adding anything to this
   screen, ask what it does on that heartbeat. **`.disabled(!phase.acceptsConnectionChoice)` is on that heartbeat too**
   — the Hugging Face segment carried it and went dead every 10 s under a finger, which is the third instance of the
   same bug and the reason `YourReachiesSection` is now the one segment nothing disables: a robot on the relay is not
@@ -96,6 +96,28 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
 - Deployment floor is iOS 18 / macOS 15 (`Package.swift`, `Apps/Project.swift`), set by `RealityView`.
   `ScrollPosition`, `onScrollPhaseChange` and `onScrollGeometryChange` are available; the zero-height sentinel row in
   `LogConsoleScreen` predates the bump and is not a required pattern.
+
+## Errors
+
+**An error is shown by the screen whose action caused it.** A daemon failure goes into the slot on that screen's
+model — `AppStoreModel.lastError`, `MovesModel.lastError`, `AudioSettingsModel.errorMessage`,
+`SystemUpdateModel.state`, `WiFiSettingsCard.loadFailure`, `HFAccountSection.linkError`. `RobotSession.robotError`
+is **not** a fallback for anything: it holds the robot's connection and power, which are the only failures with no
+screen of their own, and `RobotScreen` / `ConnectionScreen` are its only readers. It used to be `lastError` and
+every funnel wrote to it, which is how an Apps failure — and before that a _cancelled_ Apps call — ended up printed
+on the Robot tab.
+
+- **Fill a slot with `lastError.recordDaemonFailure(error)`** (`DaemonFailure.swift`), never by describing the error
+  here. Each of these models used to carry its own `describe` helper, and the moment the session stopped absorbing
+  cancellations those eight copies would each have started printing the word "cancelled" on their own tab. The one
+  filter is `RobotSession.message(for:)`; `recordDaemonFailure` is the one-liner over it, and it logs on the way past.
+- Where the failure lands in a **state enum** rather than an optional (`SystemUpdateModel`, `AppInstallModel`), the
+  same rule reads `guard let message = RobotSession.message(for: error) else { return }` — pulled into a private
+  `fail(on:)` in both, because two of those guards in one function put `install` over SwiftLint's cyclomatic limit.
+- `OnboardingModel` and `HFSignInModel` keep their own `describe`: they report BLE and `ASWebAuthenticationSession`
+  failures, neither of which is a daemon call, and the latter already models cancellation as its own error type.
+  `YourReachiesModel` maps relay failures to sentences of its own and so guards on `RobotSession.isCancellation`
+  at the top of `report(_:)` instead.
 
 ## Strings
 

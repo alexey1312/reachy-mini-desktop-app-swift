@@ -60,13 +60,6 @@ extension RobotSession {
         guard let updateClient = client as? any DaemonUpdateClient else {
             throw ReachyKitError.wirelessFeaturesUnavailable
         }
-        do {
-            let result = try await call(updateClient)
-            lastError = nil
-            return result
-        } catch {
-            lastError = Self.describe(error)
-            throw error
-        }
+        return try await call(updateClient)
     }
 }

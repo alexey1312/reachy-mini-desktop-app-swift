@@ -59,7 +59,7 @@ final class SystemUpdateModel {
             case let .available(current, latest): .available(current: current, latest: latest)
             }
         } catch {
-            state = .failed(describe(error))
+            fail(on: error)
         }
     }
 
@@ -74,7 +74,7 @@ final class SystemUpdateModel {
         do {
             jobID = try await session.startUpdate(preRelease: preRelease)
         } catch {
-            state = .failed(describe(error))
+            fail(on: error)
             return
         }
 
@@ -96,7 +96,7 @@ final class SystemUpdateModel {
                 }
             }
         } catch {
-            state = .failed(describe(error))
+            fail(on: error)
             return
         }
 
@@ -128,8 +128,12 @@ final class SystemUpdateModel {
         state = .finished(version: version)
     }
 
-    private func describe(_ error: Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    /// A cancelled call leaves the state exactly as it was: the screen the user
+    /// was on went away, which is not an update failure and must not be drawn as
+    /// one. `RobotSession.message(for:)` logs it either way.
+    private func fail(on error: any Error) {
+        guard let message = RobotSession.message(for: error) else { return }
+        state = .failed(message)
     }
 }
 

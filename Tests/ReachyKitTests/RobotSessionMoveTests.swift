@@ -153,9 +153,12 @@ struct RobotSessionMoveTests {
         try await session.playMove(dataset: "library", move: "first")
         client.failStopMove = true
         client.failStopSound = true
-        await session.stopMove()
+        // Returned rather than reported: both tasks are seen through, so there is
+        // no single failure to throw and nothing for the session to hold.
+        let failures = await session.stopMove()
         #expect(session.currentMove == nil)
-        #expect(session.lastError == "Move: failed\nSound: failed")
+        #expect(failures == ["Move: failed", "Sound: failed"])
+        #expect(session.robotError == nil)
         session.disconnect()
     }
 

@@ -94,7 +94,10 @@ struct RobotSessionAudioTests {
         session.disconnect()
     }
 
-    @Test("a rejected level surfaces as 422 and lands in lastError")
+    /// The 422 is thrown and nothing more. `robotError` is the robot's connection
+    /// and power; a refused slider belongs to the audio card, which fills its own
+    /// `errorMessage` from what this throws.
+    @Test("a rejected level surfaces as 422 and stays off the robot screen")
     func rejection() async throws {
         let client = AudioRobotClient()
         client.rejectsEverything = true
@@ -103,7 +106,7 @@ struct RobotSessionAudioTests {
         await #expect(throws: ReachyKitError.daemonRejected(statusCode: 422)) {
             _ = try await session.setVolume(150)
         }
-        #expect(session.lastError == ReachyKitError.daemonRejected(statusCode: 422).errorDescription)
+        #expect(session.robotError == nil)
         #expect(client.accepted.isEmpty)
         session.disconnect()
     }

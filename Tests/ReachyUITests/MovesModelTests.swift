@@ -9,6 +9,11 @@ private final class MovesUIClient: RobotAPIClient, @unchecked Sendable {
     private(set) var played: [(String, String)] = []
     private let movesByDataset: [String: [String]]
     private var failingDatasets: Set<String> = []
+    private var playFailure: (any Error)?
+
+    func setPlayFailure(_ error: (any Error)?) {
+        lock.withLock { playFailure = error }
+    }
 
     init(movesByDataset: [String: [String]] = [:]) {
         self.movesByDataset = movesByDataset
@@ -63,8 +68,13 @@ private final class MovesUIClient: RobotAPIClient, @unchecked Sendable {
     }
 
     func playMove(dataset: String, move: String) async throws -> String {
-        lock.withLock { played.append((dataset, move)) }
-        return "ui-move"
+        try lock.withLock {
+            if let playFailure {
+                throw playFailure
+            }
+            played.append((dataset, move))
+            return "ui-move"
+        }
     }
 
     func runningMoveUUIDs() async throws -> Set<String> {
@@ -231,6 +241,95 @@ struct MovesModelTests {
         #expect(!model.startingMove)
         #expect(client.played.first?.0 == "pollen-robotics/reachy-mini-emotions-library")
         #expect(client.played.first?.1 == "joy")
+        session.disconnect()
+    }
+
+    /// The reason used to live on the session, which is how a move failure and an
+    /// Apps failure ended up in the same slot. It is the model's now.
+    @Test("a refused move leaves its reason on the model, not the session")
+    func playFailureIsOwnedHere() async {
+        let client = MovesUIClient()
+        client.setPlayFailure(ReachyKitError.daemonRejected(statusCode: 503))
+        let session = RobotSession { _ in client }
+        #expect(await session.connect(to: .init(host: "127.0.0.1")))
+        let model = MovesModel()
+
+        await model.play("joy", session: session)
+
+        #expect(model.lastError == ReachyKitError.daemonRejected(statusCode: 503).errorDescription)
+        #expect(session.robotError == nil)
+        session.disconnect()
+    }
+
+    /// Leaving the tab cancels the request underneath. `URLSession` calls that
+    /// "cancelled", and printing that word at the reader is the bug this whole
+    /// split came from.
+    @Test("a cancelled move says nothing and leaves the standing reason alone")
+    func cancelledPlayIsSilent() async {
+        let client = MovesUIClient()
+        client.setPlayFailure(ReachyKitError.daemonRejected(statusCode: 503))
+        let session = RobotSession { _ in client }
+        #expect(await session.connect(to: .init(host: "127.0.0.1")))
+        let model = MovesModel()
+        await model.play("joy", session: session)
+        let standing = model.lastError
+
+        client.setPlayFailure(URLError(.cancelled))
+        await model.play("joy", session: session)
+
+        #expect(model.lastError == standing)
+        session.disconnect()
+    }
+
+    @Test("a failed library load leaves its reason on the model")
+    func loadFailureIsOwnedHere() async {
+        let client = MovesUIClient()
+        let session = RobotSession { _ in client }
+        #expect(await session.connect(to: .init(host: "127.0.0.1")))
+        let model = MovesModel()
+        client.setDataset(model.selectedLibrary.dataset, failing: true)
+
+        await model.load(session: session)
+
+        #expect(model.lastError?.isEmpty == false)
+        #expect(session.robotError == nil)
+        session.disconnect()
+    }
+
+    @Test("a successful load clears the reason a previous one left")
+    func successfulLoadClearsTheReason() async {
+        let client = MovesUIClient()
+        let session = RobotSession { _ in client }
+        #expect(await session.connect(to: .init(host: "127.0.0.1")))
+        let model = MovesModel()
+        client.setDataset(model.selectedLibrary.dataset, failing: true)
+        await model.load(session: session)
+        #expect(model.lastError != nil)
+
+        client.setDataset(model.selectedLibrary.dataset, failing: false)
+        await model.load(session: session, refresh: true)
+
+        #expect(model.lastError == nil)
+        session.disconnect()
+    }
+
+    /// `stopMove` answers with a list rather than throwing, because both daemon
+    /// tasks are stopped in parallel and both are seen through. Joining it is the
+    /// model's job now.
+    @Test("stop joins what refused into the model's own reason")
+    func stopJoinsFailures() async {
+        let client = MovesUIClient()
+        let session = RobotSession { _ in client }
+        #expect(await session.connect(to: .init(host: "127.0.0.1")))
+        let model = MovesModel()
+        await model.play("joy", session: session)
+
+        await model.stop(session: session)
+
+        let reason = model.lastError
+        #expect(reason?.contains("Move:") == true)
+        #expect(reason?.contains("Sound:") == true)
+        #expect(session.robotError == nil)
         session.disconnect()
     }
 }

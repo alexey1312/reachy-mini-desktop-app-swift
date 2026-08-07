@@ -46,7 +46,11 @@ private final class RefreshAppsClient: RobotAPIClient, RobotAppsClient, @uncheck
 @MainActor
 @Suite("Robot session background app refresh", .timeLimit(.minutes(1)))
 struct RobotSessionAppRefreshTests {
-    @Test("a background app refresh preserves the session error channel")
+    /// The dock polls on a timer behind whatever the user is looking at. Neither
+    /// its successes nor its failures may disturb `robotError`, which by now only
+    /// the connection and power paths write — a background poll that could clear a
+    /// wake failure would take the message away mid-read.
+    @Test("a background app refresh leaves the session error channel alone")
     func preservesErrors() async throws {
         let client = RefreshAppsClient()
         let defaults = try #require(UserDefaults(
@@ -57,21 +61,25 @@ struct RobotSessionAppRefreshTests {
             appsCache: RobotAppsCacheStore(defaults: defaults)
         ) { _ in client }
         #expect(await session.connect(to: .init(host: "127.0.0.1")))
+
+        let standing = "Robot backend did not start within 90 seconds."
+        session.robotError = standing
+
         client.failsCatalogue = true
         await #expect(throws: ReachyKitError.daemonRejected(statusCode: 503)) {
             _ = try await session.appCatalogue(refresh: true)
         }
-        let reportedError = try #require(session.lastError)
+        #expect(session.robotError == standing)
 
         client.failsCatalogue = false
         try await session.refreshCurrentApp()
-        #expect(session.lastError == reportedError)
+        #expect(session.robotError == standing)
 
         client.failsCurrentApp = true
         await #expect(throws: ReachyKitError.daemonRejected(statusCode: 503)) {
             try await session.refreshCurrentApp()
         }
-        #expect(session.lastError == reportedError)
+        #expect(session.robotError == standing)
     }
 
     @Test("a background app refresh cannot cross the compatibility gate")
