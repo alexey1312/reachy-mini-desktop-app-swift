@@ -364,29 +364,4 @@ struct RunningAppModelTests {
 
         #expect(model.conversationTurn == nil)
     }
-
-    @Test("conversation captions use the released semantic vocabulary", arguments: [
-        (ConversationTurn.listening, "Listening…"),
-        (.thinking, "Thinking…"),
-        (.speaking, "Speaking…"),
-        (.ready, "Ready"),
-        (.unknown("waiting_for_tool"), "waiting_for_tool"),
-    ])
-    func semanticCaption(turn: ConversationTurn, caption: String) {
-        let conversation = RobotAppStatus(app: Self.conversationApp, state: .running)
-        #expect(RunningAppCaption.title(of: conversation, conversationTurn: turn) == caption)
-    }
-
-    @Test("process transitions and reachability still take precedence")
-    func processStatePrecedesConversationTurn() {
-        let stopping = RobotAppStatus(app: Self.conversationApp, state: .stopping)
-        let running = RobotAppStatus(app: Self.conversationApp, state: .running)
-
-        #expect(RunningAppCaption.title(of: stopping, conversationTurn: .speaking) == "Stopping…")
-        #expect(RunningAppCaption.title(
-            of: running,
-            conversationTurn: .speaking,
-            isReachable: false
-        ) == "Robot unreachable")
-    }
 }

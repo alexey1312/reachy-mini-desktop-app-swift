@@ -118,6 +118,72 @@ on the Robot tab.
   failures, neither of which is a daemon call, and the latter already models cancellation as its own error type.
   `YourReachiesModel` maps relay failures to sentences of its own and so guards on `RobotSession.isCancellation`
   at the top of `report(_:)` instead.
+- **A crashed app's `error` is a stderr _tail_, not a line, and only one surface may inline it.**
+  `RobotAppStatus.error` opens with the daemon's own `Process exited with code 1` and carries the app's last stderr
+  lines under it — uvicorn's logging interleaved with a Python traceback. `RunningAppCaption.label` therefore takes
+  `Failure`: the dock passes `.inline` because its one caption line is the only place a crash can be read, and
+  `RunningAppSheet` passes `.shownSeparately` because `failureRow` prints the whole tail two rows below. It used to
+  inline there too, so "State" read `Process exited with code 1 / INFO: connection rejected (403 For…` — the first
+  two lines of the very text underneath it, under a heading that promised a state.
+  **The references passed over that for as long as it shipped**, because `RobotAppStatus.previewCrashed` was a
+  single `ModuleNotFoundError` line, and a one-line tail renders identically whether a surface prints it once or
+  twice. It is several lines now, on purpose; do not shorten it back.
+
+## An app's own settings
+
+`AppSettingsScreen` is **the only `WKWebView` in this app**, and the only screen that is not built out of the design
+system — because there is nothing to build it out of. The daemon carries no route for an app's configuration; it
+reports a port (`extra["custom_app_url"]`) and the app serves its own page there. A native screen could only be
+written against Conversation App 1.0's `/rpc` and would leave every other app with no settings whatsoever.
+(`WebAuthenticationBrowser` is **not** a second web view — that is `ASWebAuthenticationSession`, out of process on
+purpose so no Hugging Face credential passes through one of ours.)
+
+- **`RunningAppSheet` decides whether to offer it, not the screen.** `RobotSession.appSettingsURL(for:)` answers nil
+  without a declared port and without a LAN address; the sheet adds `state == .running` and `isReachable`, because
+  the process serving the page is the process that crashes. There is no way to reach an app's settings while it is
+  down, which is worst precisely when a bad setting is what took it down — say so rather than papering over it.
+- **`.ready` has no reference and cannot have one.** The web view renders nothing headless and is not even mounted
+  under `reachyPreviewMode`, and unlike `CameraViewport.streaming` this phase grows no chrome to capture over it —
+  so it is uncapturable in the sense `SceneViewport.ready` is. `.loading` and `.failed` are both covered.
+- The Settings row's presence and absence are both already under cover, and by accident of the fixtures rather than
+  by design: `previewConversation` declares 7860 so `Running app — conversation` shows the row, and
+  `previewInstalled[0]` declares nothing so `Running app — running` shows the sheet without it. Keep it that way —
+  a reference for the offered state alone cannot tell a conditional row from a permanent one.
+
+## Maintenance, and the guard the robot does not have
+
+`MaintenanceCard` carries the two `/cache/*` actions. Both delete something on the robot, both are irreversible from
+here, and both sit behind a `confirmationDialog` — but only one of them needs a rule:
+
+- **`reset-apps` is `shutil.rmtree("/venvs/apps_venv/")` and nothing else.** The daemon does not stop the running app
+  first, so its interpreter is deleted underneath it. `MaintenanceModel.blockingApp(_:)` refuses while
+  `runningApp.isBusy`, and the card **names the app to stop** rather than only greying the button out — a disabled
+  control with no reason attached tells the reader nothing to act on. An unfamiliar process state counts as busy,
+  the way `RobotAppStatus.State.isBusy` treats it: refusing to delete an environment that might be in use is the
+  safe way to be wrong.
+- The description goes **above** the button in both rows, which is how the robot's own dashboard reads it and the
+  right way round for something irreversible: what it does before the thing that does it.
+- **The dialog's keys deliberately do not echo the buttons'.** `Uninstall all apps` and `Uninstall all apps?` differ
+  only in punctuation, and the catalogue derives one Swift symbol per key — that pair is a hard `xcstringstool`
+  build error, not a warning. Hence `Remove every app?` and `Clear cached models?`.
+- `canPerformMaintenance` gates the whole section, so a Lite robot and a relay session show nothing — the same shape
+  as `canConfigureWiFi`. **The gate is only under cover because `PreviewRobotClient` conforms to
+  `CacheMaintenanceClient`**, which is why that conformance exists: the gate asks "does this client speak that
+  protocol", so without it the section is absent from every `Settings —` reference and `Settings — Lite robot`
+  certifies nothing at all. `WiFiConfigClient`, `TeleopClient` and `DaemonLogClient` are on the preview client for
+  exactly this reason; a new capability gate needs the same line adding or its screen quietly loses coverage.
+  Which reference shows it is decided by scroll position, not by the gate: **`Settings — backend stopped` is the one**,
+  because a stopped backend drops the audio section and pulls Maintenance up into the frame. `Settings — wireless
+  robot` and `Settings — rename unavailable` pass the gate too and keep the section below the fold, so they did not
+  move when it was added — which is the tell, not a bug. Content lives in the five standalone `Maintenance —`
+  references.
+
+`WiFiSettingsCard` gained "Forget all" on the same principle: one `/wifi/forget_all` rather than a loop over the
+rows, because the per-network route answers 409 while another `nmcli` operation runs and a loop would race itself.
+It appears only above one saved network — `Wi-Fi — own hotspot` (one) captures its absence, `Wi-Fi — on a network`
+(three) and `Wi-Fi — join failed` (two) its presence. The count is over `known` as the daemon sends it, `Hotspot`
+included, so a robot with one real network saved offers the button as well; that matches the rows, which list every
+entry the same way and let the robot answer 400 for its own hotspot.
 
 ## Strings
 

@@ -123,9 +123,23 @@ import Foundation
         /// The last ten stderr lines are all the daemon keeps, and on a robot whose
         /// journal is not served over the network they are the only crash output
         /// there is.
+        ///
+        /// **Several lines on purpose.** This was one line — an exception and
+        /// nothing else — and a one-line tail renders identically whether a
+        /// surface prints it once or twice, so the references passed over the
+        /// running-app sheet printing it in both its state row and its output row.
+        /// A real tail opens with the daemon's own summary and carries a traceback
+        /// under it, and that shape is what the two rows have to be captured
+        /// against.
         static let previewCrashed = RobotAppStatus.preview(
             .error,
-            error: "ModuleNotFoundError: No module named 'cv2'"
+            error: """
+            Process exited with code 1
+            Traceback (most recent call last):
+              File "/venvs/apps_venv/lib/python3.12/site-packages/reachy_mini_dance/main.py", line 12, in <module>
+                import cv2
+            ModuleNotFoundError: No module named 'cv2'
+            """
         )
 
         static let previewConversation = RobotAppStatus(app: .previewConversation, state: .running)

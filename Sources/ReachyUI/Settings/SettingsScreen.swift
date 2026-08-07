@@ -43,6 +43,9 @@ struct SettingsScreen: View {
             if session.canConfigureWiFi {
                 WiFiSettingsCard(session: session)
             }
+            if session.canPerformMaintenance {
+                MaintenanceCard(session: session)
+            }
             diagnosticsSection
             privacySection
             recoverySection

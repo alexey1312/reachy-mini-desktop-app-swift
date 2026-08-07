@@ -76,6 +76,22 @@
         }
     }
 
+    /// `SettingsScreen` tests the client for this before drawing the Maintenance
+    /// section, so without the conformance `canPerformMaintenance` is false in
+    /// every preview and the section is missing from `Settings — wireless robot`
+    /// while `Settings — Lite robot` proves nothing about the gate. Both actions
+    /// throw: a preview must never ask a robot to delete anything, and nothing in
+    /// a captured frame taps a button behind a confirmation dialog.
+    extension PreviewRobotClient: CacheMaintenanceClient {
+        public func clearHuggingFaceCache() async throws {
+            throw ReachyKitError.wirelessFeaturesUnavailable
+        }
+
+        public func resetApps() async throws {
+            throw ReachyKitError.wirelessFeaturesUnavailable
+        }
+    }
+
     /// Accepts targets and does nothing with them.
     public struct PreviewTeleopChannel: TeleopChannel {
         public init() {}

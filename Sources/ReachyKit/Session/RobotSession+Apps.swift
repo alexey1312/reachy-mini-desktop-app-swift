@@ -145,6 +145,37 @@ public extension RobotSession {
         guard let address else { throw ReachyKitError.notConnected }
         return try ConversationRPCClient(address: address, port: app.customAppPort).turns()
     }
+
+    /// Where an app serves its **own** settings page, on the port it declared and
+    /// the host this session is connected to.
+    ///
+    /// The daemon carries none of this: there is no route anywhere in the API for
+    /// an app's own configuration, only `extra["custom_app_url"]` naming the port
+    /// the app binds. So the settings a user is looking for are a page the app
+    /// renders itself — the conversation app logs `Serving settings UI from
+    /// …/static` as it comes up — and reaching them means dialling that port.
+    ///
+    /// The app supplies the port and the session supplies the host, never the
+    /// other way round; see ``RobotApp/customAppPort``.
+    ///
+    /// Nil in three cases, all of them meaning "do not offer this":
+    /// - the daemon reported no port. It scrapes that literal out of the app's
+    ///   `main.py`, so its absence is the one signal available that an app serves
+    ///   no page of its own. A link to a port nothing listens on is worse than no
+    ///   link, which is why this does **not** fall back to 7860 the way
+    ///   ``ConversationRPCClient`` does — that one is a background stream nobody
+    ///   sees fail.
+    /// - a remote session, which has no LAN address to dial. The page is served by
+    ///   the app process on the robot's own network and the relay does not carry
+    ///   it.
+    /// - the app is not running. The process serving the page is the process that
+    ///   died, so a crashed app takes its own settings down with it — including
+    ///   the ones whose misconfiguration crashed it. Callers check the state; this
+    ///   only knows about addresses.
+    func appSettingsURL(for app: RobotApp) -> URL? {
+        guard let address, let port = app.customAppPort else { return nil }
+        return RobotAddress(host: address.host, port: port).httpURL(path: "/")
+    }
 }
 
 /// What this session leaves behind for a widget that cannot ask the robot

@@ -47,6 +47,20 @@ extension PreviewScene {
         .preview()
     }
 
+    /// The app's own settings page. Only the states *around* the web view can be
+    /// captured — see the note in `AppSettingsPreviews`.
+    static func appSettings(_ phase: AppSettingsScreen.Phase) -> some View {
+        // The real seam rather than a literal: a preview session parks a LAN
+        // address and the conversation app declares 7860, so this is the URL the
+        // screen is handed on a robot. It is never dialled — `reachyPreviewMode`
+        // leaves the web view unmounted.
+        let url = RobotSession.preview().appSettingsURL(for: .previewConversation)!
+        return NavigationHost {
+            AppSettingsScreen(url: url, phase: phase)
+        }
+        .preview()
+    }
+
     /// The bottom strip on its own. Sized to fit rather than to a device: it is a
     /// component, and a full-screen capture of one would be mostly empty.
     static func runningAppDock(

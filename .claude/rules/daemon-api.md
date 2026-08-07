@@ -61,6 +61,20 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
   live address, no network names. Neither contains the other.
 - `POST /wifi/forget` answers 404 for a network the robot never saved and 400 for `Hotspot`. Everywhere else in
   `/wifi/*` and `/update/*` a 404 means the route was never mounted, i.e. a Lite robot.
+- **`/cache/*` is the third root-mounted wireless router**, and the easiest to miss: `main.py` guards `cache`, `logs`,
+  `update` and `wifi_config` behind the same `args.wireless_version`. Two routes, both `POST`, both from
+  `routers/cache.py`: `/cache/clear-hf` deletes `/home/pollen/.cache/huggingface`, `/cache/reset-apps` deletes
+  `/venvs/apps_venv/`. Each answers **200 whether it deleted anything or found the directory already gone** — the
+  difference lives only in an English `message` the daemon composes, so there is nothing machine-readable to branch
+  on and `CacheMaintenanceClient` drops it. A failed `shutil.rmtree` is a 500 with a `detail`.
+- **`reset-apps` is `rmtree` and nothing else.** It does not stop the running app, does not ask the daemon to release
+  it, and puts no environment back: an app left running has the interpreter it is executing in deleted underneath it.
+  Nothing on the robot prevents that, so a client that offers the button owns the guard — `MaintenanceModel`
+  refuses while `runningApp` is busy and names the app to stop. It also invalidates **every** answer the session is
+  holding about apps, and in two places for two reasons: `RobotSession.resetApps()` drops `appCatalogueCache` and
+  `installedAppsCache` — the same pair an install or a remove job drops, because the store would otherwise go on
+  offering Open and Remove on rows whose venv is gone — and `MaintenanceModel` re-reads the running app after it,
+  which is the one reading the caches do not cover.
 - `GET /api/daemon/hardware-id` answers one key, `{"hardware_id": "<16 hex>"}` = `sha256(usb serial)[:16]` — the same
   string as mDNS TXT `unit_id` and BLE characteristic `…cdef7`. It is a join key: never reshape it.
 
@@ -128,6 +142,16 @@ regex-scrapes the literal out of the app's `main.py`, so what arrives is the app
   the session; `RobotApp.customAppPort` exists to make that split hard to get wrong, and the daemon's own relay
   rewrites the host to `127.0.0.1` for the mirror-image reason. The key can be absent or explicitly `null` when the
   scrape found nothing, so every caller carries a default.
+- **The same port serves the app's own settings page, at `/`** — the conversation app logs `Serving settings UI from
+  …/static` as it comes up. There is **no daemon route for any of it**: an app's configuration (personalities,
+  voice, backend) is reachable only by dialling that port, which is why the app shows it in a `WKWebView`
+  (`AppSettingsScreen`) rather than natively. `RobotSession.appSettingsURL(for:)` builds it and, unlike
+  `ConversationRPCClient`, does **not** fall back to 7860: a background stream nobody sees may guess, a row someone
+  taps may not, and an absent key is the daemon's only signal that an app serves no page at all.
+- **The page dies with the app process.** It is served by the app, not by the daemon, so a crashed app takes its own
+  settings down with it — at its worst exactly when a bad setting is what crashed it. A profile directory under
+  `user_personalities/` with no `profile.md` in it does that: `Failed to initialize tools`, exit code 1, and the
+  settings that would fix it unreachable until the app starts. Fix that class of thing on the robot.
 - **Conversation App 1.0 speaks JSON-RPC 2.0 over WebSocket `/rpc`.** The REST `/api/v1/*` + SSE
   `/api/v1/conversation_events` of v0.10.0 is retired, not extended. It ships with SDK `1.10.0rc2` **in the app's own
   venv**, so `/rpc` answers on a robot whose daemon is still 1.9.0.

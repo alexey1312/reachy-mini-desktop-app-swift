@@ -21,6 +21,16 @@ public extension RobotSession {
         try await withWiFiClient { try await $0.forget(ssid: ssid) }
     }
 
+    /// Forgets every saved network at once, the robot's own hotspot aside — the
+    /// route the settings card's "Forget all" calls.
+    ///
+    /// `/wifi/forget_all` rather than a loop over `forget(ssid:)`: the robot does
+    /// this in one `nmcli` operation, and the per-network route answers 409 while
+    /// another one runs, so a loop would race itself.
+    func forgetAllWiFi() async throws {
+        try await withWiFiClient { try await $0.forgetAll() }
+    }
+
     /// Why the last join failed. `connect_sealed` returns before it joins, so this is
     /// where the reason ends up rather than in the reply.
     func lastWiFiError() async throws -> String? {

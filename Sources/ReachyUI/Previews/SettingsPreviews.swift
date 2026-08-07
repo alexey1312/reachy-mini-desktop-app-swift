@@ -24,6 +24,34 @@ import SwiftUI
     PreviewScene.settings(.preview(status: .preview(state: .stopped)))
 }
 
+// MARK: - Maintenance
+
+// Both actions delete something on the robot and neither can be undone from here,
+// so the sentence saying what goes comes above the button that sends it.
+
+#Preview("Maintenance — idle") {
+    PreviewScene.maintenanceCard()
+}
+
+#Preview("Maintenance — clearing the cache") {
+    PreviewScene.maintenanceCard(.preview(running: .clearHuggingFaceCache))
+}
+
+#Preview("Maintenance — cleared") {
+    PreviewScene.maintenanceCard(.preview(finished: .clearHuggingFaceCache))
+}
+
+// The daemon does not stop a running app before deleting the environment it runs
+// in, so the client refuses instead — and names the app, because a greyed-out
+// button on its own tells the reader nothing to act on.
+#Preview("Maintenance — an app is running") {
+    PreviewScene.maintenanceCard(runningApp: .preview(.running))
+}
+
+#Preview("Maintenance — failed") {
+    PreviewScene.maintenanceCard(.preview(error: "The robot rejected the request (HTTP 500)."))
+}
+
 // MARK: - System update
 
 #Preview("System update — idle") {

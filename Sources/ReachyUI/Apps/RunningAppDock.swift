@@ -157,6 +157,7 @@ struct RunningAppDockContent: View {
                     layout: .dock,
                     status: RunningAppCaption.label(
                         of: status,
+                        failure: .inline,
                         conversationTurn: conversationTurn,
                         isReachable: isReachable
                     )

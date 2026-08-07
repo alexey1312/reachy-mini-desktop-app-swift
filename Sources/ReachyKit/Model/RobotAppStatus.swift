@@ -40,7 +40,14 @@ public struct RobotAppStatus: Sendable, Equatable, Decodable {
 
     public let app: RobotApp
     public let state: State
-    /// Set when the app died — the traceback's last line, as the daemon saw it.
+    /// Set when the app died — the daemon's summary line followed by the tail of
+    /// the app's stderr, verbatim.
+    ///
+    /// **Several lines, not one.** It used to be documented as the traceback's
+    /// last line, and a surface built on that reading shows an arbitrary window
+    /// onto a Python traceback interleaved with uvicorn's own logging. Anything
+    /// rendering this needs either the room for all of it or an explicit decision
+    /// about what to cut.
     public let error: String?
 
     public var isBusy: Bool {
