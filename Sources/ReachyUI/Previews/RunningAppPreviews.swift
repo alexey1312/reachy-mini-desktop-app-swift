@@ -11,6 +11,22 @@ import SwiftUI
     PreviewScene.runningAppDock(.preview(.running))
 }
 
+#Preview("Dock — conversation listening", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.previewConversation, conversationTurn: .listening)
+}
+
+#Preview("Dock — conversation thinking", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.previewConversation, conversationTurn: .thinking)
+}
+
+#Preview("Dock — conversation speaking", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.previewConversation, conversationTurn: .speaking)
+}
+
+#Preview("Dock — conversation ready", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.previewConversation, conversationTurn: .ready)
+}
+
 #Preview("Dock — starting", traits: .sizeThatFitsLayout) {
     PreviewScene.runningAppDock(.preview(.starting))
 }
@@ -41,6 +57,10 @@ import SwiftUI
 
 #Preview("Running app — running") {
     PreviewScene.runningAppSheet(.preview(.running))
+}
+
+#Preview("Running app — conversation") {
+    PreviewScene.runningAppSheet(.previewConversation, conversationTurn: .listening)
 }
 
 #Preview("Running app — crashed") {

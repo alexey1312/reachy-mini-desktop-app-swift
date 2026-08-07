@@ -117,6 +117,35 @@ most questions in a glance.
 - `…cdef6` is `", ".join(...)` over the robot's `commands/` directory with `.sh` stripped, `"None"` when empty, in
   `os.listdir` order. Read it; never hardcode the list, and sort it before showing it.
 
+## An app's own control surface (`/rpc`) — not the daemon's
+
+A robot app may serve its own settings and semantic status on a port of its own. The daemon only reports it, in
+`AppInfo.extra["custom_app_url"]`, and it reports it **unresolved**: `local_common_venv._get_custom_app_url_from_file`
+regex-scrapes the literal out of the app's `main.py`, so what arrives is the app's *bind* address. Conversation App
+1.0 declares `http://0.0.0.0:7860/`.
+
+- **Take the port, discard the host.** `0.0.0.0` dialled from a phone is the phone. The robot's address belongs to
+  the session; `RobotApp.customAppPort` exists to make that split hard to get wrong, and the daemon's own relay
+  rewrites the host to `127.0.0.1` for the mirror-image reason. The key can be absent or explicitly `null` when the
+  scrape found nothing, so every caller carries a default.
+- **Conversation App 1.0 speaks JSON-RPC 2.0 over WebSocket `/rpc`.** The REST `/api/v1/*` + SSE
+  `/api/v1/conversation_events` of v0.10.0 is retired, not extended. It ships with SDK `1.10.0rc2` **in the app's own
+  venv**, so `/rpc` answers on a robot whose daemon is still 1.9.0.
+- **Consume `conversation.turn` `{state}`, not `conversation.activity` `{reason}`.** The app's own web UI subscribes
+  to `activity` and maps the raw reasons itself (`static/js/orb.js`); `turn` carries the mapped
+  `listening / thinking / speaking / ready`, deduplicated server-side, and the comment beside it in `console.py` says
+  it is there "for clients without that mapping (mobile)". Copying the frontend is the wrong instinct here.
+  Also broadcast: `conversation.transcript` `{role, text, final}`, `conversation.level` `{role, rms}`,
+  `conversation.phase`. Request methods include `conversation.status`, `conversation.mic`, `conversation.say`,
+  `conversation.interrupt`, `personalities.*`, `voices.*`, `backend.config`.
+- **There is no initial state to fetch.** `conversation.status` returns backend/connection config, not a turn, and
+  `turn` is push-only and emitted on change. A client attaching mid-conversation legitimately knows nothing until the
+  next transition — `RunningAppCaption` leaves the daemon's "Running" in place, which is the correct answer, not a
+  gap to paper over.
+- A newer daemon relays the same frames over the WebRTC DataChannel (`daemon/jsonrpc_relay.py`), which is what a
+  remote session would need. On 1.9.0 there is no relay, so `RunningAppModel.conversationStreamKey` returns nil
+  without a LAN address rather than pretending.
+
 ## MVP endpoint subset (what upstream actually calls)
 
 `daemon/status|start|stop`, `daemon/hardware-id`, `daemon/robot-name`, `state/full`, `move/set_target`,

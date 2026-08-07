@@ -3,11 +3,6 @@
 [scripts]
 run_mode = "nonconcurrent"
 
-# A linked worktree copies its repowise index from the base checkout instead of indexing from
-# scratch, so this costs seconds rather than the full parse. It blocks on purpose: a workspace
-# reported ready with a half-seeded index answers questions about the wrong branch.
-setup = "./Scripts/repowise-sync.sh --wait"
-
 # One phone, one Xcode build directory: two workspaces installing at once would fight over
 # both. The team id is read from ~/.config/reachy-mini/device.env, never from the repo.
 [scripts.run.device]

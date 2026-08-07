@@ -45,7 +45,49 @@ final class LocalWebSocketServer: @unchecked Sendable {
         )
     }
 
+    /// Fires once the client closes: a WebSocket close frame, or the connection
+    /// failing under it. A client that merely stops reading never gets here, which
+    /// is exactly the distinction a cancellation test needs to draw.
+    static func whenClosed(_ connection: NWConnection, run onClosed: @escaping @Sendable () -> Void) {
+        connection.receiveMessage { _, context, _, error in
+            let metadata = context?
+                .protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata
+            if error != nil || metadata?.opcode == .close {
+                onClosed()
+            } else {
+                whenClosed(connection, run: onClosed)
+            }
+        }
+    }
+
     func stop() {
         listener.cancel()
+    }
+}
+
+/// A cross-queue flag for a Network.framework callback to raise and a test to
+/// poll. Tests wait on conditions, not durations (project rule 7).
+final class Signal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var raised = false
+
+    var isRaised: Bool {
+        lock.withLock { raised }
+    }
+
+    func raise() {
+        lock.withLock { raised = true }
+    }
+
+    /// Polls until raised, or gives up and reports it never was.
+    func waitRaised(within budget: Duration = .seconds(10)) async -> Bool {
+        let deadline = ContinuousClock.now + budget
+        while ContinuousClock.now < deadline {
+            if isRaised {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return isRaised
     }
 }

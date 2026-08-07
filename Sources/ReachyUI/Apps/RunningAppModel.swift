@@ -13,6 +13,8 @@ import ReachyKit
 @MainActor
 @Observable
 final class RunningAppModel {
+    typealias ConversationTurns = @MainActor (RobotSession, RobotApp) throws -> AsyncStream<ConversationTurn>
+
     /// Poll cadence. Injected so tests can assert the choice without sleeping it —
     /// a fixed `Task.sleep` before an assertion is a CI flake waiting to happen
     /// (project rule 7).
@@ -51,14 +53,23 @@ final class RunningAppModel {
     var isExpanded = false
     private(set) var busy = false
     private(set) var lastError: String?
+    /// The app's own state inside the daemon's broader `.running` process state.
+    /// Nil for every other app, old Conversation App builds, and remote sessions
+    /// whose daemon cannot relay `/rpc` yet.
+    private(set) var conversationTurn: ConversationTurn?
 
     private let configuration: Configuration
+    private let conversationTurns: ConversationTurns
     private var dismissal: Dismissal?
     /// When a deep link last asked for the page, while there was nothing to open.
     private var requestedExpansion: Date?
 
-    init(configuration: Configuration = Configuration()) {
+    init(
+        configuration: Configuration = Configuration(),
+        conversationTurns: @escaping ConversationTurns = { try $0.conversationTurns(for: $1) }
+    ) {
         self.configuration = configuration
+        self.conversationTurns = conversationTurns
     }
 
     // MARK: - Visibility
@@ -162,6 +173,47 @@ final class RunningAppModel {
         }
     }
 
+    /// A stable task identity for the one app whose own socket carries the official
+    /// semantic conversation protocol. Returning nil tears the observer down while
+    /// backgrounded, during process transitions, and over daemon 1.9's relay path
+    /// (which has no address to dial).
+    ///
+    /// The port is part of the identity: a poll that refreshes the app's metadata
+    /// can name a port where the last one only had the fallback, and the observer
+    /// has to redial rather than sit on a socket to nowhere.
+    func conversationStreamKey(
+        for status: RobotAppStatus?,
+        session: RobotSession,
+        active: Bool
+    ) -> String? {
+        guard active,
+              let status,
+              status.state == .running,
+              status.app.exposesConversationRPC,
+              session.address != nil
+        else { return nil }
+        return "\(status.app.id)@\(status.app.customAppPort.map(String.init) ?? "default")"
+    }
+
+    /// Follows Conversation App 1.0's `conversation.turn` notifications. This is
+    /// presentation enrichment only: an absent or old `/rpc` surface quietly
+    /// leaves the daemon's ordinary "Running" caption in place.
+    ///
+    /// So does a live one until the conversation next moves. `turn` is push-only
+    /// and emitted on change, and `conversation.status` answers with backend config
+    /// rather than a state, so there is nothing to seed the first frame from.
+    func observeConversation(status: RobotAppStatus?, session: RobotSession) async {
+        conversationTurn = nil
+        guard let status, status.state == .running, status.app.exposesConversationRPC,
+              let turns = try? conversationTurns(session, status.app)
+        else { return }
+
+        for await turn in turns {
+            guard !Task.isCancelled else { return }
+            conversationTurn = turn
+        }
+    }
+
     /// Internal rather than private so a test can assert the cadence directly,
     /// instead of waiting one out.
     func interval(for status: RobotAppStatus?) -> Duration {
@@ -205,12 +257,14 @@ final class RunningAppModel {
         static func preview(
             isExpanded: Bool = false,
             busy: Bool = false,
-            error: String? = nil
+            error: String? = nil,
+            conversationTurn: ConversationTurn? = nil
         ) -> RunningAppModel {
             let model = RunningAppModel()
             model.isExpanded = isExpanded
             model.busy = busy
             model.lastError = error
+            model.conversationTurn = conversationTurn
             return model
         }
     }

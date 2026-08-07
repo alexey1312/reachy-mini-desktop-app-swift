@@ -171,4 +171,46 @@ struct RobotAppsTests {
 
         #expect(try card.matches(installed: installedEntry(name: "")) == false)
     }
+
+    // MARK: - The app's own control port
+
+    /// `extra["custom_app_url"]` as the daemon really sends it: the literal the
+    /// app declares in its `main.py`, bind address and all.
+    @Test("takes the port out of custom_app_url and nothing else")
+    func readsCustomAppPort() throws {
+        let app = try decode(#"""
+        {"name": "reachy_mini_conversation_app", "source_kind": "installed",
+         "extra": {"custom_app_url": "http://0.0.0.0:7860/",
+                   "venv_path": "/home/pollen/.local/share/reachy_mini/apps_venv"}}
+        """#)
+
+        #expect(app.customAppPort == 7860)
+    }
+
+    @Test("a port the app moved to is the one that is used")
+    func followsARelocatedPort() throws {
+        let app = try decode(#"""
+        {"name": "reachy_mini_conversation_app", "source_kind": "installed",
+         "extra": {"custom_app_url": "http://0.0.0.0:8123/"}}
+        """#)
+
+        #expect(app.customAppPort == 8123)
+    }
+
+    /// The daemon writes the key with a null value when its scrape of `main.py`
+    /// found nothing, and catalogue entries never carry it at all. Both have to
+    /// read as "no port", not as a decoding failure that costs the whole app.
+    @Test("no port survives a missing, null or portless url", arguments: [
+        #"{"venv_path": "/apps_venv"}"#,
+        #"{"custom_app_url": null}"#,
+        #"{"custom_app_url": "http://0.0.0.0"}"#,
+        #"{"custom_app_url": ""}"#,
+        #"{"custom_app_url": 7860}"#,
+    ])
+    func absentCustomAppPort(extra: String) throws {
+        let app = try decode(#"{"name": "app", "source_kind": "installed", "extra": \#(extra)}"#)
+
+        #expect(app.customAppPort == nil)
+        #expect(app.name == "app")
+    }
 }

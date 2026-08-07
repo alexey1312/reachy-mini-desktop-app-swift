@@ -19,6 +19,7 @@ struct RunningAppDock: View {
             if let status = model.visibleStatus(for: session) {
                 RunningAppDockContent(
                     status: status,
+                    conversationTurn: model.conversationTurn,
                     isReachable: model.isReachable(session),
                     busy: model.busy,
                     expand: { model.isExpanded = true },
@@ -90,6 +91,10 @@ private struct RunningAppDockModifier: ViewModifier {
         model.visibleStatus(for: session)
     }
 
+    private var conversationStreamKey: String? {
+        model.conversationStreamKey(for: visibleStatus, session: session, active: polls)
+    }
+
     func body(content: Content) -> some View {
         @Bindable var model = model
         content
@@ -111,6 +116,10 @@ private struct RunningAppDockModifier: ViewModifier {
                 guard polls else { return }
                 await self.model.poll(session: session)
             }
+            .task(id: conversationStreamKey) {
+                let status = conversationStreamKey == nil ? nil : visibleStatus
+                await self.model.observeConversation(status: status, session: session)
+            }
             .onChange(of: visibleStatus) { _, status in
                 self.model.visibleStatusChanged(status)
             }
@@ -129,6 +138,7 @@ struct RunningAppDockContent: View {
     }
 
     let status: RobotAppStatus
+    var conversationTurn: ConversationTurn?
     var isReachable = true
     var busy = false
     let expand: () -> Void
@@ -145,7 +155,11 @@ struct RunningAppDockContent: View {
                     artwork: AppArtwork(app: status.app),
                     title: status.app.title,
                     layout: .dock,
-                    status: RunningAppCaption.label(of: status, isReachable: isReachable)
+                    status: RunningAppCaption.label(
+                        of: status,
+                        conversationTurn: conversationTurn,
+                        isReachable: isReachable
+                    )
                 )
                 .contentShape(.rect)
             }

@@ -51,11 +51,13 @@ extension PreviewScene {
     /// component, and a full-screen capture of one would be mostly empty.
     static func runningAppDock(
         _ status: RobotAppStatus,
+        conversationTurn: ConversationTurn? = nil,
         isReachable: Bool = true,
         busy: Bool = false
     ) -> some View {
         RunningAppDockContent(
             status: status,
+            conversationTurn: conversationTurn,
             isReachable: isReachable,
             busy: busy,
             expand: {},
@@ -67,15 +69,19 @@ extension PreviewScene {
     /// The dock expanded. Parked through the session, which is where the running app
     /// lives — handing the sheet a status the session did not agree with would
     /// preview a state the app cannot reach.
+    ///
+    /// `conversationTurn` seeds the model this builds; a `model` passed in already
+    /// carries its own turn, and then this argument has nothing left to say.
     static func runningAppSheet(
         _ status: RobotAppStatus,
         phase: RobotSession.ConnectionPhase = .connected(.preview),
-        model: RunningAppModel? = nil
+        model: RunningAppModel? = nil,
+        conversationTurn: ConversationTurn? = nil
     ) -> some View {
         NavigationHost {
             RunningAppSheet(
                 session: .preview(phase: phase, runningApp: status),
-                model: model ?? .preview(),
+                model: model ?? .preview(conversationTurn: conversationTurn),
                 status: status
             )
         }
