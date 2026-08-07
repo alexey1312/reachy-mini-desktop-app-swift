@@ -21,12 +21,6 @@ Apps/ReachyStorybook/Generated/
 .claude/*
 !.claude/rules/
 
-# Written by the repowise MCP server, per worktree. The index is 34 MB of
-# regenerable caches (`wiki.db` alone is 24 MB) and `.vscode/mcp.json` hardcodes
-# the absolute path of the worktree it was written in, so neither travels.
-.repowise/
-.vscode/
-
 # Environment
 .envrc
 mise.local.toml
