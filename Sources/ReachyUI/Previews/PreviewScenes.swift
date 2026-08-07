@@ -345,6 +345,23 @@ enum PreviewScene {
         .preview()
     }
 
+    /// `runningApp` is the interesting axis: it is what blocks the uninstall, and
+    /// it belongs to the session rather than to the model, so it is parked there.
+    ///
+    /// `nil` rather than `= .preview()`: a defaulted argument whose value is
+    /// `@MainActor` compiles under SwiftPM and fails in the `Apps/` targets,
+    /// where it is evaluated nonisolated. The card already builds its own.
+    static func maintenanceCard(
+        _ model: MaintenanceModel? = nil,
+        runningApp: RobotAppStatus? = nil
+    ) -> some View {
+        Form {
+            MaintenanceCard(session: .preview(runningApp: runningApp), model: model)
+        }
+        .formStyle(.grouped)
+        .preview()
+    }
+
     static func wifiCard(
         status: WiFiStatus? = nil,
         joinError: String? = nil,

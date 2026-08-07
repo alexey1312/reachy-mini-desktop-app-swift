@@ -130,6 +130,15 @@
     "Clear": {
       "extractionState": "manual"
     },
+    "Clear cache": {
+      "extractionState": "manual"
+    },
+    "Clear cached models?": {
+      "extractionState": "manual"
+    },
+    "Clear Hugging Face cache": {
+      "extractionState": "manual"
+    },
     "Clear this error": {
       "extractionState": "manual"
     },
@@ -238,6 +247,9 @@
     "Done": {
       "extractionState": "manual"
     },
+    "Downloaded model weights are deleted. The robot downloads them again when an app needs them.": {
+      "extractionState": "manual"
+    },
     "Emotions": {
       "extractionState": "manual"
     },
@@ -256,7 +268,13 @@
     "Errors": {
       "extractionState": "manual"
     },
+    "Every app is deleted from the robot, along with the Python environment they share.": {
+      "extractionState": "manual"
+    },
     "Every app you installed, and everything those apps stored, is gone.": {
+      "extractionState": "manual"
+    },
+    "Every installed app, and the Python environment they share.": {
       "extractionState": "manual"
     },
     "Export": {
@@ -290,6 +308,12 @@
       "extractionState": "manual"
     },
     "Forget": {
+      "extractionState": "manual"
+    },
+    "Forget all": {
+      "extractionState": "manual"
+    },
+    "Forget every saved network?": {
       "extractionState": "manual"
     },
     "Frames": {
@@ -424,6 +448,9 @@
     "Log stream failed": {
       "extractionState": "manual"
     },
+    "Maintenance": {
+      "extractionState": "manual"
+    },
     "Manual address": {
       "extractionState": "manual"
     },
@@ -437,6 +464,9 @@
       "extractionState": "manual"
     },
     "Mode": {
+      "extractionState": "manual"
+    },
+    "Model weights the robot has downloaded. An app fetches what it needs again.": {
       "extractionState": "manual"
     },
     "More": {
@@ -461,6 +491,9 @@
       "extractionState": "manual"
     },
     "Name": {
+      "extractionState": "manual"
+    },
+    "Neither can be undone from here.": {
       "extractionState": "manual"
     },
     "Network": {
@@ -611,6 +644,9 @@
       "extractionState": "manual"
     },
     "Remove": {
+      "extractionState": "manual"
+    },
+    "Remove every app?": {
       "extractionState": "manual"
     },
     "Reset to neutral": {
@@ -880,6 +916,9 @@
     "The robot downloads updates itself and restarts when one finishes.": {
       "extractionState": "manual"
     },
+    "The robot falls back to its own hotspot at the next restart.": {
+      "extractionState": "manual"
+    },
     "The robot found no apps on Hugging Face.": {
       "extractionState": "manual"
     },
@@ -971,6 +1010,12 @@
       "extractionState": "manual"
     },
     "Turn it on in Control Centre or Settings, and this list will fill in.": {
+      "extractionState": "manual"
+    },
+    "Uninstall all": {
+      "extractionState": "manual"
+    },
+    "Uninstall all apps": {
       "extractionState": "manual"
     },
     "Unlink this robot": {

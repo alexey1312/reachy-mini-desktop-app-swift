@@ -150,6 +150,30 @@ purpose so no Hugging Face credential passes through one of ours.)
   `previewInstalled[0]` declares nothing so `Running app — running` shows the sheet without it. Keep it that way —
   a reference for the offered state alone cannot tell a conditional row from a permanent one.
 
+## Maintenance, and the guard the robot does not have
+
+`MaintenanceCard` carries the two `/cache/*` actions. Both delete something on the robot, both are irreversible from
+here, and both sit behind a `confirmationDialog` — but only one of them needs a rule:
+
+- **`reset-apps` is `shutil.rmtree("/venvs/apps_venv/")` and nothing else.** The daemon does not stop the running app
+  first, so its interpreter is deleted underneath it. `MaintenanceModel.blockingApp(_:)` refuses while
+  `runningApp.isBusy`, and the card **names the app to stop** rather than only greying the button out — a disabled
+  control with no reason attached tells the reader nothing to act on. An unfamiliar process state counts as busy,
+  the way `RobotAppStatus.State.isBusy` treats it: refusing to delete an environment that might be in use is the
+  safe way to be wrong.
+- The description goes **above** the button in both rows, which is how the robot's own dashboard reads it and the
+  right way round for something irreversible: what it does before the thing that does it.
+- **The dialog's keys deliberately do not echo the buttons'.** `Uninstall all apps` and `Uninstall all apps?` differ
+  only in punctuation, and the catalogue derives one Swift symbol per key — that pair is a hard `xcstringstool`
+  build error, not a warning. Hence `Remove every app?` and `Clear cached models?`.
+- `canPerformMaintenance` gates the whole section, so a Lite robot and a relay session show nothing — the same shape
+  as `canConfigureWiFi`, and `Settings — Lite robot` is the reference that proves it.
+
+`WiFiSettingsCard` gained "Forget all" on the same principle: one `/wifi/forget_all` rather than a loop over the
+rows, because the per-network route answers 409 while another `nmcli` operation runs and a loop would race itself.
+It appears only above one saved network, which `Wi-Fi — own hotspot` (one network) and `Wi-Fi — on a network`
+(three) already capture either side of.
+
 ## Strings
 
 Project rule 9 in the root `AGENTS.md` is the whole of it: `.reachy("…")` where SwiftUI takes a

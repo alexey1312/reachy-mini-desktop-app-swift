@@ -61,6 +61,17 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
   live address, no network names. Neither contains the other.
 - `POST /wifi/forget` answers 404 for a network the robot never saved and 400 for `Hotspot`. Everywhere else in
   `/wifi/*` and `/update/*` a 404 means the route was never mounted, i.e. a Lite robot.
+- **`/cache/*` is the third root-mounted wireless router**, and the easiest to miss: `main.py` guards `cache`, `logs`,
+  `update` and `wifi_config` behind the same `args.wireless_version`. Two routes, both `POST`, both from
+  `routers/cache.py`: `/cache/clear-hf` deletes `/home/pollen/.cache/huggingface`, `/cache/reset-apps` deletes
+  `/venvs/apps_venv/`. Each answers **200 whether it deleted anything or found the directory already gone** — the
+  difference lives only in an English `message` the daemon composes, so there is nothing machine-readable to branch
+  on and `CacheMaintenanceClient` drops it. A failed `shutil.rmtree` is a 500 with a `detail`.
+- **`reset-apps` is `rmtree` and nothing else.** It does not stop the running app, does not ask the daemon to release
+  it, and puts no environment back: an app left running has the interpreter it is executing in deleted underneath it.
+  Nothing on the robot prevents that, so a client that offers the button owns the guard — `MaintenanceModel`
+  refuses while `runningApp` is busy and names the app to stop. It also invalidates every installed-app answer the
+  session is holding, hence the `refreshCurrentApp()` after it.
 - `GET /api/daemon/hardware-id` answers one key, `{"hardware_id": "<16 hex>"}` = `sha256(usb serial)[:16]` — the same
   string as mDNS TXT `unit_id` and BLE characteristic `…cdef7`. It is a join key: never reshape it.
 

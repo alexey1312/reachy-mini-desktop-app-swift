@@ -13,6 +13,7 @@ struct WiFiSettingsCard: View {
     @State private var joinError: String?
     @State private var loadFailure: String?
     @State private var busy = false
+    @State private var confirmingForgetAll = false
     @Environment(\.reachyPreviewMode) private var previewMode
 
     init(session: RobotSession, status: WiFiStatus? = nil, joinError: String? = nil, loadFailure: String? = nil) {
@@ -48,6 +49,16 @@ struct WiFiSettingsCard: View {
                     .disabled(busy)
                 }
             }
+            // `/wifi/forget_all` rather than a loop over the rows: the robot does
+            // it in one `nmcli` operation, and the per-network route answers 409
+            // while another one runs, so a loop would race itself.
+            if let known = status?.known, known.count > 1 {
+                Button(.reachy("Forget all"), role: .destructive) {
+                    confirmingForgetAll = true
+                }
+                .buttonStyle(.borderless)
+                .disabled(busy)
+            }
             if let loadFailure {
                 Text(loadFailure)
                     .font(.caption)
@@ -66,6 +77,17 @@ struct WiFiSettingsCard: View {
         .task {
             guard !previewMode else { return }
             await load()
+        }
+        .confirmationDialog(
+            .reachy("Forget every saved network?"),
+            isPresented: $confirmingForgetAll,
+            titleVisibility: .visible
+        ) {
+            Button(.reachy("Forget all"), role: .destructive) {
+                Task { await forgetAll() }
+            }
+        } message: {
+            Text(.reachy("The robot falls back to its own hotspot at the next restart."))
         }
     }
 
@@ -94,6 +116,17 @@ struct WiFiSettingsCard: View {
         defer { busy = false }
         do {
             try await session.forgetWiFi(ssid: ssid)
+            await load()
+        } catch {
+            loadFailure.recordDaemonFailure(error)
+        }
+    }
+
+    private func forgetAll() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await session.forgetAllWiFi()
             await load()
         } catch {
             loadFailure.recordDaemonFailure(error)
