@@ -177,6 +177,13 @@ user-facing string is localizable, so a simulator left in another language re-re
 Run `test:snapshots` before `test:snapshots:record` — it names every reference that moved, which `record` then
 overwrites blind. If _every_ reference moved, suspect the environment rather than the code: check one nothing could
 have affected (`JoystickPad`) against HEAD with `git show HEAD:<png> | git lfs smudge > /tmp/old.png`.
+**`record` deletes all ~1100 PNGs before it runs anything, so a snapshot target that fails to _build_ leaves you with
+every reference gone** — and `git checkout` brings back only the tracked ones, not the new references an earlier run
+had just written. Get `mise run snapshots:_run` to compile first, then record. This is easy to walk into because
+`swift build` cannot see the mistake: `Previews/` is excluded from the SwiftPM target, so a preview that does not
+compile is invisible until `mise run project` plus a snapshot build. Watch for `failed to produce diagnostic for
+expression` in particular — it names the enclosing function and nothing else, and one cause is unifying an optional
+`@MainActor` closure with `nil` in a ternary (`PreviewScene.advancedSection` uses an `if` for exactly that reason).
 **Adding previews can move references belonging to screens you did not touch — but not in proportion to how many.**
 Every preview holding an indeterminate `ProgressView` — anything named _loading_, _scanning_, _connecting_,
 _waking up_, _building_ — captures that spinner at whatever phase it reached, and the phase depends on where in the
