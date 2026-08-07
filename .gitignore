@@ -17,16 +17,9 @@ Apps/ReachyStorybook/Generated/
 *.profraw
 *.profdata
 
-# Rebuilt by `repowise init` — 23 MB of caches, wiki.db and a knowledge graph
-.repowise/
-
-# Local Claude Code state. `rules/` stays tracked — CLAUDE.md sends readers there — while
-# .claude/CLAUDE.md is rewritten by every repowise run and deleted again by the sync script.
+# Local Claude Code state. `rules/` stays tracked for target-specific instructions.
 .claude/*
 !.claude/rules/
-
-# Written back by every `repowise update`, so deleting them does not stick
-.vscode/
 
 # Environment
 .envrc

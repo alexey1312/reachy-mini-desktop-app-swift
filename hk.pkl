@@ -94,17 +94,6 @@ hooks {
         }
     }
 
-    // Post-commit: re-index for repowise. The step detaches itself, so what hk waits on is
-    // the fork, not the indexing run.
-    ["post-commit"] {
-        steps {
-            ["repowise-sync"] {
-                check = "Scripts/repowise-sync.sh"
-                hide = true
-            }
-        }
-    }
-
     // Helper: run all linters with fix
     ["fix"] {
         fix = true

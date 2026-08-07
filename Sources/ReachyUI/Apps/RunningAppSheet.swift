@@ -32,7 +32,12 @@ struct RunningAppSheet: View {
                     // `.body` and not a `Typography` role: here the state is the
                     // *value* of a form row, so it takes the size the row's own
                     // label already has.
-                    RunningAppCaption.label(of: status, isReachable: isReachable, font: .body)
+                    RunningAppCaption.label(
+                        of: status,
+                        conversationTurn: model.conversationTurn,
+                        isReachable: isReachable,
+                        font: .body
+                    )
                 }
                 if !isReachable {
                     Text(

@@ -16,8 +16,7 @@ import SwiftUI
 ///
 /// The daemon's vocabulary is deliberately thin — five process states and nothing
 /// about what the app is *doing*. A semantic state ("listening", "thinking") comes
-/// from the app's own port, not from here, and slots in as a further case once that
-/// channel exists.
+/// from the app's own port and arrives separately from the daemon process state.
 enum RunningAppCaption {
     /// The dock's caption line, and the value of the sheet's `LabeledContent`.
     ///
@@ -28,11 +27,12 @@ enum RunningAppCaption {
     @MainActor
     static func label(
         of status: RobotAppStatus,
+        conversationTurn: ConversationTurn? = nil,
         isReachable: Bool = true,
         font: Font = Typography.status
     ) -> ReachyStatusLabel {
         ReachyStatusLabel(
-            text: description(of: status, isReachable: isReachable),
+            text: description(of: status, conversationTurn: conversationTurn, isReachable: isReachable),
             tone: tone(of: status),
             font: font,
             lineLimit: 2
@@ -54,8 +54,15 @@ enum RunningAppCaption {
     /// for a state this build has never heard of, and `description(of:)` below
     /// substitutes a traceback. A slot that has to hold a runtime string alongside
     /// a translated phrase resolves the phrase; it cannot stay a resource.
-    static func title(of status: RobotAppStatus, isReachable: Bool = true) -> String {
+    static func title(
+        of status: RobotAppStatus,
+        conversationTurn: ConversationTurn? = nil,
+        isReachable: Bool = true
+    ) -> String {
         guard isReachable else { return String(localized: .reachy("Robot unreachable")) }
+        if status.state == .running, let conversationTurn {
+            return title(of: conversationTurn)
+        }
         return switch status.state {
         case .starting: String(localized: .reachy("Starting…"))
         case .running: String(localized: .reachy("Running"))
@@ -68,13 +75,27 @@ enum RunningAppCaption {
         }
     }
 
+    private static func title(of turn: ConversationTurn) -> String {
+        switch turn {
+        case .listening: String(localized: .reachy("Listening…"))
+        case .thinking: String(localized: .reachy("Thinking…"))
+        case .speaking: String(localized: .reachy("Speaking…"))
+        case .ready: String(localized: .reachy("Ready"))
+        case let .unknown(state): state
+        }
+    }
+
     /// The same, with the failure inlined. The dock has one caption line and no
     /// room for a second row, so a crash has to say what it was right there.
-    static func description(of status: RobotAppStatus, isReachable: Bool = true) -> String {
+    static func description(
+        of status: RobotAppStatus,
+        conversationTurn: ConversationTurn? = nil,
+        isReachable: Bool = true
+    ) -> String {
         guard isReachable else { return title(of: status, isReachable: false) }
         if status.state == .error, let error = status.error {
             return error
         }
-        return title(of: status)
+        return title(of: status, conversationTurn: conversationTurn)
     }
 }

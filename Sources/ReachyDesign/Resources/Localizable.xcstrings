@@ -400,6 +400,9 @@
     "Link this robot": {
       "extractionState": "manual"
     },
+    "Listening…": {
+      "extractionState": "manual"
+    },
     "Live": {
       "extractionState": "manual"
     },
@@ -589,6 +592,9 @@
     "Reading the robot's description…": {
       "extractionState": "manual"
     },
+    "Ready": {
+      "extractionState": "manual"
+    },
     "Recovery": {
       "extractionState": "manual"
     },
@@ -751,6 +757,9 @@
     "Someone is driving this robot over Hugging Face.": {
       "extractionState": "manual"
     },
+    "Speaking…": {
+      "extractionState": "manual"
+    },
     "Speaks to people near the robot through its speaker.": {
       "extractionState": "manual"
     },
@@ -902,6 +911,9 @@
       "extractionState": "manual"
     },
     "The robot, powered on": {
+      "extractionState": "manual"
+    },
+    "Thinking…": {
       "extractionState": "manual"
     },
     "This app can't use Bluetooth": {
