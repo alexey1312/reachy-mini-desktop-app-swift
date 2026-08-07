@@ -11,6 +11,7 @@ test_configuration:
     - ReachyDesign
     - ReachyKit
     - ReachyMedia
+    - ReachySSH
     - ReachyWidgetUI
   snapshot_devices:
     - iPhone 16 Pro
@@ -28,4 +29,5 @@ playbook_configuration:
     - ReachyUI
     - ReachyKit
     - ReachyMedia
+    - ReachySSH
     - ReachyWidgetUI

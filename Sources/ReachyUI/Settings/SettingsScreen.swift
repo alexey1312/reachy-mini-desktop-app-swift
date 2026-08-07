@@ -1,5 +1,6 @@
 import ReachyDesign
 import ReachyKit
+import ReachySSH
 import SwiftUI
 
 /// Everything about the connected robot that is a setting rather than a control.
@@ -20,10 +21,6 @@ struct SettingsScreen: View {
     @State private var isRenaming = false
     @State private var renameError: String?
     @FocusState private var nameFocused: Bool
-    /// The app target's own screen, if it has one. Nothing in this package knows
-    /// what it contains.
-    @Environment(\.reachyDeveloperScreen) private var developerScreen
-
     private var identity: RobotIdentity? {
         switch session.phase {
         case let .connected(identity), let .unreachable(identity): identity
@@ -40,40 +37,16 @@ struct SettingsScreen: View {
             if session.supportsWirelessFeatures {
                 SystemUpdateCard(session: session)
             }
-            if session.canConfigureWiFi {
-                WiFiSettingsCard(session: session)
-            }
-            if session.canPerformMaintenance {
-                MaintenanceCard(session: session)
-            }
-            diagnosticsSection
             privacySection
-            recoverySection
+            AdvancedSettingsSection(session: session)
         }
         .formStyle(.grouped)
         .navigationTitle(.reachy("Settings"))
         .onAppear { nameDraft = identity?.name ?? "" }
     }
 
-    /// The daemon's journal, moved off the robot screen: it answers "what is the
-    /// robot doing" the way the rest of this screen's lower half does, and it is not
-    /// a control. It stays out of the Advanced group below, whose contents all need
-    /// the robot to be within Bluetooth range — this one needs the opposite.
-    @ViewBuilder
-    private var diagnosticsSection: some View {
-        if session.canReadDaemonLogs {
-            Section {
-                NavigationLink {
-                    LogConsoleScreen(session: session)
-                } label: {
-                    Label(.reachy("Daemon logs"), systemImage: "terminal")
-                }
-            }
-        }
-    }
-
-    /// Above Advanced rather than in it: everything in that group needs the robot
-    /// within Bluetooth range, and this needs no robot at all. The same screen is
+    /// Above Advanced rather than in it: everything in that group is about a robot
+    /// that is already answering, and this needs no robot at all. The same screen is
     /// reachable from the connection gate, which is where someone whose permissions
     /// are the reason they cannot get this far will find it.
     ///
@@ -94,30 +67,6 @@ struct SettingsScreen: View {
         switch session.link {
         case .lan: true
         case .none, .remote: false
-        }
-    }
-
-    /// Collapsed, and last. Everything behind it talks to the robot over Bluetooth
-    /// instead of the network, which is only ever what you want when the network has
-    /// stopped working.
-    private var recoverySection: some View {
-        Section {
-            DisclosureGroup("Advanced") {
-                NavigationLink {
-                    BLEConsoleScreen()
-                } label: {
-                    Label(.reachy("Recovery over Bluetooth"), systemImage: "wrench.and.screwdriver")
-                }
-                if let developerScreen {
-                    NavigationLink {
-                        developerScreen()
-                    } label: {
-                        Label(.reachy("Developer tools"), systemImage: "stethoscope")
-                    }
-                }
-            }
-        } footer: {
-            Text(.reachy("For a robot that has dropped off the network. It needs to be within Bluetooth range."))
         }
     }
 
