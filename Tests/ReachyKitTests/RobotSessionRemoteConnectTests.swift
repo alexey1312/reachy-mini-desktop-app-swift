@@ -82,7 +82,7 @@ struct RobotSessionRemoteConnectTests {
         }
         #expect(stage == .connect)
         #expect(!message.isEmpty)
-        #expect(session.lastError == message)
+        #expect(session.robotError == message)
     }
 
     /// Disconnect suppresses discovery-driven reconnect, and picking a robot out of

@@ -124,7 +124,12 @@ public final class YourReachiesModel {
 
     /// A failure over an existing list annotates it; a failure over nothing
     /// replaces it, because there is nothing to preserve.
+    ///
+    /// A cancelled fetch does neither: closing the sheet mid-load is not a relay
+    /// failure, and `describe` would fall through to `localizedDescription` and
+    /// print the word "cancelled" over the list.
     private func report(_ error: any Error) {
+        guard !RobotSession.isCancellation(error) else { return }
         if case .unauthorized = error as? CentralRelayClient.Failure {
             state = .needsSignIn
             lastRefreshError = nil

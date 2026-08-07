@@ -99,7 +99,9 @@ struct RobotSessionAppsTests {
         #expect(client.installedCalls == 2)
     }
 
-    @Test("a daemon that refuses leaves its reason on the session")
+    /// Thrown, not reported: the store screen owns this message. Leaving it on the
+    /// session is what used to print an Apps failure on the Robot tab.
+    @Test("a daemon that refuses throws instead of writing to the session")
     func reportsFailures() async throws {
         let client = AppsRobotClient()
         client.failsCatalogue = true
@@ -108,7 +110,7 @@ struct RobotSessionAppsTests {
         await #expect(throws: ReachyKitError.daemonRejected(statusCode: 503)) {
             try await session.appCatalogue()
         }
-        #expect(session.lastError?.isEmpty == false)
+        #expect(session.robotError == nil)
     }
 
     /// Caches are per connection: the next robot has its own apps, and showing it

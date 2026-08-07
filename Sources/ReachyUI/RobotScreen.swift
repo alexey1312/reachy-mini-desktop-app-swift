@@ -19,7 +19,7 @@ struct RobotScreen: View {
                         .foregroundStyle(.orange)
                 }
             }
-            if let error = session.lastError {
+            if let error = session.robotError {
                 Section {
                     Text(error)
                         .font(.caption.monospaced())

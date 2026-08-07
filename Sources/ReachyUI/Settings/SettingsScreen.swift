@@ -179,7 +179,7 @@ struct SettingsScreen: View {
                 // field follows what came back rather than what was typed.
                 nameDraft = try await session.rename(to: name)
             } catch {
-                renameError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                renameError.recordDaemonFailure(error)
                 nameDraft = identity?.name ?? ""
             }
         }

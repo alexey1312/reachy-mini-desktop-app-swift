@@ -45,7 +45,7 @@ public extension RobotSession {
         resetConnectionState()
         self.link = link
         phase = .connecting(.handshaking)
-        lastError = nil
+        robotError = nil
         return attemptID
     }
 
@@ -117,7 +117,7 @@ public extension RobotSession {
         automaticConnectionAllowed = false
         connectionAttemptID = UUID()
         resetConnectionState()
-        lastError = nil
+        robotError = nil
         // Here rather than in `resetConnectionState`, which also runs on a failed
         // attempt: a robot that could not be reached this time is not a robot the
         // user let go of, and blanking the widget over it loses a good reading.
@@ -145,7 +145,7 @@ public extension RobotSession {
               case let .connecting(.backendUnavailable(identity, _)) = phase
         else { return }
         let attemptID = connectionAttemptID
-        lastError = nil
+        robotError = nil
         powerTransition = .startingBackend
         defer { powerTransition = nil }
 
@@ -258,7 +258,7 @@ extension RobotSession {
     ) -> Bool {
         let message = Self.describe(error)
         resetConnectionState()
-        lastError = message
+        robotError = message
         guard !automatically else { return false }
         // Restored after the reset so the failure names what was being reached.
         // A remote attempt has no address and still has to show its failure: the

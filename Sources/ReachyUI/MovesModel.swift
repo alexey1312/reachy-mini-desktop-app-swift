@@ -43,6 +43,13 @@ final class MovesModel {
     }
 
     private(set) var startingMove = false
+    /// Why the last library fetch, playback or stop refused.
+    ///
+    /// Owned here rather than read off the session: a move that would not play is
+    /// this screen's news, and `RobotSession.robotError` is for the robot's
+    /// connection and power alone. `RobotSession.message(for:)` is what fills it,
+    /// so a cancelled fetch — the user leaving the tab — says nothing at all.
+    private(set) var lastError: String?
     /// Keyed by dataset rather than held as one array: `selection` changes a frame before
     /// `.task(id:)` gets to run, so a shared array leaves the previous library's rows under
     /// the newly selected tab for as long as the fetch takes.
@@ -93,21 +100,42 @@ final class MovesModel {
             guard !Task.isCancelled, loadID == requestID else { return }
             movesByDataset[dataset] = loaded
             attemptedDatasets.insert(dataset)
+            lastError = nil
         } catch {
             guard !Task.isCancelled, loadID == requestID else { return }
             attemptedDatasets.insert(dataset)
-            // Deliberately records nothing. An absent key means "never fetched", so the next
-            // visit to the tab retries, and a failed refresh leaves the rows already on screen
-            // in place rather than clearing them over one bad round trip. A stored `[]` is
-            // then a library the daemon really answered as empty, which is not worth retrying.
-            // `session.lastError` carries the reason to the screen either way.
+            // `movesByDataset` is deliberately left alone. An absent key means "never
+            // fetched", so the next visit to the tab retries, and a failed refresh leaves
+            // the rows already on screen in place rather than clearing them over one bad
+            // round trip. A stored `[]` is then a library the daemon really answered as
+            // empty, which is not worth retrying. Only the reason is recorded.
+            report(error)
         }
     }
 
     func play(_ move: String, session: RobotSession) async {
         startingMove = true
         defer { startingMove = false }
-        try? await session.playMove(dataset: selectedLibrary.dataset, move: move)
+        do {
+            try await session.playMove(dataset: selectedLibrary.dataset, move: move)
+            lastError = nil
+        } catch {
+            report(error)
+        }
+    }
+
+    /// The two daemon tasks are stopped in parallel and both are seen through, so
+    /// `stopMove` answers with a list rather than throwing one of them. Joined the
+    /// way the session used to join it, now on the side that owns the screen.
+    func stop(session: RobotSession) async {
+        let failures = await session.stopMove()
+        lastError = failures.isEmpty ? nil : failures.joined(separator: "\n")
+    }
+
+    /// `nil` is a cancelled call — the user left the tab — and leaves whatever is
+    /// on screen standing rather than replacing it with the word "cancelled".
+    private func report(_ error: any Error) {
+        lastError = RobotSession.message(for: error) ?? lastError
     }
 
     static func displayName(_ move: String) -> String {
@@ -123,7 +151,8 @@ final class MovesModel {
             moves: [String] = MovesModel.previewMoves,
             selection: Int = 0,
             loading: Bool = false,
-            startingMove: Bool = false
+            startingMove: Bool = false,
+            error: String? = nil
         ) -> MovesModel {
             let model = MovesModel()
             model.selection = selection
@@ -138,6 +167,7 @@ final class MovesModel {
                 model.attemptedDatasets.insert(model.selectedLibrary.dataset)
             }
             model.startingMove = startingMove
+            model.lastError = error
             return model
         }
 

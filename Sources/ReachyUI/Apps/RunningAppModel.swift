@@ -193,7 +193,7 @@ final class RunningAppModel {
             try await work()
             lastError = nil
         } catch {
-            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            lastError.recordDaemonFailure(error)
         }
     }
 }

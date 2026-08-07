@@ -40,7 +40,7 @@ final class AudioSettingsModel {
             errorMessage = nil
             hasLoaded = true
         } catch {
-            errorMessage = Self.describe(error)
+            errorMessage.recordDaemonFailure(error)
         }
     }
 
@@ -68,7 +68,7 @@ final class AudioSettingsModel {
             try await call()
             errorMessage = nil
         } catch {
-            errorMessage = Self.describe(error)
+            errorMessage.recordDaemonFailure(error)
         }
     }
 
@@ -82,10 +82,6 @@ final class AudioSettingsModel {
     private func adoptMicrophone(_ level: AudioLevel) {
         microphone = level
         microphonePercent = Double(level.percent)
-    }
-
-    private static func describe(_ error: any Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
 }
 

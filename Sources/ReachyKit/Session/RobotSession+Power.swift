@@ -10,7 +10,7 @@ public extension RobotSession {
     /// commands at a backend that is already gone.
     func wake() async {
         guard let client, powerTransition == nil else { return }
-        lastError = nil
+        robotError = nil
         // Claimed before the first suspension point: `@MainActor` re-enters on
         // every `await`, so a later latch would let a double tap through.
         powerTransition = .wakingUp
@@ -27,7 +27,7 @@ public extension RobotSession {
             }
             try await RobotPower(client: client, configuration: configuration).wake()
         } catch {
-            lastError = Self.describe(error)
+            report(error)
         }
     }
 
@@ -35,14 +35,14 @@ public extension RobotSession {
     /// otherwise the head drops wherever it happens to be.
     func sleep() async {
         guard let client, powerTransition == nil else { return }
-        lastError = nil
+        robotError = nil
         powerTransition = .goingToSleep
         defer { powerTransition = nil }
         do {
             try assertSupportedDaemon()
             try await RobotPower(client: client, configuration: configuration).sleep()
         } catch {
-            lastError = Self.describe(error)
+            report(error)
         }
     }
 }
@@ -70,11 +70,11 @@ extension RobotSession {
         do {
             try await client.startDaemon(wakeUp: wakeUp)
         } catch {
-            lastError = Self.describe(error)
+            report(error)
             return false
         }
         guard await waitForDaemonRunning(client: client) else {
-            lastError = "Robot backend did not start within \(configuration.daemonStartTimeout)."
+            robotError = "Robot backend did not start within \(configuration.daemonStartTimeout)."
             return false
         }
         return true

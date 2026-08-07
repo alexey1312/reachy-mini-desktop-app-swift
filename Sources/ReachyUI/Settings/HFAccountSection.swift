@@ -234,7 +234,7 @@ struct HFAccountSection: View {
             // that trap out by name.
             relay = refresh.didStart ? try? await session.relayStatus() : relay
         } catch {
-            linkError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            linkError.recordDaemonFailure(error)
         }
     }
 
@@ -247,7 +247,7 @@ struct HFAccountSection: View {
             robotAccount = try? await session.robotHFAccount(refresh: true)
             relay = try? await session.relayStatus()
         } catch {
-            linkError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            linkError.recordDaemonFailure(error)
         }
     }
 }

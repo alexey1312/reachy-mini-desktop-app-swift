@@ -97,7 +97,7 @@ final class AppInstallModel {
         do {
             jobID = try await start(operation)
         } catch {
-            state = .failed(operation, Self.describe(error))
+            fail(on: error, operation: operation)
             return
         }
 
@@ -115,7 +115,7 @@ final class AppInstallModel {
                 }
             }
         } catch {
-            state = .failed(operation, Self.describe(error))
+            fail(on: error, operation: operation)
         }
     }
 
@@ -157,8 +157,12 @@ final class AppInstallModel {
         }
     }
 
-    private static func describe(_ error: any Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    /// A cancelled call leaves the state exactly as it was: the sheet the user was
+    /// watching went away, which is not an install failure and must not be drawn
+    /// as one. `RobotSession.message(for:)` logs it either way.
+    private func fail(on error: any Error, operation: Operation) {
+        guard let message = RobotSession.message(for: error) else { return }
+        state = .failed(operation, message)
     }
 }
 

@@ -296,7 +296,7 @@
             session.phase = phase
             session.lastStatus = status
             session.link = link ?? address.map(RobotSession.Link.lan) ?? .none
-            session.lastError = error
+            session.robotError = error
             session.powerTransition = powerTransition
             session.compatibilityWarning = compatibilityWarning
             session.currentMove = currentMove

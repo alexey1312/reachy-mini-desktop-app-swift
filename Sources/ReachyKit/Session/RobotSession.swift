@@ -110,7 +110,17 @@ public final class RobotSession {
     public internal(set) var phase: ConnectionPhase = .idle
     public internal(set) var link: Link = .none
     public internal(set) var lastStatus: Components.Schemas.DaemonStatus?
-    public internal(set) var lastError: String?
+    /// The robot's own last failure: it could not be reached, or it would not
+    /// change power state. Nothing else belongs here.
+    ///
+    /// It used to be `lastError` and every funnel in the session wrote to it,
+    /// which is how an Apps failure — and, before that, a *cancelled* Apps call —
+    /// ended up printed on the robot screen. A feature's failure is its screen's
+    /// news and lives in that screen's model; connection and power have no screen
+    /// of their own, because they are the state of the robot rather than of a
+    /// feature. Write only through `report(_:)`, and only from
+    /// `RobotSession+Power` and `RobotSession+Connect`.
+    public internal(set) var robotError: String?
     public internal(set) var compatibilityWarning: String?
     /// Answered by the handshake, not by the version string: `/api/daemon/robot-name`
     /// postdates 1.9.0, and the name field is greyed out rather than left to fail on save.
@@ -172,31 +182,6 @@ public final class RobotSession {
     /// this is held for the connection too. Lives in `RobotSession+HFAuth`.
     var hfAccountCache: HFAuthStatus?
 
-    /// `ReachyKitError` carries actionable text; raw interpolation would print
-    /// the bare case name instead.
-    ///
-    /// The generated client wraps transport failures in a `ClientError` whose
-    /// description carries the whole operation context — around twenty lines of
-    /// `NSError` internals that bury the one sentence worth reading. Unwrap to the
-    /// root cause first, so a refused connection reads as "Could not connect to
-    /// the server."
-    /// Public because a session is not the only thing that has to put a daemon
-    /// failure in front of someone: an App Intent gets one line in Shortcuts and
-    /// no screen to elaborate on.
-    /// `nonisolated` because it reads only its argument: an intent runs off the
-    /// main actor and still has to render the same sentence.
-    public nonisolated static func describe(_ error: Error) -> String {
-        let root = rootCause(of: error)
-        return (root as? LocalizedError)?.errorDescription ?? root.localizedDescription
-    }
-
-    private nonisolated static func rootCause(of error: Error) -> Error {
-        if let clientError = error as? ClientError {
-            return rootCause(of: clientError.underlyingError)
-        }
-        return error
-    }
-
     /// Production session talking to a real daemon.
     public convenience init(configuration: Configuration = .init()) {
         self.init(configuration: configuration) { try RobotConnection(address: $0) }
@@ -229,26 +214,29 @@ public final class RobotSession {
         return moves
     }
 
+    /// Throws rather than reporting: a move that would not play is the moves
+    /// screen's news, and `MovesModel` is what puts it on screen.
     public func playMove(dataset: String, move: String) async throws {
         guard let client else { throw ReachyKitError.notConnected }
         if currentMove != nil {
-            await stopMove()
+            _ = await stopMove()
         }
-        lastError = nil
-        do {
-            let uuid = try await client.playMove(dataset: dataset, move: move)
-            let playback = MovePlayback(dataset: dataset, move: move, uuid: uuid)
-            currentMove = playback
-            startMonitoring(playback, client: client)
-        } catch {
-            lastError = Self.describe(error)
-            throw error
-        }
+        let uuid = try await client.playMove(dataset: dataset, move: move)
+        let playback = MovePlayback(dataset: dataset, move: move, uuid: uuid)
+        currentMove = playback
+        startMonitoring(playback, client: client)
     }
 
-    /// Stops both daemon tasks: motion and the separately-owned sound player.
-    public func stopMove() async {
-        guard let client, let playback = currentMove, !isStoppingMove else { return }
+    /// Stops both daemon tasks: motion and the separately-owned sound player, and
+    /// answers with whatever refused — empty when both stopped.
+    ///
+    /// Returned rather than thrown because the two are stopped in parallel and
+    /// both are seen through: parking the motors matters more than reporting, so
+    /// there is no single failure to throw. The caller decides what to do with
+    /// the list; `MovesModel.stop` joins it into its own error slot.
+    @discardableResult
+    public func stopMove() async -> [String] {
+        guard let client, let playback = currentMove, !isStoppingMove else { return [] }
         isStoppingMove = true
         movePollTask?.cancel()
         movePollTask = nil
@@ -284,7 +272,7 @@ public final class RobotSession {
             currentMove = nil
         }
         isStoppingMove = false
-        lastError = errors.isEmpty ? nil : errors.sorted().joined(separator: "\n")
+        return errors.sorted()
     }
 
     func resetConnectionState() {

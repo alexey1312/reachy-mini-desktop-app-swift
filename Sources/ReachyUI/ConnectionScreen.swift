@@ -182,7 +182,7 @@ struct ConnectionScreen: View {
     /// that already reads "Searching…" with two paragraphs explaining it.
     @ViewBuilder
     private var errorSection: some View {
-        if let error = session.lastError, !session.automaticConnectionAllowed {
+        if let error = session.robotError, !session.automaticConnectionAllowed {
             Section {
                 Text(error)
                     .font(Typography.consoleLine)
