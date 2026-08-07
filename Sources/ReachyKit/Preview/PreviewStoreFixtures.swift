@@ -17,7 +17,8 @@ import Foundation
             summary: String? = nil,
             gradient: (from: String, to: String)? = ("pink", "indigo"),
             isPrivate: Bool = false,
-            installed: Bool = false
+            installed: Bool = false,
+            customAppURL: String? = nil
         ) -> RobotApp {
             var card: [String] = []
             if let title {
@@ -42,6 +43,9 @@ import Foundation
             }
             if isPrivate {
                 extra.append("\"private\": true")
+            }
+            if let customAppURL {
+                extra.append("\"custom_app_url\": \"\(customAppURL)\"")
             }
             if !card.isEmpty {
                 extra.append("\"cardData\": {\(card.joined(separator: ", "))}")
@@ -96,6 +100,16 @@ import Foundation
             .preview(name: "reachy_mini_dance", title: nil, emoji: nil, author: nil, likes: nil, installed: true),
             .preview(name: "face_tracking", title: nil, emoji: nil, author: nil, likes: nil, installed: true),
         ]
+
+        /// Carries the bind address the daemon really reports for this app, so a
+        /// test or a preview built on it meets the `0.0.0.0` host head-on.
+        static let previewConversation = RobotApp.preview(
+            name: "reachy_mini_conversation_app",
+            title: "Conversation App",
+            emoji: "🎤",
+            installed: true,
+            customAppURL: "http://0.0.0.0:7860/"
+        )
     }
 
     public extension RobotAppStatus {
@@ -113,6 +127,8 @@ import Foundation
             .error,
             error: "ModuleNotFoundError: No module named 'cv2'"
         )
+
+        static let previewConversation = RobotAppStatus(app: .previewConversation, state: .running)
     }
 #endif
 

@@ -92,6 +92,31 @@ public struct RobotApp: Sendable, Equatable, Identifiable, Codable {
 
     static let officialAuthor = "pollen-robotics"
 
+    /// Conversation App 1.0's entry point and Space identity. The daemon may lose
+    /// installed-app metadata, so either exact identity is enough to opt into its
+    /// JSON-RPC surface. Forks retaining the entry point work too.
+    public var exposesConversationRPC: Bool {
+        name == "reachy_mini_conversation_app"
+            || spaceID == "pollen-robotics/reachy_mini_conversation_app"
+    }
+
+    /// The port an app's own settings/control server binds, from
+    /// `extra["custom_app_url"]`.
+    ///
+    /// **Only the port is usable.** The daemon does not resolve that string, it
+    /// regex-scrapes it out of the app's `main.py`
+    /// (`local_common_venv._get_custom_app_url_from_file`), so what arrives is the
+    /// app's *bind* address: the conversation app declares
+    /// `http://0.0.0.0:7860/`. Dialling that host reaches this device rather than
+    /// the robot — the host belongs to whoever holds the session. The daemon's own
+    /// relay rewrites it to `127.0.0.1` for the same reason, from the other side.
+    ///
+    /// Nil for catalogue entries, for an installed app whose metadata the daemon
+    /// lost, and whenever the scrape found nothing, so a caller needs a default.
+    public var customAppPort: Int? {
+        card.customAppURL.flatMap { URLComponents(string: $0)?.port }
+    }
+
     /// The Hub's own palette names (`cardData.colorFrom` / `colorTo`), passed
     /// through unresolved — mapping them to colours is the UI layer's business.
     ///
@@ -123,6 +148,9 @@ public struct RobotApp: Sendable, Equatable, Identifiable, Codable {
         public var colorFrom: String?
         public var colorTo: String?
         public var shortDescription: String?
+        /// Sits beside the card keys rather than inside `cardData`: the daemon adds
+        /// it to `extra` itself, so it is never part of what the Hub returned.
+        public var customAppURL: String?
 
         public static let empty = Card()
 
@@ -142,6 +170,7 @@ public struct RobotApp: Sendable, Equatable, Identifiable, Codable {
         private enum CodingKeys: String, CodingKey {
             case id, author, likes, cardData
             case isPrivate = "private"
+            case customAppURL = "custom_app_url"
         }
 
         private enum CardDataKeys: String, CodingKey {
@@ -155,6 +184,7 @@ public struct RobotApp: Sendable, Equatable, Identifiable, Codable {
             author = container.value(String.self, .author)
             likes = container.value(Int.self, .likes)
             isPrivate = container.value(Bool.self, .isPrivate)
+            customAppURL = container.value(String.self, .customAppURL)
 
             guard let card = try? container.nestedContainer(keyedBy: CardDataKeys.self, forKey: .cardData) else {
                 return
