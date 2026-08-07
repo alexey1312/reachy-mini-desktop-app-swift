@@ -181,6 +181,76 @@ struct RobotFilesModelTests {
         #expect(files.calls.contains { $0.hasPrefix("rename") } == false)
     }
 
+    /// The screen keys its full-bleed "Reading the folder…" overlay off `hasListed`,
+    /// and that overlay covers the error row a refusal has just filled in. Leaving
+    /// the flag false on failure therefore hid the reason for good.
+    @Test("a refused listing counts as an answer, so the loading overlay comes down")
+    func failedListingStopsLoading() async {
+        // Already browsing, because `connect` would throw the same injected failure
+        // and never reach the listing.
+        let model = RobotFilesModel.preview(
+            files: PreviewFileSystem(failure: .notPermitted("Permission denied")),
+            phase: .browsing,
+            path: "/",
+            hasListed: false
+        )
+        await model.refresh()
+        #expect(model.hasListed)
+        #expect(model.lastError != nil)
+    }
+
+    /// `SSHClient` has no `deinit` and `close()` is the only thing that shuts its
+    /// channel, so a model released without disconnecting leaves a live TCP
+    /// connection to the robot behind — one per visit to the screen.
+    @Test("releasing the model closes the session")
+    func deinitDisconnects() async {
+        let files = PreviewFileSystem(tree: ["/": []])
+        do {
+            let model = model(files)
+            await model.start()
+            #expect(files.isConnected)
+        }
+        // `deinit` hands the disconnect to an unstructured task, so poll the
+        // condition against a deadline rather than sleeping (project rule 7).
+        let deadline = ContinuousClock.now + .seconds(5)
+        while files.isConnected, ContinuousClock.now < deadline {
+            await Task.yield()
+        }
+        #expect(files.calls.contains("disconnect"))
+        #expect(files.isConnected == false)
+    }
+
+    @Test("refuses a picked file over the transfer limit instead of loading it")
+    func pickedFileTooLarge() async throws {
+        let files = PreviewFileSystem(tree: ["/": []])
+        let model = model(files)
+        await model.start()
+
+        let url = URL.temporaryDirectory.appending(path: "reachy-oversized-\(UUID().uuidString).bin")
+        try Data(count: RobotFilesModel.transferLimit + 1).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        await model.upload(from: url, to: "/tmp/oversized.bin")
+        #expect(model.lastError != nil)
+        // Nothing was sent: the size is checked before a byte is read.
+        #expect(files.calls.contains { $0.hasPrefix("write") } == false)
+    }
+
+    @Test("uploads a picked file that fits")
+    func pickedFileUploads() async throws {
+        let files = PreviewFileSystem(tree: ["/": []])
+        let model = model(files)
+        await model.start()
+
+        let url = URL.temporaryDirectory.appending(path: "reachy-profile-\(UUID().uuidString).md")
+        try Data("+++\nschema_version = 1\n+++\n".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        await model.upload(from: url, to: "/tmp/profile.md")
+        #expect(model.lastError == nil)
+        #expect(files.calls.contains("write(/tmp/profile.md)"))
+    }
+
     @Test("reports a non-empty folder in words the reader can act on")
     func directoryNotEmpty() {
         let message = RobotFilesModel.describe(ReachySSHError.directoryNotEmpty("/a"))

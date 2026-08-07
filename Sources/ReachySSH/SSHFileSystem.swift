@@ -251,7 +251,11 @@ final class TOFUHostKeyValidator: NIOSSHClientServerAuthenticationDelegate, Send
             validationCompletePromise.fail(HostKeyRefused())
             return
         }
-        if pinned.openSSHPublicKey == offered.openSSHPublicKey {
+        // `==`, the same operator `mapConnectFailure` uses. Every stored property of
+        // `HostKeyFingerprint` is derived from the key line inside one failable
+        // initialiser, so full equality and comparing `openSSHPublicKey` can never
+        // disagree — but two spellings of one question invite them to drift.
+        if pinned == offered {
             validationCompletePromise.succeed(())
         } else {
             validationCompletePromise.fail(HostKeyRefused())

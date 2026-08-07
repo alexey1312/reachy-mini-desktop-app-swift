@@ -49,6 +49,11 @@ warnings-as-errors policy. Do not go hunting for them in this target — there i
    `group: MultiThreadedEventLoopGroup = .init(numberOfThreads: 1)` — a fresh group per connection — and `close()`
    closes the channel without shutting the group down. `SSHClient` has no `deinit` at all. So the default leaks one
    thread per reconnect, and a flaky LAN reconnects a lot.
+   **Whoever owns a session must close it.** Because there is no `deinit`, a released owner leaves a live TCP
+   connection to the robot and a NIO channel behind — one per visit to whatever screen opened it, for as long as the
+   app runs. `RobotFilesModel` does this from its own `deinit` (`Task { await files.disconnect() }`, with `files`
+   bound first so the closure never captures `self`), chosen over `.onDisappear` because it fires exactly when the
+   last reference goes. Any future owner needs the same.
 3. **Open the SFTP subsystem once per connection.** `openSFTP()` costs a child channel plus a round trip and logs
    its own warning about "too many SFTPClient handles". `SSHFileSystem` holds the one it opened.
 4. **TOFU is two connections, because it has to be.** `validateHostKey` must resolve an `EventLoopPromise` during

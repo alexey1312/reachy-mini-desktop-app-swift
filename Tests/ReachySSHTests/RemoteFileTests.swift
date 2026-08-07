@@ -12,6 +12,16 @@ struct RemoteFileTests {
         #expect(RemoteFile.kind(mode: 0o140755, longname: "srwxr-xr-x 1 pollen") == .other)
     }
 
+    /// A server sending bare permissions used to make every entry `.other`, so
+    /// `isDirectory` was false everywhere and nothing could be opened.
+    @Test("falls back to longname when the mode carries permissions but no type bits")
+    func kindFromModeWithoutTypeBits() {
+        #expect(RemoteFile.kind(mode: 0o755, longname: "drwxr-xr-x 2 pollen") == .directory)
+        #expect(RemoteFile.kind(mode: 0o644, longname: "-rw-r--r-- 1 pollen") == .file)
+        #expect(RemoteFile.kind(mode: 0o777, longname: "lrwxrwxrwx 1 pollen") == .symlink)
+        #expect(RemoteFile.kind(mode: 0, longname: "drwxr-xr-x 2 pollen") == .directory)
+    }
+
     @Test("falls back to the ls -l character when the server sent no permissions")
     func kindFromLongname() {
         #expect(RemoteFile.kind(mode: nil, longname: "drwxr-xr-x 2 pollen pollen 4096 …") == .directory)

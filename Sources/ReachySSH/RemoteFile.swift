@@ -49,8 +49,15 @@ public struct RemoteFile: Hashable, Sendable, Identifiable {
     /// high bits of the mode, the same `S_IFMT` bits `stat(2)` reports. A server
     /// that sends no permissions at all leaves only `longname`, whose first
     /// character is the one from `ls -l`.
+    ///
+    /// A mode with **no** type bits set falls back the same way, and that case is
+    /// not hypothetical bookkeeping: without it a server sending bare permissions
+    /// (`0o755` rather than `0o040755`) makes every entry `.other`, which reads as
+    /// `isDirectory == false` and leaves the whole tree unopenable. OpenSSH sends
+    /// the full `st_mode`, so the robot itself never hits this — a non-OpenSSH
+    /// server or a wrapper trimming the field would.
     public static func kind(mode: UInt32?, longname: String) -> Kind {
-        guard let mode else {
+        guard let mode, mode & 0o170000 != 0 else {
             switch longname.first {
             case "d": return .directory
             case "l": return .symlink

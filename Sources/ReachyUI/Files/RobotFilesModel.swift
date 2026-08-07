@@ -11,35 +11,10 @@ import ReachySSH
 @MainActor
 @Observable
 final class RobotFilesModel {
-    /// A phone must not pull a multi-gigabyte model file into memory to hand it to
-    /// a document picker.
-    static let readLimit = 8 * 1024 * 1024
-
-    /// Where the session is, as opposed to what a single operation did.
-    enum Phase: Equatable {
-        /// Nothing asked yet.
-        case idle
-        /// No password stored for this robot, or the stored one was refused.
-        case needsPassword
-        /// First contact. The user has to see this key before it is pinned.
-        case confirmHostKey(HostKeyFingerprint)
-        /// A pinned robot answered with a different key. Never auto-accepted.
-        case hostKeyChanged(pinned: HostKeyFingerprint, offered: HostKeyFingerprint)
-        case connecting
-        case browsing
-        case failed(String)
-    }
-
-    /// A destructive action waiting for a confirmation dialog.
-    enum Confirmation: Equatable, Identifiable {
-        case delete(RemoteFile)
-
-        var id: String {
-            switch self {
-            case let .delete(file): "delete-\(file.path)"
-            }
-        }
-    }
+    /// A phone must not pull a multi-gigabyte file into memory in either direction —
+    /// not a model weight coming off the robot to reach a document picker, and not
+    /// one picked on the device to be pushed back.
+    static let transferLimit = 8 * 1024 * 1024
 
     private let files: any RobotFileSystem
     private let credentials: any SSHCredentialStore
@@ -60,9 +35,14 @@ final class RobotFilesModel {
     /// The operation the screen is showing progress for, if any.
     private(set) var transferring: String?
 
+    /// Whether the Keychain has been consulted. See `loadStoredCredentials()`.
+    private var hasLoadedCredentials = false
+
     /// The password field. Not `private(set)`: the sheet binds to it.
     var username: String
-    var password: String
+    /// Empty until `loadStoredCredentials()` or the user fills it in. The factory
+    /// default is named in the field's footer rather than prefilled here.
+    var password = ""
     var confirming: Confirmation?
 
     init(
@@ -79,9 +59,29 @@ final class RobotFilesModel {
         self.host = host
         self.port = port
         self.path = path
-        let stored = try? credentials.credentials(forRobot: robot)
-        username = stored?.username ?? SSHCredentials.defaultUsername
-        password = stored?.password ?? ""
+        // Deliberately *not* reading the Keychain here. `NavigationLink { … }` builds
+        // its destination eagerly, so this initialiser runs on the main thread on
+        // every render of the Advanced group — and `RobotFilesScreen` adopts the
+        // first model into `@State`, so every later one is built and thrown away.
+        // A synchronous `SecItemCopyMatching` per render is an XPC round trip for
+        // nothing. `loadStoredCredentials()` does it once, from `start()`.
+        username = SSHCredentials.defaultUsername
+    }
+
+    /// Closes the session when nothing holds this model any more.
+    ///
+    /// Not housekeeping: `SSHClient` has **no `deinit`** and `close()` is the only
+    /// thing that shuts its channel, so a model released without this leaves a live
+    /// TCP connection to the robot and a NIO channel behind — one per visit to the
+    /// screen, for as long as the app runs. `deinit` rather than `.onDisappear`
+    /// because it fires exactly when the last reference goes, which is what "the
+    /// user left for good" actually means.
+    ///
+    /// `files` is bound before the `Task` so the closure never captures `self`,
+    /// which a `deinit` may not escape.
+    deinit {
+        let files = files
+        Task { await files.disconnect() }
     }
 
     // MARK: - Places worth a shortcut
@@ -98,11 +98,25 @@ final class RobotFilesModel {
     /// Safe to call from `.task` — a second call while browsing does nothing.
     func start() async {
         guard phase == .idle || phase == .needsPassword else { return }
+        loadStoredCredentials()
         guard !password.isEmpty else {
             phase = .needsPassword
             return
         }
         await connect()
+    }
+
+    /// Reads the Keychain once, on the first visit rather than in `init`.
+    ///
+    /// Gated on a flag and not on `password.isEmpty`: someone who clears the field
+    /// on purpose — because the robot's password changed — must not have the old one
+    /// put back under them on the next `start()`.
+    private func loadStoredCredentials() {
+        guard !hasLoadedCredentials else { return }
+        hasLoadedCredentials = true
+        guard let stored = try? credentials.credentials(forRobot: robot) else { return }
+        username = stored.username
+        password = stored.password
     }
 
     func connect() async {
@@ -183,6 +197,10 @@ final class RobotFilesModel {
             // Leaving the screen mid-listing learned nothing: it may neither report
             // a failure nor clear one still being read.
         } catch {
+            // A refusal is an answer. Without this the screen keeps the full-bleed
+            // "Reading the folder…" overlay up for good — and that overlay covers
+            // the very error row the failure just filled in.
+            hasListed = true
             report(error)
         }
     }
@@ -208,17 +226,6 @@ final class RobotFilesModel {
         RemoteFile.parent(of: path) != nil
     }
 
-    /// Deepest first, so the trail reads left to right.
-    var breadcrumb: [(name: String, path: String)] {
-        var trail = [(name: "/", path: "/")]
-        var walked = ""
-        for component in path.split(separator: "/") {
-            walked += "/" + component
-            trail.append((name: String(component), path: walked))
-        }
-        return trail
-    }
-
     // MARK: - Changing things
 
     /// Reads a file so the screen can hand it to a document picker.
@@ -226,16 +233,55 @@ final class RobotFilesModel {
         transferring = file.name
         defer { transferring = nil }
         do {
-            return try await files.read(file.path, limit: Self.readLimit)
+            return try await files.read(file.path, limit: Self.transferLimit)
         } catch {
             report(error)
             return nil
         }
     }
 
-    /// Writes to an explicit path. This is both "add a file here" and "replace this
-    /// one": without an in-app editor, replacing over the same path is how an edit
-    /// made on the device lands back on the robot.
+    /// Reads a file the user picked on the device and writes it to the robot.
+    ///
+    /// The read happens off the main actor. A plain `Task` would not achieve that —
+    /// created inside a `@MainActor` context it *inherits* that isolation, so
+    /// `Data(contentsOf:)` would still block the interface — hence the detached task
+    /// in `pickedFile(at:limit:)`.
+    func upload(from url: URL, to destination: String) async {
+        transferring = (destination as NSString).lastPathComponent
+        defer { transferring = nil }
+        do {
+            let data = try await Self.pickedFile(at: url, limit: Self.transferLimit)
+            try await files.write(data, to: destination)
+            await refresh()
+        } catch {
+            report(error)
+        }
+    }
+
+    /// Off the main actor, size-checked before anything is read, and the
+    /// security-scoped access balanced by `defer` whichever way it leaves.
+    ///
+    /// A picked URL is security-scoped on iOS and reading it without the scope
+    /// silently yields nothing.
+    private nonisolated static func pickedFile(at url: URL, limit: Int) async throws -> Data {
+        try await Task.detached {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer {
+                if scoped {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            guard size <= limit else {
+                throw ReachySSHError.fileTooLarge(bytes: UInt64(size), limit: limit)
+            }
+            return try Data(contentsOf: url)
+        }.value
+    }
+
+    /// Writes bytes already in hand to an explicit path. This is both "add a file
+    /// here" and "replace this one": without an in-app editor, replacing over the
+    /// same path is how an edit made on the device lands back on the robot.
     func upload(_ data: Data, to destination: String) async {
         transferring = (destination as NSString).lastPathComponent
         defer { transferring = nil }
@@ -290,39 +336,6 @@ final class RobotFilesModel {
             return
         }
         lastError = Self.describe(error)
-    }
-
-    /// Its own wording rather than `recordDaemonFailure`, for the reason
-    /// `OnboardingModel` and `HFSignInModel` keep theirs: none of this is a daemon
-    /// call, so `RobotSession.message(for:)` has nothing to say about it.
-    static func describe(_ error: any Error) -> String {
-        guard let error = error as? ReachySSHError else {
-            return error.localizedDescription
-        }
-        switch error {
-        case .notConnected:
-            return String(localized: .reachy("Not connected to the robot."))
-        case .authenticationFailed:
-            return String(localized: .reachy("That password was refused by the robot."))
-        case let .pathNotFound(detail):
-            return String(localized: .reachy("No such file or folder. \(detail)"))
-        case let .notPermitted(detail):
-            return String(localized: .reachy("The robot refused permission. \(detail)"))
-        case .directoryNotEmpty:
-            return String(localized: .reachy("That folder is not empty. Empty it first."))
-        case let .fileTooLarge(bytes, limit):
-            let size = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
-            let cap = ByteCountFormatter.string(fromByteCount: Int64(limit), countStyle: .file)
-            return String(localized: .reachy("That file is \(size). This screen opens files up to \(cap)."))
-        case .hostKeyUnknown, .hostKeyChanged:
-            return String(localized: .reachy("The robot's identity key needs to be confirmed."))
-        case let .keychain(status):
-            return String(localized: .reachy("The keychain refused to store the password (\(status))."))
-        case let .transport(detail):
-            // The robot's or the library's own words, which is why this stays a
-            // runtime string rather than becoming a catalogue entry.
-            return detail
-        }
     }
 
     /// Directories first, then case-insensitive by name — the order every file

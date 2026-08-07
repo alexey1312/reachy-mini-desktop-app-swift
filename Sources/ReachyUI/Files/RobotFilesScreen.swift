@@ -319,15 +319,9 @@ private struct FileTransferModifier: ViewModifier {
                 // name inside the current directory.
                 let destination = replacing?.path ?? model.destination(forFileNamed: url.lastPathComponent)
                 replacing = nil
-                // A picked URL is security-scoped on iOS, and reading it without
-                // the scope silently yields nothing.
-                let scoped = url.startAccessingSecurityScopedResource()
-                let data = try? Data(contentsOf: url)
-                if scoped {
-                    url.stopAccessingSecurityScopedResource()
-                }
-                guard let data else { return }
-                Task { await model.upload(data, to: destination) }
+                // The model reads the file off the main actor and reports a refusal
+                // through the same slot every other failure uses.
+                Task { await model.upload(from: url, to: destination) }
             }
             .contentLoading(
                 isPresented: model.transferring != nil,
