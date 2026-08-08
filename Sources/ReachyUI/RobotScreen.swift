@@ -9,6 +9,8 @@ import SwiftUI
 struct RobotScreen: View {
     let session: RobotSession
 
+    @State private var powerOff = RobotPowerOffModel()
+
     var body: some View {
         Form {
             statusSection
@@ -87,8 +89,12 @@ struct RobotScreen: View {
     /// each a tab or a settings row now — the controller behind Live, the move
     /// library at the root of its own tab, the daemon log with the rest of the
     /// diagnostics — so this screen is about the robot's identity and its state.
+    ///
+    /// The three rows are one ladder, in the order they take things away: waking
+    /// gives the robot its motors, sleeping takes them, powering off takes the
+    /// backend behind them. Only the last needs asking twice.
     private var controlSection: some View {
-        Section(.reachy("Control")) {
+        Section {
             Button {
                 Task { await session.wake() }
             } label: {
@@ -101,6 +107,12 @@ struct RobotScreen: View {
                 Label(.reachy("Go to sleep"), systemImage: "moon.zzz")
             }
             .disabled(session.powerTransition != nil)
+            Button(role: .destructive) {
+                powerOff.isConfirming = true
+            } label: {
+                Label(.reachy("Power off"), systemImage: "power")
+            }
+            .disabled(!powerOff.canPowerOff(session))
             if let transition = session.powerTransition {
                 HStack {
                     ProgressView()
@@ -108,8 +120,54 @@ struct RobotScreen: View {
                         .foregroundStyle(.secondary)
                 }
             }
+        } header: {
+            Text(.reachy("Control"))
+        } footer: {
+            Text(powerOffDescription)
         }
         .disabled(!isConnected)
+        .confirmationDialog(
+            Text(.reachy("Stop the robot backend?")),
+            isPresented: $powerOff.isConfirming,
+            titleVisibility: .visible
+        ) {
+            Button(.reachy("Power the robot off"), role: .destructive) {
+                Task { await powerOff.perform(session) }
+            }
+        } message: {
+            Text(powerOffConfirmation)
+        }
+    }
+
+    /// Says what "off" means here, because the word covers three different things on
+    /// a robot and this is only one of them: the motors, the camera and the state
+    /// stream go, the daemon that answers this app does not.
+    ///
+    /// It names Wake up rather than Connect. The daemon's own server survives the
+    /// teardown, so the session stays `.connected` and the gate — the app's only
+    /// screen called Connect — is never shown again; `wake()` is what starts the
+    /// backend from here, through `daemon/start?wake_up=true`.
+    ///
+    /// A section footer rather than a caption row, unlike `MaintenanceCard`, which
+    /// puts each sentence above its button. There the sentence belongs to one of two
+    /// rows that both need one; here two of the three rows need nothing, and a
+    /// caption between them would read as a footnote to sleeping.
+    private var powerOffDescription: LocalizedStringResource {
+        if session.address == nil {
+            // A relay session cannot reach `/api/daemon/stop`, and bringing the
+            // backend back needs this Wi-Fi — so the greyed-out button says which.
+            .reachy("Powering off needs the robot's own network.")
+        } else {
+            .reachy("Powering off stops the camera, the motors and the state stream. Wake up brings it back.")
+        }
+    }
+
+    private var powerOffConfirmation: LocalizedStringResource {
+        if let app = powerOff.runningApp(session) {
+            .reachy("\(app.title) stops first, then the robot goes to sleep and its backend shuts down.")
+        } else {
+            .reachy("The robot goes to sleep first, then its backend shuts down.")
+        }
     }
 
     private var isConnected: Bool {

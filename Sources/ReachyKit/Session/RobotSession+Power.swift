@@ -45,6 +45,50 @@ public extension RobotSession {
             report(error)
         }
     }
+
+    /// Sleep's bigger sibling: tear the robot backend down, so the camera, the
+    /// state stream and the motors all go rather than only the motors.
+    ///
+    /// **The parking is the daemon's, not ours.** `stop?goto_sleep=true` enables the
+    /// motors, awaits the sleep animation and only then cuts power — which is more
+    /// than `RobotPower.sleep()` does, since that one never enables them first. So
+    /// this asks for it rather than performing its own sequence beforehand.
+    ///
+    /// The running app is stopped here because the daemon will not do it: its
+    /// teardown drops the media server and the JSON-RPC relay and never touches the
+    /// app manager, leaving the app running against a backend that has gone. A
+    /// failure to stop it is reported and does not abort — the robot's body is
+    /// parked either way, and that is the half that matters.
+    ///
+    /// What comes back is the daemon's own HTTP server, which survives all of this —
+    /// and that is also why `phase` stays `.connected` and the connect gate is never
+    /// shown again. `startBackend()` is therefore *not* the way up from here: it
+    /// guards on `.connecting(.backendUnavailable(…))`, which only a fresh connect
+    /// reaches. `wake()` is, because it starts a stopped backend itself.
+    func powerOff() async {
+        guard let client, powerTransition == nil else { return }
+        robotError = nil
+        // Claimed before the first suspension point, like `wake()`.
+        powerTransition = .stoppingBackend
+        defer { powerTransition = nil }
+        do {
+            try assertSupportedDaemon()
+            if runningApp?.isBusy == true {
+                do {
+                    try await stopCurrentApp()
+                } catch {
+                    report(error)
+                }
+            }
+            try await client.stopDaemon(gotoSleep: true)
+        } catch {
+            report(error)
+            return
+        }
+        if await !waitForDaemonStopped(client: client) {
+            robotError = "Robot backend did not stop within \(configuration.daemonStopTimeout)."
+        }
+    }
 }
 
 extension RobotSession {
@@ -78,6 +122,25 @@ extension RobotSession {
             return false
         }
         return true
+    }
+
+    /// Waits out the background stop job, refreshing `lastStatus` as it goes.
+    ///
+    /// `.error` is a finished job too, not a reason to keep polling: the daemon
+    /// records the sleep animation failing that way and goes on tearing the backend
+    /// down regardless. Reporting it as a timeout would name the wrong cause.
+    func waitForDaemonStopped(client: any RobotAPIClient) async -> Bool {
+        let deadline = ContinuousClock.now + configuration.daemonStopTimeout
+        while ContinuousClock.now < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: configuration.pollInterval)
+            guard let status = try? await client.daemonStatus() else { continue }
+            lastStatus = status
+            switch status.state {
+            case .stopped, .error: return true
+            default: continue
+            }
+        }
+        return false
     }
 
     /// Waits out the background start job, refreshing `lastStatus` as it goes.

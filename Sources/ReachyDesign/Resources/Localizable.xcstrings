@@ -604,6 +604,21 @@
     "Place head from pose": {
       "extractionState": "manual"
     },
+    "Power off": {
+      "extractionState": "manual"
+    },
+    "Power the robot off": {
+      "extractionState": "manual"
+    },
+    "Powering off needs the robot's own network.": {
+      "extractionState": "manual"
+    },
+    "Powering off stops the camera, the motors and the state stream. Wake up brings it back.": {
+      "extractionState": "manual"
+    },
+    "Powering off… going to sleep first": {
+      "extractionState": "manual"
+    },
     "Privacy": {
       "extractionState": "manual"
     },
@@ -850,6 +865,9 @@
     "Stop stream": {
       "extractionState": "manual"
     },
+    "Stop the robot backend?": {
+      "extractionState": "manual"
+    },
     "Stopped": {
       "extractionState": "manual"
     },
@@ -920,6 +938,9 @@
       "extractionState": "manual"
     },
     "The robot found no apps on Hugging Face.": {
+      "extractionState": "manual"
+    },
+    "The robot goes to sleep first, then its backend shuts down.": {
       "extractionState": "manual"
     },
     "The robot has not registered a video stream yet.": {

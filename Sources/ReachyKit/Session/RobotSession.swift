@@ -72,6 +72,7 @@ public final class RobotSession {
     /// that the UI has to show what the robot is doing meanwhile.
     public enum PowerTransition: Equatable, Sendable {
         case startingBackend
+        case stoppingBackend
         case wakingUp
         case goingToSleep
     }
@@ -93,6 +94,10 @@ public final class RobotSession {
         public var moveCompletionTimeout: Duration = .seconds(10)
         /// Backend startup budget — upstream's `STARTUP.TIMEOUT_NORMAL`.
         public var daemonStartTimeout: Duration = .seconds(90)
+        /// Shutdown budget. Shorter than the start, and not by guesswork: the
+        /// daemon's teardown is the sleep animation plus a backend thread it joins
+        /// with a 5 s cap, where a start builds a media pipeline and loads a model.
+        public var daemonStopTimeout: Duration = .seconds(60)
         /// Motors need a moment to hold their pose before the animation starts.
         public var motorSettleDelay: Duration = .milliseconds(300)
         /// Connect-time readiness budget. We never start a backend during connect,

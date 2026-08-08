@@ -16,6 +16,15 @@ reverse.
   configuration metadata disappears even though button intents may still run.
 - `RobotAppQuery.entities(for:)` restores saved configuration: never access the network or omit requested identifiers,
   because WidgetKit prunes missing selections. Live refresh belongs in `suggestedEntities()`.
+- **An integer literal in `@Parameter(size:)` means _exactly_ that many, and it is a requirement the widget cannot
+  render without.** `IntentCollectionSize` is `ExpressibleByIntegerLiteral` onto `init(exactly:)`, so
+  `size: [.systemSmall: 2]` compiles to `min: 2, max: 2`. A robot with one installed app can then never satisfy the
+  configuration, and the only symptom is the widget sitting in WidgetKit's redacted placeholder forever — no error,
+  no crash, no "Edit Widget" that can be closed, and no buttons, because a placeholder has none. Write
+  `.init(min: 0, max: n)`. The trap survives every test this repo has: previews render `RobotAppsWidgetView`
+  directly, so nothing in `Metadata.appintents` is exercised by the snapshot suite. What does catch it is reading the
+  built metadata — `python3 -c "import json; print(json.load(open('Apps/DerivedData/Build/Products/Debug-iphoneos/ReachyWidget.appex/Metadata.appintents/extract.actionsdata'))['actions']['RobotAppsConfigurationIntent']['parameters'][0]['typeSpecificMetadata'][1])"`
+  — or adding it to a Home Screen.
 - Extension processes are disposable; persist pending and failure state in App Group stores and reload affected
   timelines rather than relying on memory.
 - On iOS 18, widget and Control Centre intents cannot open the app with `openAppWhenRun`; use `widgetURL` where an

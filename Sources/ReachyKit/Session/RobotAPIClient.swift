@@ -11,6 +11,7 @@ public protocol RobotAPIClient: Sendable {
     func setRobotName(_ name: String) async throws -> String
     func setMotorMode(_ mode: Components.Schemas.MotorControlMode) async throws
     func startDaemon(wakeUp: Bool) async throws
+    func stopDaemon(gotoSleep: Bool) async throws
     func listMoves(dataset: String) async throws -> [String]
     func playMove(dataset: String, move: String) async throws -> String
     func runningMoveUUIDs() async throws -> Set<String>
@@ -42,6 +43,10 @@ public extension RobotAPIClient {
     }
 
     func startDaemon(wakeUp _: Bool) async throws {
+        throw URLError(.unsupportedURL)
+    }
+
+    func stopDaemon(gotoSleep _: Bool) async throws {
         throw URLError(.unsupportedURL)
     }
 
