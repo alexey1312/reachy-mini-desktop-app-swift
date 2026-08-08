@@ -18,6 +18,7 @@ let package = Package(
         .library(name: "ReachyKit", targets: ["ReachyKit"]),
         .library(name: "ReachyMedia", targets: ["ReachyMedia"]),
         .library(name: "ReachyScene", targets: ["ReachyScene"]),
+        .library(name: "ReachySSH", targets: ["ReachySSH"]),
         .library(name: "ReachyUI", targets: ["ReachyUI"]),
         .library(name: "ReachyWidgetUI", targets: ["ReachyWidgetUI"]),
     ],
@@ -26,6 +27,9 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.8.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.1.0"),
         .package(url: "https://github.com/stasel/WebRTC.git", from: "150.0.0"),
+        // Pre-1.0, where a minor bump is a breaking change, so `upToNextMinor`
+        // rather than the `from:` every other dependency here uses.
+        .package(url: "https://github.com/orlandos-nl/Citadel", .upToNextMinor(from: "0.9.2")),
     ],
     targets: [
         // This app's own Hugging Face session — sign-in, token custody, renewal.
@@ -67,13 +71,25 @@ let package = Package(
             dependencies: ["ReachyKit"],
             exclude: ["AGENTS.md", "CLAUDE.md"]
         ),
+        // SFTP to the robot, for the files the daemon API deliberately cannot
+        // reach. Its own product rather than a corner of ReachyKit: the widget
+        // extension links ReachyWidgetUI, which links ReachyKit, and a process
+        // woken for a moment to draw two lines of text has no business loading
+        // SwiftNIO. It knows nothing about robots — host, port and credentials
+        // arrive as values, the way a Hugging Face token reaches ReachyKit.
+        .target(
+            name: "ReachySSH",
+            dependencies: [.product(name: "Citadel", package: "Citadel")],
+            exclude: ["AGENTS.md", "CLAUDE.md"]
+        ),
         .target(
             name: "ReachyUI",
             // `ReachyWidgetUI` for the app artwork alone, which both the store
             // rows and the widget's tiles draw. The arrow points this way round on
             // purpose: the widget target must stay clear of ReachyMedia.
             dependencies: [
-                "HuggingFaceAuth", "ReachyDesign", "ReachyKit", "ReachyMedia", "ReachyScene", "ReachyWidgetUI",
+                "HuggingFaceAuth", "ReachyDesign", "ReachyKit", "ReachyMedia", "ReachyScene", "ReachySSH",
+                "ReachyWidgetUI",
             ],
             // `Previews` sits beside the views it documents but is compiled by the Xcode targets
             // in `Apps/`, not by this one: `#Preview` is an external macro whose implementation
@@ -107,6 +123,10 @@ let package = Package(
         .testTarget(
             name: "ReachySceneTests",
             dependencies: ["ReachyScene", "ReachyKit"]
+        ),
+        .testTarget(
+            name: "ReachySSHTests",
+            dependencies: ["ReachySSH"]
         ),
         .testTarget(
             name: "ReachyUITests",
