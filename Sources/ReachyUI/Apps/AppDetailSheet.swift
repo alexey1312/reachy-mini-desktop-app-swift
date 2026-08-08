@@ -51,6 +51,15 @@ struct AppDetailSheet: View {
         runningApp.isReachable(session)
     }
 
+    /// This app, stuck in a transition long past its deadline.
+    ///
+    /// Matched against the app `runningStatus` already resolved to, so a wedge
+    /// belonging to some other app never speaks for this page.
+    private var isWedged: Bool {
+        guard let wedged = runningApp.wedged, let status = runningStatus else { return false }
+        return wedged.app.name == status.app.name
+    }
+
     /// The app's own settings page, when there is one to offer.
     ///
     /// `session.appSettingsURL(for:)` already answers nil without a declared port
@@ -175,8 +184,12 @@ struct AppDetailSheet: View {
                     failure: .shownSeparately,
                     conversationTurn: runningApp.conversationTurn,
                     isReachable: isReachable,
+                    wedged: isWedged,
                     font: .body
                 )
+            }
+            if isWedged {
+                WedgedAppNotice(state: status.state)
             }
             if !isReachable {
                 Text(
@@ -221,15 +234,19 @@ struct AppDetailSheet: View {
                 runningApp.dismissFailure(session)
             }
         } else {
+            // Both are refused identically once the slot is wedged: the daemon
+            // raises on `STOPPING`, and restart calls stop first. `WedgedAppNotice`
+            // above says why they are out, so this is a disabled control with a
+            // reason attached rather than one without.
             Button(.reachy("Restart"), systemImage: "arrow.clockwise") {
                 Task { await runningApp.restart(session: session) }
             }
-            .disabled(runningApp.busy || !isReachable)
+            .disabled(runningApp.busy || !isReachable || isWedged)
 
             Button(.reachy("Stop"), systemImage: "stop.fill", role: .destructive) {
                 Task { await runningApp.stop(session: session) }
             }
-            .disabled(runningApp.busy || !isReachable)
+            .disabled(runningApp.busy || !isReachable || isWedged)
         }
     }
 

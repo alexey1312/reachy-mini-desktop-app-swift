@@ -46,25 +46,47 @@ enum RunningAppCaption {
         failure: Failure,
         conversationTurn: ConversationTurn? = nil,
         isReachable: Bool = true,
+        wedged: Bool = false,
+        actionFailure: String? = nil,
         font: Font = Typography.status
     ) -> ReachyStatusLabel {
         let text = switch failure {
-        case .inline: description(of: status, conversationTurn: conversationTurn, isReachable: isReachable)
-        case .shownSeparately: title(of: status, conversationTurn: conversationTurn, isReachable: isReachable)
+        case .inline: description(
+                of: status,
+                conversationTurn: conversationTurn,
+                isReachable: isReachable,
+                wedged: wedged,
+                actionFailure: actionFailure
+            )
+        // No `actionFailure`: a surface that shows the crash separately has a slot
+        // for the refusal too, and `AppDetailSheet` already prints it there.
+        case .shownSeparately: title(
+                of: status,
+                conversationTurn: conversationTurn,
+                isReachable: isReachable,
+                wedged: wedged
+            )
         }
         return ReachyStatusLabel(
             text: text,
-            tone: tone(of: status),
+            tone: tone(of: status, wedged: wedged, actionFailure: actionFailure),
             font: font,
             lineLimit: 2
         )
     }
 
-    /// Only a crash is coloured. "Running" stays quiet: the strip is on screen
-    /// solely because something is running, so saying it again in green would tell
-    /// the reader nothing they cannot already see.
-    static func tone(of status: RobotAppStatus) -> StatusTone {
-        status.state == .error ? .failed : .idle
+    /// Only a crash is coloured, and a stuck transition. "Running" stays quiet: the
+    /// strip is on screen solely because something is running, so saying it again in
+    /// green would tell the reader nothing they cannot already see.
+    ///
+    /// A wedge is coloured for the opposite reason — nothing else on screen says
+    /// this stopped being a normal transition minutes ago.
+    static func tone(
+        of status: RobotAppStatus,
+        wedged: Bool = false,
+        actionFailure: String? = nil
+    ) -> StatusTone {
+        status.state == .error || wedged || actionFailure != nil ? .failed : .idle
     }
 
     /// The state in one phrase, with no failure detail. What the sheet puts in a
@@ -78,9 +100,15 @@ enum RunningAppCaption {
     static func title(
         of status: RobotAppStatus,
         conversationTurn: ConversationTurn? = nil,
-        isReachable: Bool = true
+        isReachable: Bool = true,
+        wedged: Bool = false
     ) -> String {
         guard isReachable else { return String(localized: .reachy("Robot unreachable")) }
+        // Ahead of everything below, including the conversation turn: once the robot
+        // is stuck, what the app was last heard doing is no longer the news.
+        if wedged {
+            return stuck(in: status.state)
+        }
         if status.state == .running, let conversationTurn {
             return title(of: conversationTurn)
         }
@@ -93,6 +121,20 @@ enum RunningAppCaption {
         // Carried through rather than replaced with "Unknown": a later daemon's
         // own word for the state is more use than ours (project rule 3).
         case let .unknown(state): state
+        }
+    }
+
+    /// Which transition ran out of time. Its own function rather than a nested
+    /// switch, which put `title(of:)` over SwiftLint's cyclomatic limit — and the two
+    /// phrases have to differ: a stuck start and a stuck stop leave the robot in
+    /// different places and ask different things of the reader.
+    private static func stuck(in state: RobotAppStatus.State) -> String {
+        switch state {
+        case .stopping: String(localized: .reachy("Stuck stopping"))
+        case .starting: String(localized: .reachy("Stuck starting"))
+        // Unreachable — only those two states are ever timed — but a `default` here
+        // would silently caption a future timed state as its normal self.
+        case .running, .done, .error, .unknown: String(localized: .reachy("Stuck"))
         }
     }
 
@@ -114,15 +156,29 @@ enum RunningAppCaption {
     /// this yields is the first two lines of one. That is the price of the dock
     /// having nowhere else to put it, and the reason no surface with a row for
     /// the output calls this.
+    /// `actionFailure` is the daemon's answer to a Stop or Restart the user just
+    /// tapped, and it belongs here for the same reason the crash tail does: the dock
+    /// has one caption line, so a refusal shown nowhere is a refusal shown nowhere.
+    /// It used to be exactly that — the dock rendered no error at all, and the next
+    /// poll then removed the dock, which reads as the Stop having worked.
+    ///
+    /// Precedence, most important first: a crash, a wedge, the refusal, the state.
+    /// A wedge outranks the refusal because it is the durable truth — and because
+    /// the two say nearly the same thing, while only one of them leads anywhere.
     static func description(
         of status: RobotAppStatus,
         conversationTurn: ConversationTurn? = nil,
-        isReachable: Bool = true
+        isReachable: Bool = true,
+        wedged: Bool = false,
+        actionFailure: String? = nil
     ) -> String {
         guard isReachable else { return title(of: status, isReachable: false) }
         if status.state == .error, let error = status.error {
             return error
         }
-        return title(of: status, conversationTurn: conversationTurn)
+        if !wedged, let actionFailure {
+            return actionFailure
+        }
+        return title(of: status, conversationTurn: conversationTurn, wedged: wedged)
     }
 }

@@ -75,6 +75,16 @@ Base: `http://<host>:8000/api`. Port is configurable in our client (upstream har
   `installedAppsCache` — the same pair an install or a remove job drops, because the store would otherwise go on
   offering Open and Remove on rows whose venv is gone — and `MaintenanceModel` re-reads the running app after it,
   which is the one reading the caches do not cover.
+  - **It takes each app's instance data with its code, and reinstalling does not bring that back.** `.env`,
+    `startup_settings.json` and `user_personalities/` live *inside*
+    `/venvs/apps_venv/lib/python3.12/site-packages/<package>/`, so credentials and settings go with the `rmtree`. The
+    card's copy has to say so; "every installed app, and the Python environment they share" is true and reads as
+    recoverable, which is how it was lost on 2026-08-08.
+  - **Nothing reports what a deleted venv used to hold**, so the list is unrecoverable over REST — after the fact only
+    `journalctl` on the robot could say what had been installed. `MaintenanceModel.installedSummary` names the apps in
+    the confirmation for exactly that reason: it is the last moment those names exist anywhere the user can see.
+  - It has no `summary` or `description` in `openapi.json`, and the name says *cache*. Absent documentation is not
+    evidence of a harmless endpoint — that inference is what turned a stuck app into lost data.
 - `GET /api/daemon/hardware-id` answers one key, `{"hardware_id": "<16 hex>"}` = `sha256(usb serial)[:16]` — the same
   string as mDNS TXT `unit_id` and BLE characteristic `…cdef7`. It is a join key: never reshape it.
 
@@ -130,6 +140,51 @@ most questions in a glance.
     `ERROR: Journal not running`. That is a `JOURNAL_START` away from fixed, not a terminal state.
 - `…cdef6` is `", ".join(...)` over the robot's `commands/` directory with `.sh` stripped, `"None"` when empty, in
   `os.listdir` order. Read it; never hardcode the list, and sort it before showing it.
+
+## `stopping` is a one-way door, and no client can open it
+
+Burned on 2026-08-08: `reachy_mini_conversation_app` sat in `state: stopping` indefinitely, both stop and start
+answered 400, and the search for another REST way out found `/cache/reset-apps` — which deleted every installed app
+and its credentials. The mechanism is entirely daemon-side, in `apps/manager.py`:
+
+- `:283` sets `STOPPING` **before any I/O**, so a wedge anywhere after it is permanent.
+- `:275-279` `stop_current_app` raises on `STOPPING` → HTTP 400 `No app is currently running`.
+- `:99-106` `is_app_running()` counts `STOPPING` as alive → `start_app` answers `An app is already running`.
+- `:357-369` `restart_current_app` calls both and inherits both failures.
+- `:355` `current_app = None` is the **last line**, after three unbounded awaits (`process.wait()` after the kill,
+  `await monitor_task`, `goto_target`). Only the 20 s subprocess wait at `:301` has a timeout. So a status that still
+  names the app means the coroutine is stuck *past* the kill: the app is already dead, the slot is not.
+- The robot-app lock is released in the monitor's `finally` (`:255-261`), i.e. **before** the untimed return-to-zero.
+  So `robot-app-lock-status` reports `free` while `current-app-status` still names the app. Neither is lying.
+- Unchanged in upstream `1.10.0.dev0`. Not fixed above us.
+
+**No parameter exists to do this differently.** `POST /api/apps/stop-current-app` takes nothing at all — no body, no
+`force`, no `timeout` (the internal `stop_current_app(timeout=20.0)` is not exposed); `start-app/{name}` takes only
+its path component. `check-updates?force=` is the only `force` anywhere in the daemon.
+
+**Nor can a client cause it.** Two hypotheses were checked and both are dead: uvicorn 0.52.1 does **not** cancel the
+ASGI task when the client disconnects (`connection_lost` only sets `cycle.disconnected`, in both `h11_impl.py` and
+`httptools_impl.py`; the sole `.cancel()` is the keep-alive timer, and there is no `BaseHTTPMiddleware` in the chain),
+so our 35 s and 6 s budgets cannot abort a stop in flight. And `play_move` takes its guard **non-blocking** and
+simply returns when a move is running (`backend/abstract.py:412`), so nothing we hold — teleop, the state stream, the
+camera — can stall return-to-zero.
+
+**`POST /api/daemon/restart` does not clear it.** It restarts the motor backend, not the FastAPI process that holds
+the slot (`daemon/daemon.py:473-536`, whose own docstring says so). The only ways out are `systemctl restart
+reachy-mini-daemon` — reachable from this app as BLE `CMD_RESTART_DAEMON`, which the `reachy-mini-bluetooth` unit runs
+as root — the tail of `POST /update/start`, or a power cycle.
+
+**Which await hung is answerable, from the robot's journal.** The daemon's own log lines bracket every one, so the
+last `apps.manager.runner` line names the place: `App stopped successfully` → stuck on `await monitor_task`;
+`App did not stop within timeout, forcing termination` → stuck on the kill/reap; `Returning robot to zero position` →
+stuck inside `goto_target`; `Could not return to zero position:` → not stuck at all, the slot would have cleared.
+
+Client-side, `RunningAppModel` puts a deadline on the two transitional states (40 s stopping, 120 s starting) and the
+dock then names the wedge and refuses both controls, because the daemon can only answer 400 for either. **Only a poll
+that answered advances that deadline** — an unreachable robot leaves the last status in place, and timing it as if it
+were fresh reports a Wi-Fi blip as a wedged daemon. And the two are not one situation: a stuck `stopping` means the app
+is dead and the slot is not, while a stuck `starting` means nothing ever ran, so `WedgedAppNotice` reads the state
+rather than assuming a stop.
 
 ## An app's own control surface (`/rpc`) — not the daemon's
 
