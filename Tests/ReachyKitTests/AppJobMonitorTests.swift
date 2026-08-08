@@ -144,6 +144,21 @@ struct AppJobMonitorTests {
         #expect(events == [.finished(.daemonRestarted)])
     }
 
+    /// The robot does not send that 404 bare — FastAPI attaches a `detail`, which
+    /// makes it `.daemonRefused` rather than `.daemonRejected`. This is the shape
+    /// the daemon actually produces, and the test above is the shape a stub with no
+    /// body produces; both have to reach the same conclusion or the restart notice
+    /// works only in tests.
+    @Test("a forgotten job reads as a restart even when the daemon explains itself")
+    func reportsForgottenJobWithDetail() async {
+        let events = await collect(
+            socket: silentSocket(),
+            poll: Poll([.failure(ReachyKitError.daemonRefused(statusCode: 404, detail: "Job not found"))])
+        )
+
+        #expect(events == [.finished(.daemonRestarted)])
+    }
+
     /// Same conclusion over the socket: the daemon greets an unknown id with one
     /// JSON frame and hangs up.
     @Test("the socket rejecting the job ends it the same way")

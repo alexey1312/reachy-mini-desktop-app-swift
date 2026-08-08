@@ -143,4 +143,72 @@ struct MaintenanceModelTests {
         #expect(session.robotError == nil)
         #expect(!model.isBusy)
     }
+
+    /// **Nothing on the robot reports what a deleted venv used to hold.** After the
+    /// 2026-08-08 incident the only way left to find out what had been installed was
+    /// `journalctl` on the robot itself, so the confirmation is the last place those
+    /// names appear — and the only place a reader can still change their mind.
+    ///
+    /// Asserted here and not in a reference image because a `confirmationDialog`
+    /// presents in a context of its own that captures as nothing: recorded twice for
+    /// `RobotScreen`, the two references came out byte-identical to each other and
+    /// to the screen with no dialog at all (`Sources/ReachyUI/AGENTS.md`).
+    @Test("the confirmation names the apps it is about to delete")
+    func namesWhatItDeletes() {
+        let model = MaintenanceModel.preview(installed: RobotApp.previewInstalled)
+        let titles = RobotApp.previewInstalled.map(\.title)
+
+        let summary = model.installedSummary
+
+        #expect(summary != nil)
+        for title in titles {
+            #expect(summary?.contains(title) == true)
+        }
+    }
+
+    /// An unread list must not read as an empty robot: the dialog falls back to
+    /// "every app", which is true whatever the list turned out to be.
+    @Test("an unread list names nothing rather than claiming there is nothing")
+    func saysNothingWhenTheListIsUnknown() {
+        #expect(MaintenanceModel().installedSummary == nil)
+    }
+
+    /// A Lite robot and a relay session mount no `/cache/*`, so the section is
+    /// absent — asking the robot for a list nothing will act on is a request with no
+    /// reader.
+    @Test("no maintenance, no inventory request")
+    func skipsTheListWhereTheSectionIsAbsent() async {
+        let model = MaintenanceModel()
+
+        await model.loadInstalled(session: session(wirelessVersion: false))
+
+        #expect(model.installed.isEmpty)
+        #expect(model.installedSummary == nil)
+    }
+
+    /// **The list is fiction the moment the venv is gone**, and it is read once when
+    /// the card appears — nothing re-reads it. So without this the button stays
+    /// enabled and a second confirmation names the apps this very action deleted,
+    /// under a sentence saying they are about to be.
+    @Test("the inventory goes with the apps")
+    func forgetsTheListItJustDeleted() async {
+        let model = MaintenanceModel.preview(installed: RobotApp.previewInstalled)
+
+        await model.perform(.resetApps, session: session())
+
+        #expect(model.installed.isEmpty)
+        #expect(model.installedSummary == nil)
+    }
+
+    /// The other action deletes model weights, not apps. Clearing the list there
+    /// would make the dialog say "every app" about a robot whose apps are all still
+    /// installed.
+    @Test("clearing the model cache leaves the app list alone")
+    func keepsTheListWhenOnlyTheCacheGoes() async {
+        let model = MaintenanceModel.preview(installed: RobotApp.previewInstalled)
+
+        await model.perform(.clearHuggingFaceCache, session: session())
+
+        #expect(model.installedSummary != nil)
+    }
 }
