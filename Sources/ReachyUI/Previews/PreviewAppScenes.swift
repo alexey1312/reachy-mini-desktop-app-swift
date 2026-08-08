@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 @testable import ReachyUI
 import SwiftUI
@@ -93,11 +94,18 @@ extension PreviewScene {
 
     /// The bottom strip on its own. Sized to fit rather than to a device: it is a
     /// component, and a full-screen capture of one would be mostly empty.
+    ///
+    /// `placement` defaults to `.standalone`, which is both the environment's own
+    /// default and the shape the strip takes below iOS 26.1 — so every capture here
+    /// is of the half a root capture on an iOS 26 simulator can never show. `.inline`
+    /// is the other one: nothing scrolls in a snapshot, so a minimised tab bar is
+    /// unreachable from a root preview and this is the only way to cover it.
     static func runningAppDock(
         _ status: RobotAppStatus,
         conversationTurn: ConversationTurn? = nil,
         isReachable: Bool = true,
-        busy: Bool = false
+        busy: Bool = false,
+        placement: ReachyAccessoryPlacement = .standalone
     ) -> some View {
         RunningAppDockContent(
             status: status,
@@ -107,6 +115,7 @@ extension PreviewScene {
             expand: {},
             perform: { _ in }
         )
+        .environment(\.reachyAccessoryPlacement, placement)
         .preview()
     }
 }

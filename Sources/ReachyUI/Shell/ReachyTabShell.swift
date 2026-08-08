@@ -52,71 +52,106 @@ struct ReachyTabShell: View {
         @Bindable var router = router
         return TabView(selection: $router.tab) {
             Tab(value: ReachyRouter.Tab.robot) {
-                RobotTab(session: session, router: router)
+                docked {
+                    RobotTab(session: session, router: router)
+                }
             } label: {
                 Label(.reachy("Robot"), systemImage: "figure.wave")
             }
             Tab(value: ReachyRouter.Tab.live) {
-                LiveTab(
-                    session: session,
-                    viewport: viewport,
-                    floating: floating,
-                    router: router,
-                    remoteLink: remoteLink
-                )
+                docked {
+                    LiveTab(
+                        session: session,
+                        viewport: viewport,
+                        floating: floating,
+                        router: router,
+                        remoteLink: remoteLink
+                    )
+                }
             } label: {
                 Label(.reachy("Live"), systemImage: "cube.transparent")
             }
             Tab(value: ReachyRouter.Tab.moves) {
-                MovesTab(session: session, router: router)
+                docked {
+                    MovesTab(session: session, router: router)
+                }
             } label: {
                 Label(.reachy("Moves"), systemImage: "music.note")
             }
             Tab(value: ReachyRouter.Tab.apps) {
-                AppsTab(
-                    session: session,
-                    router: router,
-                    runningApp: runningApp,
-                    store: store,
-                    install: install,
-                    findRobot: findRobot
-                )
+                docked {
+                    AppsTab(
+                        session: session,
+                        router: router,
+                        runningApp: runningApp,
+                        store: store,
+                        install: install,
+                        findRobot: findRobot
+                    )
+                }
             } label: {
                 Label(.reachy("Apps"), systemImage: "square.grid.2x2")
             }
             Tab(value: ReachyRouter.Tab.settings) {
-                SettingsTab(session: session, router: router)
+                docked {
+                    SettingsTab(session: session, router: router)
+                }
             } label: {
                 Label(.reachy("Settings"), systemImage: "gearshape")
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        // The strip lives in the system's accessory slot, which is the row a
+        // minimised bar shrinks to make. Order against `floatingViewport` is free —
+        // measured on iOS 26.4, an accessory applied either side of the overlay
+        // reports the same geometry to the point.
+        .reachyTabAccessory(isPresented: dockIsUp) { dock }
         // The bar gets out of the way while reading a list and comes back on the way
         // up. iPhone only, and the fork lives in `ReachyChrome` — a sidebar has
-        // nothing to minimise.
-        //
-        // Off while the dock is up. The dock is an opaque strip in the bottom safe
-        // area, so a minimised bar shrinks into a row it cannot be seen in: the
-        // whole tab bar disappeared the moment a list was scrolled down with an app
-        // running, and it read as the dock having replaced it. Getting one row back
-        // is not worth losing every destination.
-        .reachyMinimizingTabBar(runningApp.visibleStatus(for: session) == nil)
-        // Above `runningAppDock` on purpose: the dock is a bottom `safeAreaInset`,
-        // and applying it afterwards is what shrinks the area the window comes to
-        // rest in. The other order parks the window on the dock's buttons.
-        //
+        // nothing to minimise. It used to be switched off while the dock was up,
+        // for a reason the accessory removes; `reachyMinimizingTabBar` carries it.
+        .reachyMinimizingTabBar()
         // The router is read here rather than inside the model: `placement` is a
         // function of which tab is showing, and this is the one place that knows.
         .onChange(of: router.tab, initial: true) { _, tab in
             floating.isLiveTabSelected = tab == .live
         }
+        // Neither placement the strip can take is reported to an overlay on the
+        // `TabView`, the way the tab bar is not, so the window is told rather than
+        // left to measure.
+        .onChange(of: dockIsUp, initial: true) { _, isUp in
+            floating.hasBottomAccessory = isUp
+        }
         .floatingViewport(model: floating, viewport: viewport, session: session) {
             router.tab = .live
         }
-        // Applied to the `TabView` itself — see `runningAppDock` for why that is the
-        // whole trick. It is not mounted in the gate: with no connection
-        // `RunningAppModel.canPoll` is false and the dock draws `EmptyView`, so the
-        // polling should die with the shell rather than idle behind the gate.
-        .runningAppDock(session: session, model: runningApp, store: store, install: install)
+        // Not mounted in the gate: with no connection `RunningAppModel.canPoll` is
+        // false and the dock draws nothing, so the polling should die with the shell
+        // rather than idle behind the gate.
+        .runningApp(session: session, model: runningApp, store: store, install: install)
+    }
+
+    private var dockIsUp: Bool {
+        runningApp.visibleStatus(for: session) != nil
+    }
+
+    /// The strip, wherever it is drawn. One definition, six mount points, of which
+    /// exactly one is live on any given OS.
+    private var dock: some View {
+        RunningAppDock(session: session, model: runningApp)
+    }
+
+    /// Below iOS 26.1, and on every macOS, the inset belongs to the **tab**: on the
+    /// `TabView` a bottom `safeAreaInset` is drawn straight over the bar, and on a
+    /// tab's content it lands above it. A no-op wherever the system slot is live, so
+    /// the two can never both draw a strip.
+    ///
+    /// Five copies of the strip therefore exist below the floor, since the shell
+    /// builds all five tabs at once. That is layout only — every effect the dock has
+    /// lives in `runningApp`, mounted once — so do not collapse these into a single
+    /// overlay on the `TabView`: an overlay does not inset a tab's content, and the
+    /// last row of every list would sit under the strip forever.
+    private func docked(@ViewBuilder _ content: () -> some View) -> some View {
+        content().reachyTabAccessoryFallback(isPresented: dockIsUp) { dock }
     }
 }

@@ -55,6 +55,13 @@ final class FloatingViewportModel {
     /// Whether the Live tab is the selected one. Written by the shell.
     var isLiveTabSelected = false
 
+    /// Whether the running-app strip is on screen. Written by the shell, because
+    /// neither placement the strip can take is reported to the overlay's safe area —
+    /// the system's accessory slot is invisible to it for the same reason the tab
+    /// bar is, and the fallback's inset sits *inside* a tab, one level further in
+    /// than the overlay can see.
+    var hasBottomAccessory = false
+
     /// Set while the window grows to fill the screen, in the instant before the
     /// tab takes the viewport over. There is no matched transition to be had here
     /// — that would need both hosts alive at once — so the overlay animates its

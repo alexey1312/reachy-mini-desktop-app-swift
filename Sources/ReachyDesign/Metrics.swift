@@ -33,6 +33,21 @@ public enum Metrics {
     /// where the first version of the floating viewport landed squarely on the
     /// Apps and Settings labels.
     public static let tabBarAllowance: CGFloat = 56
+    /// Room for the tab accessory the running-app strip is drawn in, over and above
+    /// the bar — and invisible to an overlay on the `TabView` for the same reason
+    /// the bar is.
+    ///
+    /// The system slot measures 56 pt: on an iPhone 17 Pro running iOS 26.4 a tab's
+    /// content reports a bottom safe area of 139 pt with the accessory and 83 pt
+    /// without, and the system's own container makes up the difference between that
+    /// and the 33.3 pt it offers the content. This reserves more, for the two
+    /// reasons a single measurement cannot cover: the fallback strip is that 56 plus
+    /// its own gap to the bar, and either one carries a shadow. Recorded at 56 the
+    /// floating window came to rest 2 pt off the strip, which
+    /// `Root — floating viewport over the dock` exists to catch. Reserving the
+    /// larger leaves the window slightly high in the other placement, which is the
+    /// same trade `tabBarAllowance` makes and the safe way to be wrong.
+    public static let tabAccessoryAllowance: CGFloat = 68
     /// A `Form` left to itself fills a 1024 pt iPad and reads as broken.
     public static let readableForm: CGFloat = 560
 }

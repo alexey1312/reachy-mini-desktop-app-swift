@@ -1,3 +1,4 @@
+import ReachyDesign
 import ReachyKit
 import ReachyMedia
 import ReachyScene
@@ -72,10 +73,16 @@ import SwiftUI
 // see `AGENTS.md`. `MovesScreenPreviews` and `SettingsPreviews` cover those screens; that they sit at
 // the root of a tab is what `Root — relay moves tab` below shows, from a state that needs no `.task`.
 
-// The dock, in place. These are the captures that verify it lands *below* the tab bar and shrinks the
-// interface rather than floating over it — which no unit test can see. Under `.sidebarAdaptable` the
-// iPad shot is the interesting one: the bar is a sidebar on the left, so the strip is not under it but
-// under the whole window, running the full width. The Telegram shape survives the move.
+// The dock, in place. What these have to show is a **tab bar that is still on screen**, with the strip
+// above it and the tab's content inset to clear it. They used to be described as verifying that the
+// strip landed *below* the bar; for five releases they recorded the opposite and nobody read them that
+// way — the bar is simply absent from the pre-fix images, and `Root — connected` beside them is where
+// it should have been. When one of these moves, check for the bar first and the strip second.
+//
+// They capture the fallback placement, because `PreviewScene.root` forces it for a reason written out
+// there: an enabled `tabViewBottomAccessory` blanks the whole capture. There is no root reference for
+// the system slot and there cannot be one — the strip it would hold is captured on its own instead, as
+// `Dock — expanded`.
 #Preview("Root — dock on the robot tab") {
     PreviewScene.root(
         .preview(runningApp: .preview(.running)),
