@@ -161,12 +161,92 @@ struct RobotConnectionAppsTests {
 
     /// Stopping when nothing runs is a 400, and the screen has to say so rather
     /// than show a failure the user cannot act on.
+    ///
+    /// A bare 400 — no body — is all this stub gives, so it stays the unexplained
+    /// case. The robot's own answer is the test below.
     @Test("stopping twice is refused the second time")
     func stopIsRefusedWhenNothingRuns() async throws {
         let session = makeSession(["/api/apps/stop-current-app": .init(statusCode: 400)])
 
         await #expect(throws: ReachyKitError.daemonRejected(statusCode: 400)) {
             try await makeConnection(session).stopCurrentApp()
+        }
+    }
+
+    /// **The two refusals on this surface are the same 400 and mean opposite
+    /// things**, and only the daemon's `detail` tells them apart:
+    /// `stop_current_app` raises "No app is currently running" while `start_app`
+    /// raises "An app is already running" (`apps/manager.py:275-279`, `:121-122`).
+    ///
+    /// Both used to reach the user as `The daemon rejected the request (HTTP 400)`.
+    /// That is the line an operator read while an app sat wedged in `stopping` on
+    /// 2026-08-08, and reading it as "the request was malformed" is what sent the
+    /// search for a way out towards `/cache/reset-apps`.
+    @Test("the daemon's own reason survives the transport")
+    func refusalCarriesTheDaemonsReason() async throws {
+        let session = makeSession([
+            "/api/apps/stop-current-app": .init(
+                statusCode: 400,
+                json: #"{"detail": "No app is currently running"}"#
+            ),
+        ])
+
+        await #expect(throws: ReachyKitError.daemonRefused(
+            statusCode: 400,
+            detail: "No app is currently running"
+        )) {
+            try await makeConnection(session).stopCurrentApp()
+        }
+    }
+
+    @Test("a refused start says which way round the refusal was")
+    func startRefusalNamesTheOccupant() async throws {
+        let session = makeSession([
+            "/api/apps/start-app/dance_party": .init(
+                statusCode: 400,
+                json: #"{"detail": "An app is already running"}"#
+            ),
+        ])
+
+        let error = await #expect(throws: ReachyKitError.self) {
+            try await makeConnection(session).startApp(named: "dance_party")
+        }
+
+        #expect(error?.statusCode == 400)
+        #expect(error?.errorDescription == "An app is already running (HTTP 400)")
+    }
+
+    /// A validation failure puts a *list* of field errors in the same key. Rendering
+    /// that would put `[{"loc": …}]` in front of somebody, so it is dropped and the
+    /// refusal stays the plain one.
+    @Test("a validation detail is dropped rather than shown as JSON")
+    func validationDetailIsNotShown() async throws {
+        let session = makeSession([
+            "/api/apps/job-status/job-1": .init(
+                statusCode: 422,
+                json: #"{"detail": [{"loc": ["path", "job_id"], "msg": "invalid"}]}"#
+            ),
+        ])
+
+        await #expect(throws: ReachyKitError.daemonRejected(statusCode: 422)) {
+            try await makeConnection(session).appJob(id: "job-1")
+        }
+    }
+
+    /// 503 and 409 keep their own cases even with a reason attached: those are the
+    /// two a caller *branches* on, and knowing which is which is worth more than a
+    /// sentence.
+    @Test("a stopped backend stays classified, reason or no reason")
+    func backendNotRunningOutranksItsDetail() async throws {
+        let session = makeSession([
+            "/api/apps/current-app-status": .init(
+                statusCode: 503,
+                json: #"{"detail": "Backend not running"}"#
+            ),
+        ])
+
+        await #expect(throws: ReachyKitError.backendNotRunning) {
+            try await makeConnection(session).currentAppStatus()
         }
     }
 

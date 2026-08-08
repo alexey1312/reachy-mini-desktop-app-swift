@@ -105,6 +105,8 @@ extension PreviewScene {
         conversationTurn: ConversationTurn? = nil,
         isReachable: Bool = true,
         busy: Bool = false,
+        wedged: Bool = false,
+        actionFailure: String? = nil,
         placement: ReachyAccessoryPlacement = .standalone
     ) -> some View {
         RunningAppDockContent(
@@ -112,6 +114,8 @@ extension PreviewScene {
             conversationTurn: conversationTurn,
             isReachable: isReachable,
             busy: busy,
+            wedged: wedged,
+            actionFailure: actionFailure,
             expand: {},
             perform: { _ in }
         )

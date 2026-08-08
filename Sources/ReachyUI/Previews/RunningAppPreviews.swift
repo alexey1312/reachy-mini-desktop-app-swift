@@ -53,6 +53,28 @@ import SwiftUI
     PreviewScene.runningAppDock(.preview(.unknown("reloading")))
 }
 
+// The state that cost an incident. `Dock — stopping` above is what a normal stop
+// looks like; this is the same status forty seconds later, and the whole point of
+// the pair is that the two references differ — the caption names the wedge and both
+// controls are out, because the daemon can only answer 400 for either.
+#Preview("Dock — stuck stopping", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.stopping), wedged: true)
+}
+
+#Preview("Dock — stuck starting", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.starting), wedged: true)
+}
+
+// The dock had no error slot at all, so a refused Stop was invisible and the next
+// poll then removed the strip — which reads as the Stop having worked. It goes in
+// the one caption line the strip has.
+#Preview("Dock — command refused", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(
+        .preview(.running),
+        actionFailure: "No app is currently running (HTTP 400)"
+    )
+}
+
 // MARK: - Merged into a minimised tab bar
 
 // The two captures of `.inline`, and the only cover it can have: reaching it for
@@ -112,10 +134,32 @@ import SwiftUI
 }
 
 // The stop call itself failed — distinct from the app failing, and the only place
-// that reason is shown.
+// that reason is shown. The message is now the daemon's own sentence rather than
+// `HTTP 400`, which is what `ReachyKitError.daemonRefused` carries up.
 #Preview("Running app — command failed") {
     PreviewScene.runningAppDetail(
         .preview(.running),
-        model: .preview(error: "The daemon rejected the request (HTTP 400)")
+        model: .preview(error: "No app is currently running (HTTP 400)")
+    )
+}
+
+// The page for a slot the robot will not release: the state names it, two sentences
+// say what happened and where the way out is, and both controls are out because the
+// daemon answers 400 for either. This is the one surface with room to explain it —
+// the strip has a single caption line.
+#Preview("Running app — stuck stopping") {
+    PreviewScene.runningAppDetail(
+        .preview(.stopping),
+        model: .preview(wedged: .preview(.stopping))
+    )
+}
+
+// The same slot wedged the other way round, and the pair is the point: nothing ever
+// ran, so the notice must not claim the app already stopped. `WedgedAppNotice` reads
+// the state for that, and only this reference shows the two sentences differ.
+#Preview("Running app — stuck starting") {
+    PreviewScene.runningAppDetail(
+        .preview(.starting),
+        model: .preview(wedged: .preview(.starting))
     )
 }

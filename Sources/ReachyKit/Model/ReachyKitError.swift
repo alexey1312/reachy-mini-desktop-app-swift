@@ -37,14 +37,71 @@ public enum ReachyKitError: Error, Sendable, Equatable {
     case daemonLogsUnavailable
     /// This connection cannot stream teleop targets.
     case teleopUnavailable
+    /// The daemon refused **and said why**, in FastAPI's `detail`.
+    ///
+    /// Appended for the reason ``daemonLogsUnavailable`` was. It is a case of its
+    /// own rather than a `detail` added to ``daemonRejected(statusCode:)`` for a
+    /// second reason: that one is constructed in some sixty places, half of them
+    /// test expectations matched by value, so widening it would rewrite every one
+    /// and make equality depend on a sentence the daemon is free to reword.
+    ///
+    /// Both carry the same status code. ``statusCode`` reads it off either, and
+    /// that — not a pattern match on a case — is what control flow belongs on.
+    case daemonRefused(statusCode: Int, detail: String)
 
     /// Maps a daemon HTTP status onto the cases callers can act on.
-    static func fromStatusCode(_ statusCode: Int) -> ReachyKitError {
+    ///
+    /// `detail` is defaulted so the callers that have no body in hand are
+    /// unchanged.
+    static func fromStatusCode(_ statusCode: Int, detail: String? = nil) -> ReachyKitError {
         switch statusCode {
+        // These two stay classified even when the daemon explains itself: they are
+        // the refusals callers branch on — 503 gates every motion route, 409 is
+        // worth retrying — and a sentence is worth less than knowing which is which.
         case 503: .backendNotRunning
         case 409: .daemonBusy
-        default: .daemonRejected(statusCode: statusCode)
+        default:
+            if let detail, !detail.isEmpty {
+                .daemonRefused(statusCode: statusCode, detail: detail)
+            } else {
+                .daemonRejected(statusCode: statusCode)
+            }
         }
+    }
+
+    /// The HTTP status behind a refusal, whichever case ended up carrying it.
+    ///
+    /// **Control flow must go through this rather than match a case.** Whether the
+    /// daemon attached a `detail` decides which of the two cases a refusal becomes,
+    /// and it attaches one to some 404s and not others — so
+    /// `catch .daemonRejected(statusCode: 404)` is a branch that works against a
+    /// stub with no body and silently stops working against the robot.
+    public var statusCode: Int? {
+        switch self {
+        case let .daemonRejected(statusCode): statusCode
+        case let .daemonRefused(statusCode, _): statusCode
+        // Spelled out rather than `default`, so a later case carrying a status code
+        // is a compile error here instead of quietly reporting nil.
+        case .invalidAddress, .notConnected, .unsupportedDaemonVersion,
+             .backendNotRunning, .daemonBusy, .wirelessFeaturesUnavailable,
+             .renameUnavailable, .appsUnavailable, .hfAuthUnavailable,
+             .daemonLogsUnavailable, .teleopUnavailable:
+            nil
+        }
+    }
+
+    /// The reason out of a refusal's body, if it carries one a person can read.
+    ///
+    /// FastAPI's `detail` is a string for an `HTTPException` and a *list* of field
+    /// errors for a validation failure. Only the string form says anything
+    /// actionable, so the list form is dropped rather than stringified into
+    /// `[{"loc": …}]` and put in front of somebody.
+    static func detail(in data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let detail = object["detail"] as? String
+        else { return nil }
+        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -71,6 +128,10 @@ extension ReachyKitError: LocalizedError {
             "This robot's Hugging Face account cannot be reached over this connection"
         case let .daemonRejected(statusCode):
             "The daemon rejected the request (HTTP \(statusCode))"
+        // The daemon's own sentence first, because it is the part that says what to
+        // do about it; the status stays for the screenshot in a bug report.
+        case let .daemonRefused(statusCode, detail):
+            "\(detail) (HTTP \(statusCode))"
         case .daemonLogsUnavailable:
             "The daemon's logs cannot be read over this connection"
         case .teleopUnavailable:

@@ -34,6 +34,8 @@ struct RunningAppDock: View {
                 conversationTurn: model.conversationTurn,
                 isReachable: model.isReachable(session),
                 busy: model.busy,
+                wedged: model.wedged != nil,
+                actionFailure: model.lastError,
                 expand: { model.isExpanded = true },
                 perform: perform
             )
@@ -156,6 +158,12 @@ struct RunningAppDockContent: View {
     var conversationTurn: ConversationTurn?
     var isReachable = true
     var busy = false
+    /// The transition has outlasted its deadline: only the robot's software can end
+    /// it now. See ``RunningAppModel/wedged``.
+    var wedged = false
+    /// What the daemon answered the last Stop or Restart with. The strip's one
+    /// caption line is the only place it can be read from here.
+    var actionFailure: String?
     let expand: () -> Void
     let perform: (Action) -> Void
 
@@ -163,6 +171,15 @@ struct RunningAppDockContent: View {
 
     private var hasFailed: Bool {
         status.state == .error
+    }
+
+    /// **Both controls are refused by the daemon once the slot is wedged**, and
+    /// refused identically: `stop_current_app` raises on `STOPPING` and
+    /// `restart_current_app` calls it first, so each answers the same 400
+    /// (`apps/manager.py:275-279`, `:357-369`). Leaving them live invited exactly
+    /// the tapping that filled the 2026-08-08 timeline with 400s.
+    private var canAct: Bool {
+        !busy && isReachable && !wedged
     }
 
     var body: some View {
@@ -195,7 +212,9 @@ struct RunningAppDockContent: View {
                         of: status,
                         failure: .inline,
                         conversationTurn: conversationTurn,
-                        isReachable: isReachable
+                        isReachable: isReachable,
+                        wedged: wedged,
+                        actionFailure: actionFailure
                     )
                 )
                 .contentShape(.rect)
@@ -273,7 +292,7 @@ struct RunningAppDockContent: View {
         }
         .reachyButton()
         .buttonBorderShape(.circle)
-        .disabled(busy || !isReachable)
+        .disabled(!canAct)
     }
 
     private var stopButton: some View {
@@ -286,7 +305,7 @@ struct RunningAppDockContent: View {
         .reachyButton(.prominent)
         .buttonBorderShape(.circle)
         .tint(.red)
-        .disabled(busy || !isReachable)
+        .disabled(!canAct)
     }
 
     private var dismissButton: some View {

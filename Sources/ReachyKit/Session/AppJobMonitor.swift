@@ -139,7 +139,12 @@ public struct AppJobMonitor: Sendable {
                     guard !isFinished else { return }
                     deliver(logs: info.logs)
                     deliver(info.status)
-                } catch ReachyKitError.daemonRejected(statusCode: 404) {
+                    // Matched on the status rather than on a case: a real daemon puts
+                    // `detail: "Job not found"` in that 404, which makes it
+                    // `.daemonRefused` instead of `.daemonRejected`. Pattern-matching
+                    // the case worked against a stub with no body and would have gone
+                    // quietly dead against the robot — the whole restart notice with it.
+                } catch let error as ReachyKitError where error.statusCode == 404 {
                     finish(.daemonRestarted)
                     return
                 } catch {

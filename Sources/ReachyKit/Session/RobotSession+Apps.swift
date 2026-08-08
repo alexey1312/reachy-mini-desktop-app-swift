@@ -74,9 +74,24 @@ public extension RobotSession {
 
     /// Refused with a 400 when nothing is running, which is what a second Stop
     /// looks like.
+    ///
+    /// **A 200 here does not mean the app is gone, so the answer is re-read rather
+    /// than assumed.** This used to record `nil` on the reply. But the daemon sets
+    /// `stopping` before any I/O and clears its own slot only on the last line of
+    /// `stop_current_app`, past three unbounded awaits (`apps/manager.py:283`,
+    /// `:355`) — so an app that wedges in between had the dock vanish on the reply
+    /// and come back 1.5 s later, still stopping. A wedge read as a flicker.
+    ///
+    /// Re-reading costs one request per Stop and keeps what the optimistic write was
+    /// actually for: the widget's snapshot goes stale otherwise, because the poll
+    /// that would have corrected it stops the moment the app is backgrounded — and
+    /// somebody who stops an app and puts the phone away is the common case, not the
+    /// awkward one.
     func stopCurrentApp() async throws {
         try await withAppsClient { try await $0.stopCurrentApp() }
-        recordRunning(nil)
+        // Left to the poll if it fails: a re-read that did not arrive has learned
+        // nothing, and the last known reading is better than a guess either way.
+        try? await refreshCurrentApp()
     }
 
     /// All four return a job id; follow it with `appJobEvents(jobID:)`.

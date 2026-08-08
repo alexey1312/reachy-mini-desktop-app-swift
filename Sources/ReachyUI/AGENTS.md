@@ -142,6 +142,21 @@ on the Robot tab.
   **The references passed over that for as long as it shipped**, because `RobotAppStatus.previewCrashed` was a
   single `ModuleNotFoundError` line, and a one-line tail renders identically whether a surface prints it once or
   twice. It is several lines now, on purpose; do not shorten it back.
+- **An error rendered _in place of_ a state has to expire; one in a slot of its own does not.** `lastError` is
+  cleared only by a later successful command, which is correct for `AppDetailSheet`, where it is its own red row
+  under a state that stays visible. The dock has one caption line, so the same value there hides the state — and a
+  refused Restart on an app that goes on running would hide it, and the conversation turn with it, for the rest of
+  the session. `RunningAppModel.expireActionFailure(at:)` retires it after `actionFailureWindow`, driven by the poll
+  rather than by a `Timer`: the poll is the only clock this model already owns, and while backgrounded there is
+  nothing on screen for a stale refusal to be stale on. It must not be shortened to "clear on the next tick" —
+  the tick can land milliseconds after the tap, which is the original bug (a refusal shown nowhere) wearing a
+  stopwatch.
+- **A verdict may only be reached from a reading that arrived.** `refresh` swallows its own failure with `try?`, so
+  after an unreachable poll `session.runningApp` still holds the previous status — and timing _that_ as if it were
+  fresh is what let a Wi-Fi blip during a stop be reported as a wedged daemon, with `WedgedAppNotice` sending the
+  reader to restart the robot's software over Bluetooth. `noteTransition` now runs only on a successful read; a
+  verdict already reached stands, and silence concludes nothing new. Anything else this model infers from elapsed
+  time owes the same check.
 
 ## One page per app
 
