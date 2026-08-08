@@ -3,6 +3,13 @@ import SwiftUI
 
 @main
 struct ReachySpikeApp: App {
+    // Carries the Home Screen quick actions and nothing else. The menu they appear
+    // in is UIKit's, and a scene delegate is the only way to be told one was
+    // tapped — `ReachyQuickAction` says why App Shortcuts cannot cover it.
+    #if os(iOS)
+        @UIApplicationDelegateAdaptor(QuickActionAppDelegate.self) private var appDelegate
+    #endif
+
     var body: some Scene {
         WindowGroup {
             // The tab bar is `ReachyRootView`'s: which tabs exist depends on the

@@ -29,8 +29,44 @@ reverse.
   timelines rather than relying on memory.
 - On iOS 18, widget and Control Centre intents cannot open the app with `openAppWhenRun`; use `widgetURL` where an
   app-opening fallback is needed.
-- **The views localize, the intents do not — and that split is deliberate.** Everything rendered goes through
-  `.reachy(_:)` like the rest of the app, but `AppIntent.title`, `DisplayRepresentation` and the widgets'
-  `configurationDisplayName` stay bare `LocalizedStringResource` against the main bundle: that metadata is baked into
-  `Metadata.appintents` at build time, where a runtime bundle URL has nothing to resolve against. Reasoning in
+- **An intent's metadata does not localize; everything else here does, its dialogs included.** `AppIntent.title`,
+  `DisplayRepresentation` and the widgets' `configurationDisplayName` stay bare `LocalizedStringResource` against the
+  main bundle, because that metadata is baked into `Metadata.appintents` at build time, where a runtime bundle URL has
+  nothing to resolve against. An `IntentDialog` handed back from `perform()` is not extracted at all — it is built
+  while the intent runs — so it takes `.reachy(_:)` like every rendered string. Reasoning in
   `Sources/ReachyDesign/AGENTS.md`.
+
+## The intents, and who each one is for
+
+Three protocols with no session around them — `RobotPower` (in `ReachyKit`), `RobotAppLauncher` and `RobotShutdown` —
+and one piece of bookkeeping, `RobotAppCommand`. Each has a twin in `RobotSession`, and the twins are not shared code
+on purpose: a session reads its own cached state and reports each failure onto a screen, while an intent has seconds,
+one client, and one sentence. Say which is which in the doc comment when adding the next pair.
+
+- **`RobotAppCommand` is the bookkeeping half and there are four callers**: the widget tile and Shortcuts' start,
+  stop and toggle. Pending state, the snapshot write and both timeline reloads live there once. A caller with no tile
+  behind it (`StopRobotAppIntent`) passes no `appID` and files no pending caption — `RobotAppLaunchState` is keyed by
+  app, and "stop whatever is running" names none.
+- **`RobotAppTileIntent` and `ToggleRobotAppIntent` do the same thing and must stay two types.** The tile's takes
+  plain `String`s so a widget button never depends on metadata extraction; the Shortcuts one takes a
+  `RobotAppEntity` so the picker exists. The tile's is the one that is `isDiscoverable = false`.
+- **`isDiscoverable = false` does not remove an intent from `Metadata.appintents`** — it is recorded there as a flag.
+  Reading the built metadata to check what Shortcuts offers means reading `isDiscoverable`, not looking for an
+  absence:
+  `python3 -c "import json; d=json.load(open('Apps/DerivedData/Build/Products/Debug-iphoneos/ReachySpike.app/Metadata.appintents/extract.actionsdata')); print({k: v['isDiscoverable'] for k, v in d['actions'].items()})"`.
+  The same file's `autoShortcuts` is the extracted `ReachyShortcuts`, phrase templates and parameter presentations
+  included — the only way to see that a parameterized phrase compiled into anything.
+- **`RobotAppLauncher` reads the running app exactly once per call.** Every path goes through one private
+  `runningApp()` and none may add a second `currentAppStatus` — the whole budget is a few seconds.
+  `RobotAppLauncherTests.readsTheStatusOnce` holds that line.
+- **A running app has no title, so nothing may speak the daemon's word for one.** `AppManager.start_app` files the
+  status as `AppInfo(name=…, source_kind=INSTALLED)` with an empty `extra`, so `RobotApp.title` off a
+  `current-app-status` or a `start-app` reply _is_ the Python entry point — Siri saying `dance_party` where the store
+  says "Dance Party". `RobotAppTitles` is the join, keyed by entry point name against the cache `RobotAppQuery`
+  already fills; the two entity-taking intents use `app.title` and skip it. **A stub will not catch this**:
+  `StubAppsClient.status(name:title:)` injects a `cardData.title` no real robot sends, which is the same
+  fixtures-carry-metadata trap that hid the app-settings row for a release
+  (`Sources/ReachyUI/AGENTS.md`). `RobotAppTitlesTests.aRunningStatusCarriesNoTitle` pins the premise itself.
+  `RobotAppLauncher.Failure.busy` still names the app the daemon's way, and is the one sentence left to join.
+- **The Home Screen icon's menu is not here and cannot be.** It is UIKit's, not App Intents'; `ReachyQuickAction` in
+  `ReachyUI` owns it and explains the split. Nothing declared in this target reaches it.

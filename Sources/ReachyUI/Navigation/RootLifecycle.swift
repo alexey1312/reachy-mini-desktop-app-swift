@@ -18,6 +18,12 @@ struct RootLifecycle: ViewModifier {
     let router: ReachyRouter
     @Binding var remoteLink: RemoteRobotLink?
 
+    /// A `let` with a value, so it stays out of the memberwise initialiser and the
+    /// eighth collaborator does not reach the call site. Nothing injects it: the
+    /// scene delegate that fills it is built by UIKit, and what is worth asserting
+    /// lives in `QuickActionInbox` rather than in a `ViewModifier`.
+    private let quickActions = QuickActionInbox.shared
+
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.reachyPreviewMode) private var previewMode
 
@@ -26,6 +32,13 @@ struct RootLifecycle: ViewModifier {
             .task {
                 guard !previewMode else { return }
                 hfAccount.restore()
+                ReachyQuickAction.install()
+            }
+            // `initial: true` because a cold launch fills the inbox in
+            // `scene(_:willConnectTo:)`, before this body has ever run.
+            .onChange(of: quickActions.pending, initial: true) { _, _ in
+                guard !previewMode else { return }
+                runQuickAction()
             }
             .onChange(of: hfAccount.state, initial: true) { _, _ in
                 guard !previewMode else { return }
@@ -91,6 +104,22 @@ struct RootLifecycle: ViewModifier {
     private func stopRemoteLink() {
         remoteLink?.stop()
         remoteLink = nil
+    }
+
+    /// A quick action lands on the Robot tab either way, because that is where the
+    /// transition and any failure are shown.
+    ///
+    /// **It only runs against a robot already connected**, which on a cold launch
+    /// is none: the app opens on the gate, the command is dropped, and the tab it
+    /// selected is the one it would have opened on anyway. Queueing it until the
+    /// session settles is a change to this one guard, and worth making only if the
+    /// warm case — the app still resident, which on iOS is most of the time —
+    /// turns out not to cover it.
+    private func runQuickAction() {
+        guard let action = quickActions.take() else { return }
+        router.tab = .robot
+        guard case .connected = session.phase else { return }
+        Task { await action.perform(on: session) }
     }
 }
 
