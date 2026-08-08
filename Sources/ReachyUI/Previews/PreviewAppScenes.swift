@@ -12,11 +12,13 @@ extension PreviewScene {
     static func appStore(
         _ session: RobotSession,
         model: AppStoreModel? = nil,
-        install: AppInstallModel? = nil
+        install: AppInstallModel? = nil,
+        runningApp: RunningAppModel? = nil
     ) -> some View {
         NavigationHost {
             AppStoreScreen(
                 session: session,
+                runningApp: runningApp ?? .preview(),
                 // Built on *this* session, not one of its own: the model reads the
                 // running app through it, and two sessions would put the screen and
                 // the dock on different robots.
@@ -27,13 +29,16 @@ extension PreviewScene {
         .preview()
     }
 
-    /// The sheet the store opens, previewed on its own: it carries the whole
-    /// install flow, and a snapshot of it is the only view of a job in flight.
+    /// The one page about an app, previewed on its own: it carries the whole
+    /// install flow — a snapshot of it is the only view of a job in flight — and,
+    /// when the session says this app holds the robot, the process controls and the
+    /// app's own settings row.
     static func appDetail(
         _ session: RobotSession,
         app: RobotApp,
         model: AppStoreModel? = nil,
-        install: AppInstallModel? = nil
+        install: AppInstallModel? = nil,
+        runningApp: RunningAppModel? = nil
     ) -> some View {
         NavigationHost {
             AppDetailSheet(
@@ -41,10 +46,35 @@ extension PreviewScene {
                 model: model ?? .preview(session: session),
                 session: session,
                 install: install ?? .preview(state: .idle, session: session),
+                runningApp: runningApp ?? .preview(),
                 dismiss: {}
             )
         }
         .preview()
+    }
+
+    /// The same page reached from the dock. The status is parked on the session,
+    /// which is where the running app lives — handing the page a status the session
+    /// did not agree with would preview a state the app cannot reach.
+    ///
+    /// `conversationTurn` seeds the model this builds; a `model` passed in already
+    /// carries its own turn, and then this argument has nothing left to say.
+    static func runningAppDetail(
+        _ status: RobotAppStatus,
+        phase: RobotSession.ConnectionPhase = .connected(.preview),
+        model: RunningAppModel? = nil,
+        conversationTurn: ConversationTurn? = nil
+    ) -> some View {
+        let session = RobotSession.preview(phase: phase, runningApp: status)
+        return appDetail(
+            session,
+            // The running app is installed by definition, and the store model is
+            // what the page asks. Left at the default catalogue it would offer
+            // "Install" for the app currently holding the robot.
+            app: status.app,
+            model: .preview(session: session, section: .installed, installed: [status.app]),
+            runningApp: model ?? .preview(conversationTurn: conversationTurn)
+        )
     }
 
     /// The app's own settings page. Only the states *around* the web view can be
@@ -77,28 +107,6 @@ extension PreviewScene {
             expand: {},
             perform: { _ in }
         )
-        .preview()
-    }
-
-    /// The dock expanded. Parked through the session, which is where the running app
-    /// lives — handing the sheet a status the session did not agree with would
-    /// preview a state the app cannot reach.
-    ///
-    /// `conversationTurn` seeds the model this builds; a `model` passed in already
-    /// carries its own turn, and then this argument has nothing left to say.
-    static func runningAppSheet(
-        _ status: RobotAppStatus,
-        phase: RobotSession.ConnectionPhase = .connected(.preview),
-        model: RunningAppModel? = nil,
-        conversationTurn: ConversationTurn? = nil
-    ) -> some View {
-        NavigationHost {
-            RunningAppSheet(
-                session: .preview(phase: phase, runningApp: status),
-                model: model ?? .preview(conversationTurn: conversationTurn),
-                status: status
-            )
-        }
         .preview()
     }
 }

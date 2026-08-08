@@ -6,6 +6,11 @@ import SwiftUI
 struct AppsTab: View {
     let session: RobotSession
     let router: ReachyRouter
+    let runningApp: RunningAppModel
+    /// Owned by the shell so the dock's page and this screen are the same page —
+    /// see `ReachyTabShell`.
+    let store: AppStoreModel
+    let install: AppInstallModel
     /// Leaving a relay session is the way back to a robot that can serve the store,
     /// and only the root knows how to do it.
     let findRobot: () -> Void
@@ -15,7 +20,12 @@ struct AppsTab: View {
         return NavigationStack {
             Group {
                 if session.canManageApps {
-                    AppStoreScreen(session: session)
+                    AppStoreScreen(
+                        session: session,
+                        runningApp: runningApp,
+                        model: store,
+                        install: install
+                    )
                 } else {
                     AppsUnavailableView(isRemote: session.isRemote, findRobot: findRobot)
                 }

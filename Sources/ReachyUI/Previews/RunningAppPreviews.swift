@@ -53,28 +53,34 @@ import SwiftUI
     PreviewScene.runningAppDock(.preview(.unknown("reloading")))
 }
 
-// MARK: - The expanded sheet
+// MARK: - The expanded page
+
+// The dock expands into `AppDetailSheet` — the same page a store row opens — so
+// these capture that page in the states only a running app reaches. The pair to
+// keep is `running` and `conversation`: the first declares no port and shows no
+// Settings row, the second declares 7860 and shows one. A reference for the
+// offered state alone cannot tell a conditional row from a permanent one.
 
 #Preview("Running app — running") {
-    PreviewScene.runningAppSheet(.preview(.running))
+    PreviewScene.runningAppDetail(.preview(.running))
 }
 
 #Preview("Running app — conversation") {
-    PreviewScene.runningAppSheet(.previewConversation, conversationTurn: .listening)
+    PreviewScene.runningAppDetail(.previewConversation, conversationTurn: .listening)
 }
 
 #Preview("Running app — crashed") {
-    PreviewScene.runningAppSheet(.previewCrashed)
+    PreviewScene.runningAppDetail(.previewCrashed)
 }
 
 #Preview("Running app — unreachable") {
-    PreviewScene.runningAppSheet(.preview(.running), phase: .unreachable(.preview))
+    PreviewScene.runningAppDetail(.preview(.running), phase: .unreachable(.preview))
 }
 
 // The stop call itself failed — distinct from the app failing, and the only place
 // that reason is shown.
 #Preview("Running app — command failed") {
-    PreviewScene.runningAppSheet(
+    PreviewScene.runningAppDetail(
         .preview(.running),
         model: .preview(error: "The daemon rejected the request (HTTP 400)")
     )

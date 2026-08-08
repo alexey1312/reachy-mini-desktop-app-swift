@@ -17,6 +17,9 @@ final class AppsRobotClient: RobotAPIClient, RobotAppsClient, CacheMaintenanceCl
     private(set) var running: RobotAppStatus?
     var failsCatalogue = false
     var returnsEmptyInstalled = false
+    /// Replaces the one-app installed list, for the tests that need an entry
+    /// carrying the metadata the daemon leaves off a running-app status.
+    var installedFixtures: [RobotApp]?
 
     private var status: Components.Schemas.DaemonStatus {
         let json = """
@@ -60,7 +63,7 @@ final class AppsRobotClient: RobotAPIClient, RobotAppsClient, CacheMaintenanceCl
         if returnsEmptyInstalled {
             return []
         }
-        return [Self.app(name: "dance_party", kind: "installed")]
+        return installedFixtures ?? [Self.app(name: "dance_party", kind: "installed")]
     }
 
     func removeApp(named name: String) async throws -> String {
@@ -108,6 +111,21 @@ final class AppsRobotClient: RobotAPIClient, RobotAppsClient, CacheMaintenanceCl
         // swiftlint:disable:next force_try
         try! JSONDecoder().decode(RobotApp.self, from: Data(#"""
         {"name": "\#(name)", "source_kind": "\#(kind)", "extra": {}}
+        """#.utf8))
+    }
+
+    /// An installed entry shaped like the ones `list-available/installed` really
+    /// returns — the daemon's own `custom_app_url` beside the Hub's card. The
+    /// running-app status carries none of this, which is what makes the two
+    /// halves worth joining.
+    static func describedApp(name: String, spaceID: String, port: Int) -> RobotApp {
+        // swiftlint:disable:next force_try
+        try! JSONDecoder().decode(RobotApp.self, from: Data(#"""
+        {"name": "\#(name)", "source_kind": "installed",
+         "extra": {"id": "\#(spaceID)", "author": "pollen-robotics",
+                   "custom_app_url": "http://0.0.0.0:\#(port)/",
+                   "cardData": {"title": "Reachy Mini Conversation App", "emoji": "🎤",
+                                "short_description": "Talk with Reachy Mini!"}}}
         """#.utf8))
     }
 }

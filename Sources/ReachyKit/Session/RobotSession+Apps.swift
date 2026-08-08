@@ -35,8 +35,9 @@ public extension RobotSession {
 
     func currentApp() async throws -> RobotAppStatus? {
         let status = try await withAppsClient { try await $0.currentAppStatus() }
-        recordRunning(status)
-        return status
+        let described = await describedFromInstalled(status)
+        recordRunning(described)
+        return described
     }
 
     /// Refreshes the running-app reading for background observers. Unlike
@@ -53,20 +54,22 @@ public extension RobotSession {
             throw ReachyKitError.appsUnavailable
         }
         let status = try await appsClient.currentAppStatus()
-        recordRunning(status)
+        await recordRunning(describedFromInstalled(status))
     }
 
     /// Refused with a 400 while another app holds the robot — stop that one first.
     func startApp(named name: String) async throws -> RobotAppStatus {
         let status = try await withAppsClient { try await $0.startApp(named: name) }
-        recordRunning(status)
-        return status
+        let described = await describedFromInstalled(status) ?? status
+        recordRunning(described)
+        return described
     }
 
     func restartCurrentApp() async throws -> RobotAppStatus {
         let status = try await withAppsClient { try await $0.restartCurrentApp() }
-        recordRunning(status)
-        return status
+        let described = await describedFromInstalled(status) ?? status
+        recordRunning(described)
+        return described
     }
 
     /// Refused with a 400 when nothing is running, which is what a second Stop
@@ -186,6 +189,37 @@ public extension RobotSession {
 /// happens to trigger them, or in the three-second status poll, which learns
 /// neither of these things.
 private extension RobotSession {
+    /// Puts the app's own metadata back onto a running-app status.
+    ///
+    /// The daemon does not send any: `AppManager.start_app` builds the status as
+    /// `AppInfo(name=app_name, source_kind=INSTALLED)` and files the real entry
+    /// nowhere near it, so `extra` arrives empty and with it go the title, the
+    /// emoji, the description **and `custom_app_url`**. That last one is why the
+    /// running app offered no Settings row while the very same app in the store
+    /// showed everything: `customAppPort` was nil, so `appSettingsURL(for:)`
+    /// refused. The conversation caption kept working only because
+    /// ``ConversationRPCClient`` falls back to 7860 and this deliberately does not.
+    ///
+    /// `list-available/installed` has all of it, keyed by the same entry point
+    /// name, so the fix is a lookup rather than a route. It costs at most one extra
+    /// call per connection: the cache is dropped only by install, remove and
+    /// `reset-apps`, each of which should re-read this anyway.
+    ///
+    /// An unmatched name passes through untouched — a local app the daemon lists
+    /// under a name of its own is still an app, and a wrong match would put another
+    /// app's name and settings port on this one.
+    func describedFromInstalled(_ status: RobotAppStatus?) async -> RobotAppStatus? {
+        guard let status, status.app.card == .empty else { return status }
+        if installedAppsCache == nil {
+            _ = try? await installedApps()
+        }
+        guard let installed = installedAppsCache else { return status }
+        let twin = installed.first { $0.name == status.app.name }
+            ?? installed.first { $0.matches(installed: status.app) }
+        guard let twin else { return status }
+        return RobotAppStatus(app: twin, state: status.state, error: status.error)
+    }
+
     func recordInstalled(_ apps: [RobotApp]) {
         // An empty list is what a daemon mid-restart reports. Keep the last
         // identity-bound menu until a non-empty answer replaces it; otherwise a

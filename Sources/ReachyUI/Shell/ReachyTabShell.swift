@@ -19,6 +19,35 @@ struct ReachyTabShell: View {
     let remoteLink: RemoteRobotLink?
     let findRobot: () -> Void
 
+    /// The store's two models live here rather than inside the Apps tab because the
+    /// dock expands into the *same* page a store row opens, and it does so from
+    /// every tab. One copy, or the two surfaces disagree about what is installed the
+    /// moment either one acts. They are inert until `load()`, so holding them for
+    /// the life of a connection costs nothing — and a connection is exactly how long
+    /// the caches behind them live.
+    @State private var store: AppStoreModel
+    @State private var install: AppInstallModel
+
+    init(
+        session: RobotSession,
+        viewport: ViewportModel,
+        floating: FloatingViewportModel,
+        runningApp: RunningAppModel,
+        router: ReachyRouter,
+        remoteLink: RemoteRobotLink?,
+        findRobot: @escaping () -> Void
+    ) {
+        self.session = session
+        self.viewport = viewport
+        self.floating = floating
+        self.runningApp = runningApp
+        self.router = router
+        self.remoteLink = remoteLink
+        self.findRobot = findRobot
+        _store = State(initialValue: AppStoreModel(session: session))
+        _install = State(initialValue: AppInstallModel(session: session))
+    }
+
     var body: some View {
         @Bindable var router = router
         return TabView(selection: $router.tab) {
@@ -44,7 +73,14 @@ struct ReachyTabShell: View {
                 Label(.reachy("Moves"), systemImage: "music.note")
             }
             Tab(value: ReachyRouter.Tab.apps) {
-                AppsTab(session: session, router: router, findRobot: findRobot)
+                AppsTab(
+                    session: session,
+                    router: router,
+                    runningApp: runningApp,
+                    store: store,
+                    install: install,
+                    findRobot: findRobot
+                )
             } label: {
                 Label(.reachy("Apps"), systemImage: "square.grid.2x2")
             }
@@ -58,7 +94,13 @@ struct ReachyTabShell: View {
         // The bar gets out of the way while reading a list and comes back on the way
         // up. iPhone only, and the fork lives in `ReachyChrome` — a sidebar has
         // nothing to minimise.
-        .reachyMinimizingTabBar()
+        //
+        // Off while the dock is up. The dock is an opaque strip in the bottom safe
+        // area, so a minimised bar shrinks into a row it cannot be seen in: the
+        // whole tab bar disappeared the moment a list was scrolled down with an app
+        // running, and it read as the dock having replaced it. Getting one row back
+        // is not worth losing every destination.
+        .reachyMinimizingTabBar(runningApp.visibleStatus(for: session) == nil)
         // Above `runningAppDock` on purpose: the dock is a bottom `safeAreaInset`,
         // and applying it afterwards is what shrinks the area the window comes to
         // rest in. The other order parks the window on the dock's buttons.
@@ -75,6 +117,6 @@ struct ReachyTabShell: View {
         // whole trick. It is not mounted in the gate: with no connection
         // `RunningAppModel.canPoll` is false and the dock draws `EmptyView`, so the
         // polling should die with the shell rather than idle behind the gate.
-        .runningAppDock(session: session, model: runningApp)
+        .runningAppDock(session: session, model: runningApp, store: store, install: install)
     }
 }

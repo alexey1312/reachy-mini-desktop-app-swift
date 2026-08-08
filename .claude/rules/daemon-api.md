@@ -142,6 +142,11 @@ regex-scrapes the literal out of the app's `main.py`, so what arrives is the app
   the session; `RobotApp.customAppPort` exists to make that split hard to get wrong, and the daemon's own relay
   rewrites the host to `127.0.0.1` for the mirror-image reason. The key can be absent or explicitly `null` when the
   scrape found nothing, so every caller carries a default.
+- **`current-app-status` does not carry any of it.** `AppManager.start_app` builds the status as
+  `AppInfo(name=app_name, source_kind=INSTALLED)` with an empty `extra`, so the running app arrives with no title,
+  no emoji, no description and **no `custom_app_url`** — while `list-available/installed` has all four for the same
+  entry point name. A client that reads the port off the status alone therefore never offers an app's settings on a
+  real robot. `RobotSession.describedFromInstalled` joins the two; do not add a route for it, there isn't one.
 - **The same port serves the app's own settings page, at `/`** — the conversation app logs `Serving settings UI from
   …/static` as it comes up. There is **no daemon route for any of it**: an app's configuration (personalities,
   voice, backend) is reachable only by dialling that port, which is why the app shows it in a `WKWebView`

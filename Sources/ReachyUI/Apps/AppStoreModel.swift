@@ -176,6 +176,19 @@ final class AppStoreModel {
 
     /// Re-reads what an install or removal changed, without re-fetching the
     /// catalogue from Hugging Face.
+    /// Enough to say whether this app is installed, whether it auto-starts, and
+    /// which installed row its commands are keyed by — without the Hugging Face
+    /// round trip the catalogue costs.
+    ///
+    /// The detail sheet opens from two places now, and only one of them has been
+    /// through the store: reached from the dock it would otherwise offer "Install"
+    /// for the app currently running.
+    func loadInstalledIfNeeded(session: RobotSession) async {
+        guard installed.isEmpty else { return }
+        installed = await (try? session.installedApps()) ?? installed
+        startupApp = try? await session.startupApp()
+    }
+
     func reloadInstalled(session: RobotSession) async {
         installed = await (try? session.installedApps(refresh: true)) ?? installed
         _ = try? await session.currentApp()

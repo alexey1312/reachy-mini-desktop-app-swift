@@ -67,14 +67,26 @@ extension View {
     /// It lives here rather than in the root view because that reasoning belongs
     /// next to the thing it is about — and because the root view is already at its
     /// length limit.
-    func runningAppDock(session: RobotSession, model: RunningAppModel) -> some View {
-        modifier(RunningAppDockModifier(session: session, model: model))
+    ///
+    /// `store` and `install` are the shell's, not this modifier's: expanding the
+    /// dock opens `AppDetailSheet`, the one page about an app, and that page can
+    /// install, update and remove as well as stop. A model built here would be a
+    /// second copy of the store's, disagreeing with it the moment either acted.
+    func runningAppDock(
+        session: RobotSession,
+        model: RunningAppModel,
+        store: AppStoreModel,
+        install: AppInstallModel
+    ) -> some View {
+        modifier(RunningAppDockModifier(session: session, model: model, store: store, install: install))
     }
 }
 
 private struct RunningAppDockModifier: ViewModifier {
     let session: RobotSession
     let model: RunningAppModel
+    let store: AppStoreModel
+    let install: AppInstallModel
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.reachyPreviewMode) private var previewMode
@@ -107,7 +119,15 @@ private struct RunningAppDockModifier: ViewModifier {
                 // that no longer exists.
                 if let status = visibleStatus {
                     NavigationStack {
-                        RunningAppSheet(session: session, model: self.model, status: status)
+                        AppDetailSheet(
+                            app: status.app,
+                            model: store,
+                            session: session,
+                            install: install,
+                            runningApp: self.model
+                        ) {
+                            self.model.isExpanded = false
+                        }
                     }
                     .presentationDetents([.large])
                 }
