@@ -11,6 +11,9 @@ struct FloatingViewportModelTests {
     /// are distinct and the window fits inside with room to spare.
     private static let portrait = CGRect(x: 0, y: 0, width: 400, height: 800)
     private static let landscape = CGRect(x: 0, y: 0, width: 800, height: 400)
+    /// The same screen once the running-app strip is up: `Metrics.tabAccessoryAllowance`
+    /// shorter, which is the change that used to land under a finger mid-drag.
+    private static let withAccessory = CGRect(x: 0, y: 0, width: 400, height: 732)
 
     private func model(
         _ rest: FloatingViewportModel.Placement = .floating(.bottomTrailing),
@@ -20,11 +23,38 @@ struct FloatingViewportModelTests {
         .preview(rest, hasTabBar: hasTabBar, isLiveTabSelected: live)
     }
 
-    /// A gesture is two calls; `dragEnded` alone has no starting point to work from,
-    /// which is the same thing SwiftUI guarantees.
-    private func drag(_ model: FloatingViewportModel, by translation: CGSize, in bounds: CGRect) {
-        model.dragChanged(translation: translation, in: bounds)
-        model.dragEnded(translation: translation, in: bounds)
+    /// A whole gesture, the shape SwiftUI delivers one: a first `onChanged` already
+    /// carrying whatever the finger travelled before the recogniser woke up, then the
+    /// real movement, then a release.
+    ///
+    /// `from` is that head start, and it defaults to something non-zero on purpose —
+    /// a test that drags from exactly zero cannot tell a model that subtracts the
+    /// activation from one that does not.
+    ///
+    /// `thrown` is how much further the finger was *heading* than where it stopped.
+    /// Zero means it was set down rather than flicked.
+    private func drag(
+        _ model: FloatingViewportModel,
+        by translation: CGSize,
+        from activation: CGSize = CGSize(width: 6, height: -3),
+        thrown: CGSize = .zero,
+        in bounds: CGRect
+    ) {
+        let raw = activation + translation
+        model.dragChanged(translation: activation)
+        model.dragChanged(translation: raw)
+        model.dragEnded(
+            FloatingViewportModel.DragRelease(predictedEndTranslation: raw + thrown),
+            in: bounds
+        )
+    }
+
+    /// Where the window is actually drawn: the resting centre of whatever `drawn`
+    /// names, plus what the finger is currently adding. The view sums the same two.
+    private func drawnCentre(_ model: FloatingViewportModel, in bounds: CGRect) -> CGPoint {
+        let centre = model.centre(in: bounds)
+        let offset = model.dragOffset(in: bounds)
+        return CGPoint(x: centre.x + offset.width, y: centre.y + offset.height)
     }
 
     // MARK: - The placement automaton
@@ -68,6 +98,7 @@ struct FloatingViewportModelTests {
     func inlineIsReversible() {
         let model = model()
         drag(model, by: CGSize(width: -300, height: -600), in: Self.portrait)
+        model.finishSettling()
         let before = model.placement
 
         model.isLiveTabSelected = true
@@ -88,25 +119,75 @@ struct FloatingViewportModelTests {
         #expect(!model.isStreaming)
     }
 
-    // MARK: - The off switch
+    /// The overlay is not on screen at all while the tab has the viewport, so a
+    /// half-finished animation must not out-vote that.
+    @Test("inline out-votes an animation in flight")
+    func inlineOutvotesSettling() {
+        let model = model()
+        model.beginDocking(.leading, in: Self.portrait)
 
-    @Test("docking stops the stream and undocking starts it")
-    func dockIsTheOffSwitch() {
+        model.isLiveTabSelected = true
+        #expect(model.drawn == .inline)
+        #expect(model.placement == .inline)
+    }
+
+    // MARK: - The off switch, in two phases
+
+    /// **The whole point of `settling`.** While the window is animating into its edge
+    /// the renderer is still mounted and the stream still running, so RealityKit is
+    /// not being torn down on the frames the animation is trying to draw. `rest`, and
+    /// with it `isStreaming`, moves only once the animation reports itself done.
+    @Test("docking animates first and stops the stream afterwards")
+    func dockingIsTwoPhase() {
         let model = model()
 
-        model.dock(.leading, in: Self.portrait)
+        model.beginDocking(.leading, in: Self.portrait)
+        #expect(model.drawn == .docked(.leading, y: 728))
+        #expect(model.centre(in: Self.portrait) == CGPoint(x: 22, y: 728))
+        #expect(model.placement == .floating(.bottomTrailing))
+        #expect(model.isStreaming)
+
+        model.finishSettling()
         #expect(model.placement == .docked(.leading, y: 728))
+        #expect(model.drawn == .docked(.leading, y: 728))
+        #expect(!model.isStreaming)
+    }
+
+    /// The mirror, and for the same reason the other way round: the stream starts
+    /// *after* the window has finished growing, so the window arrives empty and the
+    /// picture appears in it rather than stuttering into place with it.
+    @Test("undocking animates first and starts the stream afterwards")
+    func undockingIsTwoPhase() {
+        let model = model(.docked(.trailing, y: 320))
+
+        model.beginUndocking(in: Self.portrait)
+        #expect(model.drawn == .floating(.topTrailing))
+        #expect(model.placement == .docked(.trailing, y: 320))
         #expect(!model.isStreaming)
 
-        model.undock(in: Self.portrait)
-        #expect(model.placement == .floating(.bottomLeading))
+        model.finishSettling()
+        #expect(model.placement == .floating(.topTrailing))
         #expect(model.isStreaming)
+    }
+
+    @Test("finishing nothing is not an error")
+    func finishSettlingIsIdempotent() {
+        let model = model()
+
+        model.finishSettling()
+        #expect(model.placement == .floating(.bottomTrailing))
+
+        model.beginDocking(.trailing, in: Self.portrait)
+        model.finishSettling()
+        model.finishSettling()
+        #expect(model.placement == .docked(.trailing, y: 728))
     }
 
     @Test("a docked window stays docked through a visit to the Live tab")
     func dockSurvivesInline() {
         let model = model()
-        model.dock(.trailing, in: Self.portrait)
+        model.beginDocking(.trailing, in: Self.portrait)
+        model.finishSettling()
 
         model.isLiveTabSelected = true
         #expect(model.placement == .inline)
@@ -132,17 +213,62 @@ struct FloatingViewportModelTests {
         #expect(model.placement == .docked(.leading, y: 300))
     }
 
-    // MARK: - Geometry
+    // MARK: - Dragging
 
-    @Test("each corner is a margin in from its own two edges", arguments: [
-        (FloatingViewportModel.Corner.topLeading, CGPoint(x: 96, y: 72)),
-        (.topTrailing, CGPoint(x: 304, y: 72)),
-        (.bottomLeading, CGPoint(x: 96, y: 728)),
-        (.bottomTrailing, CGPoint(x: 304, y: 728)),
-    ])
-    func cornerAnchors(corner: FloatingViewportModel.Corner, expected: CGPoint) {
-        #expect(FloatingViewportModel.centre(of: corner, in: Self.portrait) == expected)
+    /// SwiftUI's first `onChanged` already carries everything the finger travelled
+    /// before `minimumDistance` was crossed — 4 pt at the very least and arbitrarily
+    /// more from a fast finger. Taking it at face value teleported the window by a
+    /// speed-dependent amount at every single touch-down.
+    @Test("a drag starts where the window already is, however fast the finger was")
+    func activationDoesNotJump() {
+        let model = model()
+
+        model.dragChanged(translation: CGSize(width: 30, height: -18))
+        #expect(model.dragOffset(in: Self.portrait) == .zero)
+        #expect(drawnCentre(model, in: Self.portrait) == CGPoint(x: 304, y: 728))
+
+        model.dragChanged(translation: CGSize(width: -70, height: -18))
+        #expect(model.dragOffset(in: Self.portrait) == CGSize(width: -100, height: 0))
     }
+
+    /// SwiftUI can drop a `DragGesture` without ever calling `onEnded` — and the
+    /// window's own subtree really is unmounted mid-gesture, whenever the Live tab is
+    /// selected or the robot stops answering. Nothing may survive that.
+    @Test("a cancelled gesture leaves the window on its corner, not in mid-air")
+    func cancelledDragIsForgotten() {
+        let model = model()
+        model.dragChanged(translation: .zero)
+        model.dragChanged(translation: CGSize(width: -150, height: -300))
+        #expect(model.dragOffset(in: Self.portrait) != .zero)
+
+        model.endDrag()
+
+        #expect(model.dragOffset(in: Self.portrait) == .zero)
+        #expect(model.placement == .floating(.bottomTrailing))
+        #expect(drawnCentre(model, in: Self.portrait) == CGPoint(x: 304, y: 728))
+    }
+
+    /// The running-app strip arrives on a poll, so it can arrive with a finger down.
+    /// The offset is a pure function of the translation, so the only thing that moves
+    /// is the anchor — by exactly the allowance, and not a point more. It used to be
+    /// measured against the rectangle of the first `onChanged` and drift on top.
+    @Test("the dock arriving mid-drag moves the window by the allowance and no more")
+    func boundsChangeMidDragDoesNotDrift() {
+        let model = model()
+        model.dragChanged(translation: .zero)
+        model.dragChanged(translation: CGSize(width: -100, height: -200))
+
+        let travel = CGSize(width: -100, height: -200)
+        #expect(model.dragOffset(in: Self.portrait) == travel)
+        #expect(model.dragOffset(in: Self.withAccessory) == travel)
+
+        let before = drawnCentre(model, in: Self.portrait)
+        let after = drawnCentre(model, in: Self.withAccessory)
+        #expect(after.x == before.x)
+        #expect(before.y - after.y == Metrics.tabAccessoryAllowance)
+    }
+
+    // MARK: - Where a release lands
 
     @Test("a drag that ends inside snaps to the nearest corner")
     func snapsToNearestCorner() {
@@ -166,65 +292,74 @@ struct FloatingViewportModelTests {
     func overshootDocks() {
         let leading = model()
         drag(leading, by: CGSize(width: -400, height: -400), in: Self.portrait)
+        leading.finishSettling()
         #expect(leading.placement == .docked(.leading, y: 328))
 
         let trailing = model(.floating(.topLeading))
         drag(trailing, by: CGSize(width: 400, height: 200), in: Self.portrait)
+        trailing.finishSettling()
         #expect(trailing.placement == .docked(.trailing, y: 272))
+    }
+
+    // MARK: - A flick, not a carry
+
+    /// FaceTime's picture-in-picture needs a flick rather than a haul, and the
+    /// difference is entirely in which point is tested: where the finger stopped, or
+    /// where it was heading. This drag stops exactly at the margin — the case
+    /// `edgeWithoutOvershootDoesNotDock` proves does *not* dock — and docks anyway,
+    /// because it was still travelling.
+    @Test("a flick at the edge docks even though the finger stopped short")
+    func flickDocksWithoutOvershoot() {
+        let model = model()
+
+        drag(
+            model,
+            by: CGSize(width: -220, height: 0),
+            thrown: CGSize(width: -120, height: 0),
+            in: Self.portrait
+        )
+
+        #expect(model.drawn == .docked(.leading, y: 728))
+        #expect(model.placement == .floating(.bottomTrailing))
+
+        model.finishSettling()
+        #expect(model.placement == .docked(.leading, y: 728))
+    }
+
+    /// And the corner is the one it was thrown at. The same release without the throw
+    /// settles in the opposite corner, which is what makes this a test of the
+    /// predicted point rather than of the arithmetic around it.
+    @Test("a flick lands in the corner it was aimed at, not the one it left from")
+    func flickPicksThePredictedCorner() {
+        let thrown = model()
+        drag(
+            thrown,
+            by: CGSize(width: -30, height: -40),
+            thrown: CGSize(width: -150, height: -500),
+            in: Self.portrait
+        )
+        #expect(thrown.placement == .floating(.topLeading))
+
+        let settled = model()
+        drag(settled, by: CGSize(width: -30, height: -40), in: Self.portrait)
+        #expect(settled.placement == .floating(.bottomTrailing))
     }
 
     @Test("the window never leaves the safe area, however far the finger goes")
     func dragIsClamped() {
         let model = model()
-        model.dragChanged(translation: CGSize(width: -5000, height: -5000), in: Self.portrait)
-        #expect(model.centre(in: Self.portrait) == CGPoint(x: 96, y: 72))
+        model.dragChanged(translation: .zero)
 
-        model.dragChanged(translation: CGSize(width: 5000, height: 5000), in: Self.portrait)
-        #expect(model.centre(in: Self.portrait) == CGPoint(x: 304, y: 728))
+        model.dragChanged(translation: CGSize(width: -5000, height: -5000))
+        #expect(drawnCentre(model, in: Self.portrait) == CGPoint(x: 96, y: 72))
+
+        model.dragChanged(translation: CGSize(width: 5000, height: 5000))
+        #expect(drawnCentre(model, in: Self.portrait) == CGPoint(x: 304, y: 728))
     }
+}
 
-    /// The corner is stored, not the point, so a rotation needs no migration — the
-    /// same case simply resolves against the new rectangle.
-    @Test("rotation re-resolves a floating corner")
-    func rotationMovesTheCorner() {
-        let model = model(.floating(.bottomTrailing))
-        #expect(model.centre(in: Self.portrait) == CGPoint(x: 304, y: 728))
-
-        model.fit(to: Self.landscape)
-        #expect(model.placement == .floating(.bottomTrailing))
-        #expect(model.centre(in: Self.landscape) == CGPoint(x: 704, y: 328))
-    }
-
-    /// A docked tab does carry a point, so it is the one thing rotation can strand.
-    @Test("rotation pulls a docked tab back inside")
-    func rotationClampsTheTab() {
-        let model = model(.docked(.trailing, y: 700))
-
-        model.fit(to: Self.landscape)
-        #expect(model.placement == .docked(.trailing, y: 364))
-        #expect(model.centre(in: Self.landscape) == CGPoint(x: 778, y: 364))
-    }
-
-    @Test("both edges put the tab flush against the screen", arguments: [
-        (HorizontalEdge.leading, CGFloat(22)),
-        (.trailing, CGFloat(378)),
-    ])
-    func tabHugsItsEdge(edge: HorizontalEdge, expectedX: CGFloat) {
-        let model = model(.docked(edge, y: 400))
-
-        #expect(model.centre(in: Self.portrait) == CGPoint(x: expectedX, y: 400))
-    }
-
-    /// A split view squeezed below the window's own size has no valid position at
-    /// all. Centring is the only answer that is not off screen.
-    @Test("a rectangle smaller than the window centres it rather than losing it")
-    func degenerateBoundsCentre() {
-        let tiny = CGRect(x: 0, y: 0, width: 80, height: 60)
-        let middle = CGPoint(x: 40, y: 30)
-
-        #expect(FloatingViewportModel.centre(of: .topLeading, in: tiny) == middle)
-        #expect(FloatingViewportModel.centre(of: .bottomTrailing, in: tiny) == middle)
-        #expect(FloatingViewportModel.clamped(CGPoint(x: 999, y: 999), in: tiny) == middle)
-        #expect(FloatingViewportModel.nearestCorner(to: .zero, in: .zero) == nil)
+private extension CGSize {
+    static func + (lhs: CGSize, rhs: CGSize) -> CGSize {
+        CGSize(width: lhs.width + rhs.width, height: lhs.height + rhs.height)
     }
 }

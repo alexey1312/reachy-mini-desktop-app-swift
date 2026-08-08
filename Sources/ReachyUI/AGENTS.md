@@ -34,6 +34,53 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   - **The old entry read `Root — dock on the apps tab` as showing the bar where the layout puts it.** It showed the
     bar buried. When a reference is the evidence for a claim about layout, say which pixels — and see
     `ReachyDesign/AGENTS.md` on why no reference can be evidence about the safe area at all.
+- **The floating window and its edge tab are one view, and the morph depends on that.** They used to be two
+  branches of a `switch` returning structurally different views — which gave them different SwiftUI identities, and
+  nothing geometric interpolates across an identity boundary. `withAnimation(Motion.dock)` was therefore left with
+  only the default opacity transition, so "collapsing into the tab" was a 0.28 s crossfade between two differently
+  sized things in two places on screen. One identity animates its frame, its position and its corner radii instead
+  (`UnevenRoundedRectangle` is `Animatable` and `RectangleCornerRadii.animatableData` is `VectorArithmetic` —
+  compiler-checked, not assumed, which is why `Radius.flush(to:_:)` returns that type for the round case too).
+  **`matchedGeometryEffect` is still ruled out** for the reason it always was: it keeps source and destination alive
+  at once, and a second `RealityView` takes the robot from the first.
+  - **`settling` is what keeps RealityKit out of the animation, and it is not cosmetic.** Assigning `rest` directly
+    took `isStreaming` false in the same runloop turn the animation started, and `RootLifecycle` answers that
+    synchronously — `viewport.setActive(false)` → `pauseStream()` on the main actor, a stall landing on the frames
+    the animation was trying to draw. The geometry follows `drawn`, the mounted renderer follows `placement`, and
+    they differ for exactly as long as the animation runs. Both directions want that gap: docking keeps the renderer
+    mounted while it fades, undocking keeps the stream off until the window has finished growing. Every caller owes
+    `finishSettling()` from the animation's completion handler — and `onDisappear` owes it as well, for the reason
+    `endDrag()` is there: an animation on a subtree that is already gone may never report a completion, and every way
+    into the model guards on `settling == nil`, so a missed one would leave the window unable to move again with
+    `isStreaming` still true over one the reader had put away. **That one is behind `reachyPreviewMode`, and the
+    references are why**: a frozen `settling` is the only static evidence about the morph there is, and adopting it on
+    teardown destroyed it between captures — `Floating viewport — undocking` came back with a switcher and a spinner
+    in three of its four references, the first matching byte-for-byte and the rest rendering `.floating`. See the
+    previews section on why three and not four.
+  - **The expansion is three properties, and they are only correct together.** `size`, `centre` and `pictureSize` each
+    fork on `isExpanding`, and nothing else in the target reads it. Fork one and not the others and the window grows to
+    the screen around a 160 pt picture, or centred on the corner anchor it was resting at with three quarters of itself
+    off screen. No reference covers it — `isExpanding` lasts one animation and hands over to the Live tab — so this
+    entry is the cover.
+  - **The window's chrome goes outside the `clipShape`.** Moved inside it once, and the references named it exactly:
+    the switcher capsule is inset by `Space.xs` and meets a 16 pt continuous corner, so the corner shaved it. The
+    three floating captures carrying a switcher or a badge all moved and `Floating viewport — no camera`, which
+    carries neither, did not. `windowOnly(_:)` is where that lives.
+  - **The drag is a pure function of the gesture, and `.position` never sees it.** `dragTranslation` stores the
+    translation minus the `activation` SwiftUI reported when it woke the recogniser up — that first `onChanged`
+    already carries everything the finger travelled before `minimumDistance`, so taking it at face value teleported
+    the window by a speed-dependent amount at every touch-down. Nothing about the screen is captured, which is what
+    makes a rectangle that changes under a finger (the running-app strip arrives on a poll, 68 pt) re-clamp rather
+    than drift. The live delta rides a render-time `.offset` in `DragOffset`, a modifier of its own so that
+    `FloatingViewport.body` does not read `dragTranslation` and is not rebuilt per touch event; `.position` carries
+    only the resting point, because it is a layout modifier and driving it from the gesture ran a layout pass over a
+    subtree hosting a rendering `RealityView`. `endDrag()` hangs off `onDisappear` as well — SwiftUI can drop a
+    `DragGesture` without ever ending it, and this subtree really is unmounted mid-gesture.
+  - **A release is decided by `predictedEndTranslation`, not by where the finger stopped.** That is what makes a
+    flick enough to dock, and `Motion.absorb(velocity:)` is seeded from `DragGesture.Value.velocity` so a thrown
+    window continues instead of restarting from a standstill. A spring's initial velocity is a fraction of the
+    _journey_ per second, so `releaseDistance(for:in:)` exists to tell the view how long the journey is — it shares
+    `resolved(_:in:)` with `dragEnded` rather than duplicating the branch.
 - **`.unreachable` belongs to the shell, not the gate.** Only `.idle` and `.connecting` show the gate. A network blip
   must not pull the tab bar out from under a finger, and the robot screen already reports the state in place.
 - **The gate's fork has progress conditions, and they only ever delay.** For `.connected`, `isConnectedEnough` waits
@@ -269,6 +316,13 @@ Adding a screen (project rule 8) means: a preview per state in `Previews/<Screen
   hand the view a model that is already in its end state (`AudioSettingsModel.preview()`, `RobotSession.preview()`).
 - Model preview factories live **in the model's own file** under `#if DEBUG`, not in `Previews/`: they write members
   that are `private` to that file, and `@testable` does not reach `private`.
+- **One preview body, one model, four captures — so a teardown side effect leaks between them.** Prefire evaluates the
+  body once and snapshots the resulting view per device and appearance, mounting and unmounting it each time; the model
+  the body built is shared across all four. Anything in `onDisappear` that mutates it therefore corrupts capture two
+  onwards while capture one still passes, which is the tell: a single preview failing on three of its four references
+  with the first byte-identical is a state-leaking teardown, not a rendering change. Measured on
+  `FloatingViewport.onDisappear` adopting a pending `settling`. Put such an effect behind `reachyPreviewMode` — the same
+  key `.task` work uses, and for the same reason: a snapshot has to render the state it was handed.
 - Screens take their model through an initialiser with a default (`init(session:model:)`), so production call sites
   are unchanged and previews inject a frozen one.
 - A defaulted argument whose value is `@MainActor` (`= SpikeModel()`, `= .preview()`) compiles in the SwiftPM targets

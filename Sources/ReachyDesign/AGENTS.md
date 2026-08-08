@@ -7,21 +7,21 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 
 ## What is here
 
-| File                       | Holds                                                                        |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| `Space.swift`              | The 4-point layout rhythm, and the two rules for adopting it                 |
-| `Radius.swift`             | Corner radii plus `Radius.rect(_:)`, the only rounded rectangle handed out   |
-| `Tone.swift`               | Semantic colour roles over system styles — no palette, no `.xcassets`        |
-| `Typography.swift`         | Text roles from semantic `Font`s, and `IconRatio` for glyph-as-artwork       |
-| `Motion.swift`             | The three animations the app runs, named                                     |
-| `Metrics.swift`            | Sizes fixed by what they represent rather than by their text                 |
-| `StatusTone.swift`         | `StatusTone` + `ReachyStatusLabel`, the one shape a state caption renders in |
-| `ReachySurface.swift`      | `SurfaceRole` + `reachySurface(_:in:)`                                       |
-| `ReachyBadge.swift`        | A word in a capsule, on the `.badge` surface                                 |
-| `ReachySurfaceGroup.swift` | `GlassEffectContainer` — and why it cannot hold a `reachySurface`            |
-| `ReachyButton.swift`       | `ButtonEmphasis` + `reachyButton(_:)` — and why it has no glass tier         |
-| `ReachyChrome.swift`       | The iOS 26 bar behaviours, each a no-op below the floor                      |
-| `ReachyTabAccessory.swift` | The tab-view bottom accessory, its placement vocabulary, and its fallback    |
+| File                       | Holds                                                                               |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `Space.swift`              | The 4-point layout rhythm, and the two rules for adopting it                        |
+| `Radius.swift`             | Corner radii, `Radius.rect(_:)` and `Radius.flush(to:_:)` — the only two handed out |
+| `Tone.swift`               | Semantic colour roles over system styles — no palette, no `.xcassets`               |
+| `Typography.swift`         | Text roles from semantic `Font`s, and `IconRatio` for glyph-as-artwork              |
+| `Motion.swift`             | The animations the app runs, named — including the one that carries a gesture       |
+| `Metrics.swift`            | Sizes fixed by what they represent rather than by their text                        |
+| `StatusTone.swift`         | `StatusTone` + `ReachyStatusLabel`, the one shape a state caption renders in        |
+| `ReachySurface.swift`      | `SurfaceRole` + `reachySurface(_:in:)`                                              |
+| `ReachyBadge.swift`        | A word in a capsule, on the `.badge` surface                                        |
+| `ReachySurfaceGroup.swift` | `GlassEffectContainer` — and why it cannot hold a `reachySurface`                   |
+| `ReachyButton.swift`       | `ButtonEmphasis` + `reachyButton(_:)` — and why it has no glass tier                |
+| `ReachyChrome.swift`       | The iOS 26 bar behaviours, each a no-op below the floor                             |
+| `ReachyTabAccessory.swift` | The tab-view bottom accessory, its placement vocabulary, and its fallback           |
 
 ## Rules
 
@@ -57,6 +57,15 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
      reference, which is why `FloatingViewport` uses it.
   4. **Glass laid over a `Color.clear` does the same** — there is no backdrop to refract. It goes over the opaque
      `baseFill`, which is where `ReachySurfaceFill` puts it.
+- **Wrapping something in `.opacity()` moves its reference, at opacity 1 and with nothing else changed.** SwiftUI
+  composites that subtree offscreen and blends it back, and the round-trip lands within 1 bit. Measured when the
+  floating viewport's edge glyphs became fadeable: 14 references moved, 3990 px each on an iPhone capture, **max
+  channel delta 3/255**, and the bounding box sat inside the tab over the two glyphs rather than at its edges — so
+  neither the shape, the shadow nor the position had moved. Invisible on a device, and not a reason to avoid the
+  modifier; a reason to expect the re-record and to check _where_ the delta is before believing a story about it.
+  **A byte-identical control is what makes that reading safe**: the same run left the floating-window capture at 0
+  differing pixels, which is what ruled out the shared container as the cause. Quantify with a throwaway `swiftc`
+  script over `CGImageSourceCreateWithURL` — eyeballing a 3/255 delta reports "identical".
 - **No reference image is evidence about the safe area.** `Apps/ReachyUISnapshotTests/PreviewTests.stencil` sets
   `snapshot.device.safeArea = .zero` before every capture, so the home indicator, the status bar and every inset
   derived from them are simply absent from all ~1100 of them. This is not a detail: it is the whole reason the
@@ -111,7 +120,15 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
   tintless label beside a blue one reads as disabled.
 - **`glassEffectID` morphing between screens.** Worth having only once a layout is built around it, and there is no
   equivalent below the floor.
-- **A blanket reduce-motion resolver.** Still absent, and `dock` / `springBack` / `stateChange` still resolve nothing:
+- **A gesture-carrying spring beyond `absorb(velocity:)`.** It is the module's only `Animation` that is a function
+  rather than a constant, and the only one seeded from a gesture: `.interpolatingSpring` is the sole form taking an
+  initial velocity, and that velocity is **normalised** — a fraction of the journey per second, not points per second,
+  so the caller divides its speed by the distance to cover. `FloatingViewport.release` is the worked example. Handing
+  it raw points per second overshoots by whatever the distance happens to be. `absorbContent` beside it is a plain
+  curve at roughly a third of the duration, scoped to an opacity with `animation(_:value:)` — that scoping is the whole
+  mechanism by which the geometry keeps a spring while the content does not. Neither is a reduce-motion question, for
+  the reason the constants are not: both are one-shot responses to something the reader did.
+- **A blanket reduce-motion resolver.** Still absent, and `dock` / `stateChange` / `absorb` still resolve nothing:
   each is a one-shot response to something the reader did or something that changed, which is not what the setting is
   about. `Motion.waiting(reduceMotion:)` is the single exception and covers the app's only endlessly repeating
   animation — the connection rail's turning arc. It takes the flag as a **parameter**: this module reads no
