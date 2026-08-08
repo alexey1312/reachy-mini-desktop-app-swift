@@ -15,7 +15,7 @@ struct RobotAppLauncherTests {
     @Test("tapping the app that is running stops it")
     func stopsTheRunningApp() async throws {
         let client = StubAppsClient()
-        client.running = StubAppsClient.status(name: "dance_party")
+        client.running = StubAppsClient.status(name: "dance_party", title: "Dance Party")
 
         let outcome = try await launcher(client).toggle(name: "dance_party")
 
@@ -95,6 +95,81 @@ struct RobotAppLauncherTests {
 
         #expect(client.calls.filter { $0 == .daemonStatus }.count == 1)
         #expect(client.calls.contains(.wakeUp))
+    }
+
+    /// Shortcuts says what it wants rather than what it wants flipped, so the same
+    /// three refusals have to hold for an explicit start and an explicit stop.
+    @Test("starting an app that is already the one running changes nothing")
+    func startIsIdempotent() async throws {
+        let client = StubAppsClient()
+        client.running = StubAppsClient.status(name: "dance_party", title: "Dance Party")
+
+        let outcome = try await launcher(client).start(name: "dance_party")
+
+        #expect(outcome == .started(name: "dance_party", title: "Dance Party"))
+        #expect(client.calls == [.currentAppStatus])
+    }
+
+    @Test("starting while another app holds the robot refuses instead of evicting")
+    func startRefusesWhileBusy() async throws {
+        let client = StubAppsClient()
+        client.running = StubAppsClient.status(name: "dance_party", title: "Dance Party")
+
+        await #expect(throws: RobotAppLauncher.Failure.busy(title: "Dance Party")) {
+            try await launcher(client).start(name: "face_tracking")
+        }
+    }
+
+    /// The entry point name and nothing else: a real `current-app-status` carries
+    /// no card, so anything this claimed to be a title would be that same name in
+    /// disguise. `RobotAppTitlesTests` covers the join that finds the real one.
+    @Test("stopping names whatever holds the robot, whichever app that is")
+    func stopsWhateverIsRunning() async throws {
+        let client = StubAppsClient()
+        client.running = StubAppsClient.status(name: "dance_party", title: "Dance Party")
+
+        let outcome = try await launcher(client).stop()
+
+        #expect(outcome == .stopped(name: "dance_party"))
+        #expect(client.calls == [.currentAppStatus, .stopCurrentApp])
+    }
+
+    /// An automation ending by clearing the robot must not go red because the robot
+    /// was already clear.
+    @Test("stopping with nothing running is not a failure")
+    func stopIsIdempotent() async throws {
+        let client = StubAppsClient()
+
+        let outcome = try await launcher(client).stop()
+
+        #expect(outcome == nil)
+        #expect(client.calls == [.currentAppStatus])
+    }
+
+    /// Stopping a process needs no motors, and waking a parked robot in order to
+    /// park it again would be the wrong way round.
+    @Test("stopping never wakes the robot")
+    func stopDoesNotWake() async throws {
+        let client = StubAppsClient()
+        client.running = StubAppsClient.status(name: "dance_party")
+
+        _ = try await launcher(client, assumeAwake: nil).stop()
+
+        #expect(client.calls.contains(.wakeUp) == false)
+        #expect(client.calls.contains(.daemonStatus) == false)
+    }
+
+    /// The whole budget is a few seconds, so no path may ask the daemon what is
+    /// running more than once.
+    @Test("each path reads the running app exactly once")
+    func readsTheStatusOnce() async throws {
+        let toggled = StubAppsClient()
+        _ = try await launcher(toggled).toggle(name: "face_tracking")
+        #expect(toggled.calls.filter { $0 == .currentAppStatus }.count == 1)
+
+        let started = StubAppsClient()
+        _ = try await launcher(started).start(name: "face_tracking")
+        #expect(started.calls.filter { $0 == .currentAppStatus }.count == 1)
     }
 
     @Test("a name that would split the path is refused before anything is sent")

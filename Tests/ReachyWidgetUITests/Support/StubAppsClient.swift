@@ -14,7 +14,12 @@ final class StubAppsClient: RobotAPIClient, RobotAppsClient, @unchecked Sendable
         case setMotorMode(Components.Schemas.MotorControlMode)
         case wakeUp
         case startApp(String)
+        case stopDaemon(gotoSleep: Bool)
     }
+
+    /// A daemon that refuses, so a caller's handling of the refusal is what the
+    /// test is looking at.
+    struct Refused: Error, Equatable {}
 
     private let lock = NSLock()
     private var recorded: [Call] = []
@@ -24,6 +29,8 @@ final class StubAppsClient: RobotAPIClient, RobotAppsClient, @unchecked Sendable
     /// A wake animation that never finishes, so a shortened completion budget is
     /// the only thing that ends the wait.
     var moveNeverFinishes = false
+    var stopAppFails = false
+    var stopDaemonFails = false
 
     var calls: [Call] {
         lock.withLock { recorded }
@@ -61,6 +68,13 @@ final class StubAppsClient: RobotAPIClient, RobotAppsClient, @unchecked Sendable
         moveNeverFinishes ? ["wake-uuid"] : []
     }
 
+    func stopDaemon(gotoSleep: Bool) async throws {
+        record(.stopDaemon(gotoSleep: gotoSleep))
+        if stopDaemonFails {
+            throw Refused()
+        }
+    }
+
     // MARK: - RobotAppsClient
 
     func currentAppStatus() async throws -> RobotAppStatus? {
@@ -77,6 +91,9 @@ final class StubAppsClient: RobotAPIClient, RobotAppsClient, @unchecked Sendable
 
     func stopCurrentApp() async throws {
         record(.stopCurrentApp)
+        if stopAppFails {
+            throw Refused()
+        }
         lock.withLock { running = nil }
     }
 

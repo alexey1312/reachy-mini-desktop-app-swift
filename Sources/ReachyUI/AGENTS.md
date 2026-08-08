@@ -20,6 +20,27 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   tabs. The five are unconditional — a tab that comes and goes forces the shell to catch its disappearance and drag
   the selection elsewhere, which is what `onChange(of: offersLiveTab)` used to do. An unavailable feature renders an
   unavailable state inside its own tab instead.
+- **The Home Screen icon's menu is UIKit's, and `AppShortcutsProvider` does not fill it.** The two systems look alike
+  and are not: App Shortcuts (`ReachyShortcuts`, in the app target) reach Spotlight, Siri, the Shortcuts app and the
+  Action button, run in the background, and may number ten; the icon's menu is `UIApplicationShortcutItem`, holds
+  four, is iOS-only, and **always launches the app**. So declaring a fourth intent puts nothing in the menu, and
+  nothing in the menu runs headless. `Navigation/QuickActions.swift` owns that half:
+  - The items are **installed at runtime**, from `RootLifecycle`'s `.task`, so their titles come from the one
+    catalogue — a static `UIApplicationShortcutItems` entry is localized through `InfoPlist.strings`, which this app
+    does not have. Price: the menu is empty until the first launch.
+  - `QuickActionInbox` has a `shared` because UIKit builds the scene delegate that fills it and there is no
+    initialiser to inject through. Its `Pending` carries a monotonic token: SwiftUI notices a _change_, so two
+    identical taps have to arrive as two values or the second never runs.
+  - A tapped command **selects the Robot tab and runs only against a connected session**. On a cold launch that
+    means it is dropped — the gate is up and the tab was the default anyway. Queueing it until the session settles
+    is a change to the one guard in `RootLifecycle.runQuickAction`.
+  - The delegate itself is `Apps/ReachySpike/Sources/QuickActionSceneDelegate.swift`, the only UIKit in the app
+    target. Overriding the scene configuration does **not** cost SwiftUI its window — verified by installing on a
+    booted simulator and screenshotting, which is the only thing that can say so.
+  - **What actually got installed is readable without a long press.** SpringBoard files the items per app, so
+    `strings ~/Library/Developer/CoreSimulator/Devices/<udid>/data/Library/FrontBoard/applicationState.db | grep
+    SBSApplicationShortcutItem` prints each title next to its type after one launch. A build proves none of this:
+    the items are written at runtime.
 - **The running-app dock is a tab accessory, and it is not a `safeAreaInset` on the `TabView`. Do not put it back.**
   It was one for five releases, on the reasoning that growing the `TabView`'s safe area would push the bar up and
   leave the strip below it — the Telegram shape. A `safeAreaInset` does not shrink the frame it is applied to, and
