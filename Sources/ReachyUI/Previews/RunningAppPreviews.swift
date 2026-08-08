@@ -61,15 +61,30 @@ import SwiftUI
 // width the system ends up giving it.
 //
 // Every capture above is `.standalone`, which is the shape below iOS 26.1 and on
-// macOS: the strip backing itself. The third shape, `.expanded`, draws no surface
-// at all because the system's slot draws one, and it is the root captures that
-// show it.
+// macOS: the strip backing itself.
 #Preview("Dock — inline", traits: .sizeThatFitsLayout) {
     PreviewScene.runningAppDock(.preview(.running), placement: .inline)
 }
 
 #Preview("Dock — inline, crashed", traits: .sizeThatFitsLayout) {
     PreviewScene.runningAppDock(.previewCrashed, placement: .inline)
+}
+
+// MARK: - In the system's own container
+
+// `.expanded` is the shape every iOS 26.1 device gets, and **no root capture shows
+// it**: `PreviewScene.root` forces `.legacy` on all of them, so each renders the
+// fallback's `.standalone` instead. This is the placement's only cover.
+//
+// What it certifies is an absence. The system's slot draws the capsule, so the
+// strip must draw none — and the row is otherwise identical to `Dock — running`,
+// which is exactly what makes the reference worth having: put a background back
+// and these two images become the same one.
+//
+// It captures at all because the thing that blanks a capture is the system's glass
+// container, not the placement value, and a component preview mounts no container.
+#Preview("Dock — expanded", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.running), placement: .expanded)
 }
 
 // MARK: - The expanded page

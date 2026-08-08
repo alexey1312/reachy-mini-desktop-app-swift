@@ -81,7 +81,8 @@ import SwiftUI
 //
 // They capture the fallback placement, because `PreviewScene.root` forces it for a reason written out
 // there: an enabled `tabViewBottomAccessory` blanks the whole capture. There is no root reference for
-// the system slot and there cannot be one.
+// the system slot and there cannot be one — the strip it would hold is captured on its own instead, as
+// `Dock — expanded`.
 #Preview("Root — dock on the robot tab") {
     PreviewScene.root(
         .preview(runningApp: .preview(.running)),

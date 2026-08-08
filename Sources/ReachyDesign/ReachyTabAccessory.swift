@@ -169,8 +169,9 @@ private struct ReachyFallbackTabAccessory<Accessory: View>: ViewModifier {
     /// to build. This shim carries the annotation instead, and the strip reads
     /// `\.reachyAccessoryPlacement` with no version anywhere in sight.
     ///
-    /// `nil` means undefined, and the fallback has no such environment at all, so
-    /// both resolve to `.expanded`.
+    /// `nil` means undefined and resolves to `.expanded`. The fallback sets no
+    /// placement at all, so it resolves to the key's default, `.standalone` — the
+    /// one shape that has to back itself.
     @available(iOS 26.0, *)
     private struct ReachyPlacedAccessory<Content: View>: View {
         @Environment(\.tabViewBottomAccessoryPlacement) private var placement

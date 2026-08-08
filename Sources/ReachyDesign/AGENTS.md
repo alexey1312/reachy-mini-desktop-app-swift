@@ -44,11 +44,13 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
      no glass tier, and roughly sixty references keep their cover.
   2. **An enabled `tabViewBottomAccessory` blanks the whole capture too**, and it is the same failure wearing a
      different hat — the system draws that slot as a glass container. Recorded once: `Root — dock on the robot tab`
-     came back with no `Form` on it at all, only ghosts of the app's artwork tile and the tab-bar glyphs. So the
-     system placement is **uncapturable**, in the sense `SceneViewport.ready` is, and `PreviewScene.root` forces
+     came back with no `Form` on it at all, only ghosts of the app's artwork tile and the tab-bar glyphs. So **no
+     root capture may mount the system slot**, and `PreviewScene.root` forces
      `ReachyTabAccessoryStyle.legacy` on every root preview rather than leave each one to remember. What the
      resulting images still certify is everything both placements share: the tab bar survives, the strip is above
-     it, the tab's content is inset to clear it. See `ReachyTabAccessory`.
+     it, the tab's content is inset to clear it. What is uncapturable is the **container**, not the placement:
+     `Dock — expanded` mounts no container and photographs the row the system slot would hold, which is the only
+     cover `.expanded` has. See `ReachyTabAccessory`.
   3. **Glass over an edge with nothing behind it renders as a black-red-green smear.** Measured when the dock's shape
      still crossed the safe area; it does not any more, and `.window` is the role that came out of it — `.scrim`
      minus the glass. Keep the role: glass-free is also what makes it the one surface that flips correctly in a dark
