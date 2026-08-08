@@ -15,6 +15,15 @@ import SwiftUI
 /// The gesture's starting values are stored properties rather than
 /// `@GestureState`, which is the shape `OrbitCamera` already uses and the only one
 /// in this project.
+///
+/// **Two placements are in play while anything is moving, and the split is the whole
+/// design.** `drawn` is where the geometry is heading and `placement` is what is
+/// mounted — they differ for exactly as long as an animation runs. Keeping them apart
+/// is what lets the window morph on **one** SwiftUI identity: two `switch` branches
+/// returning structurally different views have different identities, and nothing
+/// geometric can interpolate across an identity boundary, so `withAnimation` was left
+/// with only the default opacity transition to run. It is also what moves the
+/// RealityKit teardown out of the animation: see `settling`.
 @MainActor
 @Observable
 final class FloatingViewportModel {
@@ -36,6 +45,17 @@ final class FloatingViewportModel {
         /// The overlay draws a tab at the edge and the stream is stopped. `y` is
         /// the tab's centre, kept from wherever the window was let go of.
         case docked(HorizontalEdge, y: CGFloat)
+    }
+
+    /// What a finished drag carries: where the finger was *heading*, never where it
+    /// stopped. A flick and a haul end in the same place and mean different things, and
+    /// the finger that was set down needs no second point — at rest SwiftUI predicts
+    /// where it already is, so one value answers both.
+    ///
+    /// It comes straight off `DragGesture.Value` and is still measured from the touch,
+    /// so the model subtracts its own `activation` — a caller must not do it twice.
+    struct DragRelease {
+        let predictedEndTranslation: CGSize
     }
 
     /// Where the window sits whenever the tab does not have it. Never `.inline` —
@@ -68,13 +88,65 @@ final class FloatingViewportModel {
     /// own frame and hands the content over only once it is done.
     private(set) var isExpanding = false
 
-    /// The window's centre while a finger is on it. `nil` at rest, where the
-    /// corner decides.
-    private(set) var dragCentre: CGPoint?
-    private var dragStart: CGPoint?
+    /// Where the window is heading while an animation runs, and `nil` at rest.
+    ///
+    /// **This is what keeps RealityKit out of the animation.** Assigning `rest`
+    /// directly took `isStreaming` false in the same runloop turn the animation
+    /// started, and `RootLifecycle` answers that synchronously with
+    /// `viewport.setActive(false)` → `pauseStream()` on the main actor — a stall
+    /// landing on the frames the animation was trying to draw. The geometry follows
+    /// `drawn`, so it can leave immediately; `rest` waits for `finishSettling()`.
+    ///
+    /// The two directions want the wait for opposite reasons, and both get it:
+    /// docking keeps the renderer mounted while it fades, undocking keeps the stream
+    /// off until the window has finished growing, so the picture appears in a window
+    /// that has already arrived.
+    private(set) var settling: Placement?
+
+    /// How far the finger has carried the window since the gesture woke up. A pure
+    /// function of the gesture — nothing about the screen is captured when it begins,
+    /// so a rectangle that changes mid-drag re-clamps and cannot drift, and a gesture
+    /// SwiftUI drops without an `onEnded` leaves nothing behind but this one value.
+    private(set) var dragTranslation: CGSize = .zero
+
+    /// The translation SwiftUI reported the moment it woke the recogniser up. It is
+    /// never zero: `minimumDistance` means the first `onChanged` already carries
+    /// everything the finger travelled before the gesture existed — 4 pt at the very
+    /// least, and arbitrarily more from a fast finger. Subtracting it is what stops
+    /// the window teleporting by a speed-dependent amount at every touch-down.
+    private var activation: CGSize?
 
     var placement: Placement {
         isLiveTabSelected || !hasTabBar ? .inline : rest
+    }
+
+    /// The placement the geometry draws: where an animation in flight is heading, and
+    /// the real one otherwise. Inline out-votes both — the overlay is not on screen at
+    /// all while the tab has the viewport.
+    var drawn: Placement {
+        guard !isInline else { return .inline }
+        return settling ?? placement
+    }
+
+    /// The window's size at rest in whichever placement is being drawn. The content
+    /// inside keeps `Metrics.floatingViewport` and is clipped by this, so the
+    /// renderer's own frame never moves and the morph costs no layout.
+    var drawnSize: CGSize {
+        switch drawn {
+        case .inline, .floating: Metrics.floatingViewport
+        case .docked: Metrics.viewportTab
+        }
+    }
+
+    /// The edge the drawn shape is flush with, and `nil` where it is flush with
+    /// nothing. Feeds `Radius.flush(to:_:)`, which is what squares off the two corners
+    /// that meet the screen.
+    var drawnEdge: HorizontalEdge? {
+        if case let .docked(edge, _) = drawn {
+            edge
+        } else {
+            nil
+        }
     }
 
     /// Whether the tab owns the viewport. The overlay draws exactly when this is
@@ -105,22 +177,35 @@ final class FloatingViewportModel {
         isExpanding = false
     }
 
-    /// Switches the window off at an edge, keeping the height it was at. The one
-    /// lever the user has over the stream, and the reason `isStreaming` exists.
-    func dock(_ edge: HorizontalEdge, in bounds: CGRect) {
-        guard case .floating = rest else { return }
-        rest = .docked(edge, y: Self.clampedTabY(centre(in: bounds).y, in: bounds))
+    /// Starts switching the window off at an edge, keeping the height it was at. The
+    /// one lever the user has over the stream, and the reason `isStreaming` exists.
+    ///
+    /// Only the geometry moves here. `finishSettling()` is what stops the stream, and
+    /// the caller owes it that call from the animation's completion handler.
+    func beginDocking(_ edge: HorizontalEdge, in bounds: CGRect) {
+        guard case .floating = rest, settling == nil else { return }
+        settling = .docked(edge, y: Self.clampedTabY(centre(in: bounds).y, in: bounds))
     }
 
     /// The tab at the edge was tapped. The window comes back to whichever corner
-    /// is nearest where it was hiding, and the stream comes back with it.
-    func undock(in bounds: CGRect) {
-        guard case let .docked(edge, y) = rest else { return }
+    /// is nearest where it was hiding, and the stream comes back once it has arrived.
+    func beginUndocking(in bounds: CGRect) {
+        guard case let .docked(edge, y) = rest, settling == nil else { return }
         let centre = Self.tabCentre(edge: edge, y: y, in: bounds)
         // A degenerate rectangle has no nearest anything; the edge it was hiding at
         // is still the side it should come back to.
         let fallback: Corner = edge == .leading ? .bottomLeading : .bottomTrailing
-        rest = .floating(Self.nearestCorner(to: centre, in: bounds) ?? fallback)
+        settling = .floating(Self.nearestCorner(to: centre, in: bounds) ?? fallback)
+    }
+
+    /// The animation reported itself done: adopt where it was heading. A no-op when
+    /// nothing was in flight, so a completion handler never has to check first — and
+    /// a drag that snapped to a corner rather than docking takes the same path as one
+    /// that did.
+    func finishSettling() {
+        guard let settling else { return }
+        rest = settling
+        self.settling = nil
     }
 
     /// Keeps a docked tab inside a rotated or resized screen. A floating window
@@ -132,164 +217,116 @@ final class FloatingViewportModel {
 
     // MARK: - Dragging
 
-    /// Where to draw the window's centre right now.
+    /// Where the drawn placement rests. The live drag is **not** in here — it is
+    /// `dragOffset(in:)`, and the view adds the two. Keeping them apart is what lets
+    /// the finger drive a render-time `.offset` while `.position` carries only the
+    /// resting point, so no layout pass runs over the renderer per touch event.
     func centre(in bounds: CGRect) -> CGPoint {
-        if let dragCentre {
-            return dragCentre
-        }
-        switch rest {
-        case .inline, .floating:
-            return Self.centre(of: restingCorner, in: bounds)
-        case let .docked(edge, y):
-            return Self.tabCentre(edge: edge, y: y, in: bounds)
-        }
+        Self.centre(of: drawn, in: bounds)
     }
 
-    func dragChanged(translation: CGSize, in bounds: CGRect) {
-        guard case let .floating(corner) = rest else { return }
-        let start = dragStart ?? Self.centre(of: corner, in: bounds)
-        dragStart = start
-        let moved = CGPoint(x: start.x + translation.width, y: start.y + translation.height)
-        dragCentre = Self.clamped(moved, in: bounds)
+    /// What the finger is adding to the resting centre, clamped so the window cannot
+    /// be carried off the screen. Zero at rest, and zero the instant the gesture ends,
+    /// which is what makes the release continuous: the offset collapsing to zero and
+    /// the resting centre moving to the destination happen in one animated
+    /// transaction, so their sum never jumps.
+    func dragOffset(in bounds: CGRect) -> CGSize {
+        guard case let .floating(corner) = rest, dragTranslation != .zero else { return .zero }
+        let anchor = Self.centre(of: corner, in: bounds)
+        let moved = CGPoint(
+            x: anchor.x + dragTranslation.width,
+            y: anchor.y + dragTranslation.height
+        )
+        let drawn = Self.clamped(moved, in: bounds)
+        return CGSize(width: drawn.x - anchor.x, height: drawn.y - anchor.y)
     }
 
-    /// A drag that carried the window past an edge switches it off; anything else
-    /// snaps to the nearest corner.
+    /// Takes no rectangle on purpose: whatever this stores has to stay true across a
+    /// screen that changes shape under a finger, and the running-app strip does
+    /// exactly that on a poll.
+    func dragChanged(translation: CGSize) {
+        guard case .floating = rest, settling == nil else { return }
+        let activation = activation ?? translation
+        self.activation = activation
+        dragTranslation = CGSize(
+            width: translation.width - activation.width,
+            height: translation.height - activation.height
+        )
+    }
+
+    /// A drag that carried — or threw — the window past an edge switches it off;
+    /// anything else snaps to the nearest corner.
     ///
-    /// The test is the *unclamped* position, not the drawn one: the window stops
-    /// at the margin while the finger keeps going, and that overshoot is the whole
-    /// signal. Without it a drag that merely ended at the edge would dock, and the
-    /// stream would stop because someone parked the window on the left.
-    func dragEnded(translation: CGSize, in bounds: CGRect) {
-        defer {
-            dragStart = nil
-            dragCentre = nil
+    /// **The predicted end point decides, not where the finger stopped.** That is what
+    /// makes a flick enough: the window keeps going the way it was thrown, and a
+    /// smaller movement with speed behind it reaches the edge that the same movement
+    /// set down does not.
+    ///
+    /// The test is the *unclamped* point, not the drawn one: the window stops at the
+    /// margin while the finger keeps going, and that overshoot is the whole signal.
+    /// Without it a drag that merely ended at the edge would dock, and the stream
+    /// would stop because someone parked the window on the left.
+    func dragEnded(_ release: DragRelease, in bounds: CGRect) {
+        defer { endDrag() }
+        guard let target = resolved(release, in: bounds) else { return }
+        // A corner needs no second phase — nothing is mounted or unmounted by moving
+        // between two floating positions — but taking `settling` either way is what
+        // lets one completion handler serve every release.
+        if case .docked = target {
+            settling = target
+        } else {
+            rest = target
         }
-        guard case let .floating(corner) = rest, let start = dragStart else { return }
-        let moved = CGPoint(x: start.x + translation.width, y: start.y + translation.height)
+    }
+
+    /// How far the window still has to travel if it were released now.
+    ///
+    /// The view needs this to seed the spring, and cannot work it out itself: a spring's
+    /// initial velocity is a fraction of the *journey* per second, so it means nothing
+    /// until the journey is known — and the journey is only known once the release has
+    /// been resolved, which is what this shares with `dragEnded`.
+    func releaseDistance(for release: DragRelease, in bounds: CGRect) -> CGFloat {
+        guard let target = resolved(release, in: bounds) else { return 0 }
+        let resting = centre(in: bounds)
+        let offset = dragOffset(in: bounds)
+        let from = CGPoint(x: resting.x + offset.width, y: resting.y + offset.height)
+        let to = Self.centre(of: target, in: bounds)
+        return hypot(to.x - from.x, to.y - from.y)
+    }
+
+    /// Where a release lands — decided, not adopted. `nil` when there is no gesture to
+    /// resolve, which is also what makes `dragEnded` a no-op for a stray `onEnded`.
+    private func resolved(_ release: DragRelease, in bounds: CGRect) -> Placement? {
+        guard case let .floating(corner) = rest, settling == nil, activation != nil else { return nil }
+        let thrown = adjusted(release.predictedEndTranslation)
+        let anchor = Self.centre(of: corner, in: bounds)
+        let moved = CGPoint(x: anchor.x + thrown.width, y: anchor.y + thrown.height)
         let resting = Self.clamped(moved, in: bounds)
         if moved.x < resting.x - Self.dockOvershoot {
-            rest = .docked(.leading, y: Self.clampedTabY(moved.y, in: bounds))
-        } else if moved.x > resting.x + Self.dockOvershoot {
-            rest = .docked(.trailing, y: Self.clampedTabY(moved.y, in: bounds))
-        } else {
-            rest = .floating(Self.nearestCorner(to: resting, in: bounds) ?? corner)
+            return .docked(.leading, y: Self.clampedTabY(moved.y, in: bounds))
         }
-    }
-
-    /// The corner a floating window rests in, and the one a docked one came from —
-    /// the tab's icons need something to draw even while the window is away.
-    private var restingCorner: Corner {
-        if case let .floating(corner) = rest {
-            corner
-        } else {
-            .bottomTrailing
+        if moved.x > resting.x + Self.dockOvershoot {
+            return .docked(.trailing, y: Self.clampedTabY(moved.y, in: bounds))
         }
+        return .floating(Self.nearestCorner(to: resting, in: bounds) ?? corner)
     }
-}
 
-// MARK: - Geometry
+    /// Forgets the gesture. Called from `dragEnded`, and from the window's
+    /// `onDisappear` — SwiftUI can drop a `DragGesture` without ever ending it, and
+    /// this subtree really is unmounted mid-gesture whenever the Live tab is selected
+    /// or the robot stops answering. Without this the window stayed where the finger
+    /// left it and its corner never decided again.
+    func endDrag() {
+        dragTranslation = .zero
+        activation = nil
+    }
 
-/// Pure, and deliberately static: every one of these is a function of a rectangle
-/// and a point, so the whole placement automaton is testable with no view around
-/// it.
-extension FloatingViewportModel {
-    /// How far past the margin the finger has to travel before letting go docks
-    /// the window rather than snapping it back.
-    static let dockOvershoot: CGFloat = 44
-
-    /// Clamped as well as anchored, so a rectangle too small to hold the window —
-    /// a squeezed split view, a preview given no size — still yields a point on
-    /// screen rather than one off the far edge.
-    static func centre(
-        of corner: Corner,
-        in bounds: CGRect,
-        size: CGSize = Metrics.floatingViewport,
-        margin: CGFloat = Space.lg
-    ) -> CGPoint {
-        clamped(
-            CGPoint(
-                x: corner.isLeading ? bounds.minX : bounds.maxX,
-                y: corner.isTop ? bounds.minY : bounds.maxY
-            ),
-            in: bounds,
-            size: size,
-            margin: margin
+    private func adjusted(_ translation: CGSize) -> CGSize {
+        guard let activation else { return translation }
+        return CGSize(
+            width: translation.width - activation.width,
+            height: translation.height - activation.height
         )
-    }
-
-    /// Which quadrant of `bounds` a point is in. `nil` only for a degenerate
-    /// rectangle, where "nearest" means nothing and the caller keeps what it had.
-    static func nearestCorner(to point: CGPoint, in bounds: CGRect) -> Corner? {
-        guard bounds.width > 0, bounds.height > 0 else { return nil }
-        switch (point.x < bounds.midX, point.y < bounds.midY) {
-        case (true, true): return .topLeading
-        case (false, true): return .topTrailing
-        case (true, false): return .bottomLeading
-        case (false, false): return .bottomTrailing
-        }
-    }
-
-    static func clamped(
-        _ centre: CGPoint,
-        in bounds: CGRect,
-        size: CGSize = Metrics.floatingViewport,
-        margin: CGFloat = Space.lg
-    ) -> CGPoint {
-        CGPoint(
-            x: clamp(
-                centre.x,
-                bounds.minX + margin + size.width / 2,
-                bounds.maxX - margin - size.width / 2
-            ),
-            y: clamp(
-                centre.y,
-                bounds.minY + margin + size.height / 2,
-                bounds.maxY - margin - size.height / 2
-            )
-        )
-    }
-
-    /// The tab is flush with the edge — no margin, that is what makes it read as
-    /// something hanging off the side rather than as a shrunken window.
-    static func tabCentre(
-        edge: HorizontalEdge,
-        y: CGFloat,
-        in bounds: CGRect,
-        size: CGSize = Metrics.viewportTab
-    ) -> CGPoint {
-        CGPoint(
-            x: edge == .leading
-                ? bounds.minX + size.width / 2
-                : bounds.maxX - size.width / 2,
-            y: clampedTabY(y, in: bounds, size: size)
-        )
-    }
-
-    static func clampedTabY(
-        _ y: CGFloat,
-        in bounds: CGRect,
-        size: CGSize = Metrics.viewportTab
-    ) -> CGFloat {
-        clamp(y, bounds.minY + size.height / 2, bounds.maxY - size.height / 2)
-    }
-
-    /// An inverted range means the window does not fit at all — a split view
-    /// squeezed to nothing, a preview given no size. Centring is the only answer
-    /// that is not off screen.
-    private static func clamp(_ value: CGFloat, _ lower: CGFloat, _ upper: CGFloat) -> CGFloat {
-        guard lower <= upper else { return (lower + upper) / 2 }
-        return min(max(value, lower), upper)
-    }
-}
-
-extension FloatingViewportModel.Corner {
-    var isLeading: Bool {
-        self == .topLeading || self == .bottomLeading
-    }
-
-    var isTop: Bool {
-        self == .topLeading || self == .topTrailing
     }
 }
 
@@ -297,13 +334,21 @@ extension FloatingViewportModel.Corner {
     extension FloatingViewportModel {
         /// Parked in a placement a real gesture would have to reach. `rest` is
         /// `private(set)`, which is why this lives here rather than in `Previews/`.
+        ///
+        /// `settling` is the interesting one: it is the mid-morph state, and freezing
+        /// it is the only static evidence a reference image can give about an
+        /// animation. Pass it with the `rest` the morph is leaving, not the one it is
+        /// heading for — `.floating(…)` plus `settling: .docked(…)` is a window whose
+        /// geometry has reached the edge while its renderer is still mounted.
         static func preview(
             _ rest: Placement = .floating(.bottomTrailing),
+            settling: Placement? = nil,
             hasTabBar: Bool = true,
             isLiveTabSelected: Bool = false
         ) -> FloatingViewportModel {
             let model = FloatingViewportModel()
             model.rest = rest
+            model.settling = settling
             model.hasTabBar = hasTabBar
             model.isLiveTabSelected = isLiveTabSelected
             return model

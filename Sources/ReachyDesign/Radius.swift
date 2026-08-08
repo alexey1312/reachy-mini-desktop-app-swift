@@ -23,4 +23,24 @@ public enum Radius {
     public static func rect(_ radius: CGFloat) -> RoundedRectangle {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
     }
+
+    /// A rectangle with the two corners on one side squared off — the shape something
+    /// flush with a screen edge takes, so it reads as hanging off the side rather than
+    /// as a shrunken window. `nil` is flush with nothing and rounds all four.
+    ///
+    /// One shape type across both, deliberately: the floating viewport morphs between
+    /// them on a single SwiftUI identity, and only one type can interpolate into
+    /// itself. Returning a `RoundedRectangle` for the `nil` case would put an identity
+    /// boundary in the middle of the animation and take the morph away again.
+    public static func flush(to edge: HorizontalEdge?, _ radius: CGFloat) -> UnevenRoundedRectangle {
+        let leading = edge == .leading ? 0 : radius
+        let trailing = edge == .trailing ? 0 : radius
+        return UnevenRoundedRectangle(
+            topLeadingRadius: leading,
+            bottomLeadingRadius: leading,
+            bottomTrailingRadius: trailing,
+            topTrailingRadius: trailing,
+            style: .continuous
+        )
+    }
 }

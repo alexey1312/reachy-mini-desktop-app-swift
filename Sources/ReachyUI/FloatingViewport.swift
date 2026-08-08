@@ -14,6 +14,18 @@ import SwiftUI
 /// is one object that can be moved, put away and opened; the robot is driven from
 /// the tab. That is a product decision and, since the scene's own gesture would
 /// otherwise swallow every touch, also what makes the window work at all.
+///
+/// **The window and the tab are one view, not two branches.** They used to be a
+/// `switch` returning structurally different views, which gave them different SwiftUI
+/// identities — and nothing geometric interpolates across an identity boundary, so
+/// `withAnimation` had only the default opacity transition left to run and the morph
+/// was a 0.28 s crossfade between two differently sized things in two places. One
+/// identity animates its frame, its position and its corners instead. The renderer
+/// keeps its own fixed size inside and is clipped, so none of that re-lays it out.
+///
+/// `matchedGeometryEffect` would be the obvious way to do this and is exactly what
+/// cannot be used: it keeps source and destination alive at the same time, and a
+/// second `RealityView` takes the robot away from the first.
 struct FloatingViewport: View {
     let model: FloatingViewportModel
     let viewport: ViewportModel
@@ -26,75 +38,200 @@ struct FloatingViewport: View {
     /// before: the tab and the window cannot both hold the viewport.
     let open: () -> Void
 
+    @Environment(\.reachyPreviewMode) private var previewMode
+
     var body: some View {
-        switch model.placement {
-        case .inline:
+        if model.isInline {
             EmptyView()
-        case .floating:
-            window
-        case let .docked(edge, _):
-            edgeTab(edge)
+        } else {
+            chrome
         }
     }
 
-    // MARK: - The window
-
     /// The frame is animated by `isExpanding` and the content is handed over only
-    /// once that animation reports itself done. A `matchedGeometryEffect` would be
-    /// the obvious way to do this and is exactly what cannot be used: it keeps
-    /// source and destination alive at the same time, and a second `RealityView`
-    /// takes the robot away from the first.
-    private var window: some View {
-        let shape = Radius.rect(Radius.lg)
-        return ViewportContent(model: viewport)
-            // **The window's content is a picture, not a control.** `RobotSceneView`
-            // hangs a `DragGesture(minimumDistance: 0)` off the `RealityView` for the
-            // orbit camera, and in SwiftUI a descendant's gesture beats an ancestor's
-            // `.gesture(_:)` — so every touch on the 3D pane went to the camera and
-            // the window could be neither moved nor opened. The camera pane had no
-            // such gesture and worked, which is what made the bug look 3D-only.
-            //
-            // Suppressed rather than out-prioritised with `highPriorityGesture`:
-            // orbiting a 160 pt viewport is the same call as the absent `makeTeleop`
-            // above, and both belong to full screen. The chrome is added *after*
-            // this and stays live.
-            .allowsHitTesting(false)
-            .frame(width: windowSize.width, height: windowSize.height)
-            .clipShape(shape)
-            .reachySurface(.window, in: shape)
-            .overlay(alignment: .topLeading) { switcher }
-            .overlay(alignment: .bottomTrailing) { reconnectingBadge }
-            .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
-            .contentShape(.rect)
-            // Everything below hangs off the window's own frame, and **`.position`
-            // comes last on purpose**: it hands its child the parent's whole area to
-            // sit in, so a gesture attached after it is scoped to the screen rather
-            // than to the window. The translation is a delta either way, which is
-            // what makes this a free correction rather than a rewrite.
-            //
-            // A non-zero minimum distance is what leaves the tap intact: at 0 the
-            // drag claims every touch, and tapping the window is how it is opened.
-            .gesture(drag)
-            .onTapGesture(perform: openFullScreen)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(.reachy("Live view"))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityActions { windowActions }
-            .position(model.isExpanding ? CGPoint(x: bounds.midX, y: bounds.midY) : model.centre(in: bounds))
+    /// once that animation reports itself done — the same shape as the dock below it,
+    /// and for the same reason.
+    private var chrome: some View {
+        let shape = Radius.flush(to: model.drawnEdge, Radius.lg)
+        return ZStack {
+            picture
+            edgeGlyphs
+        }
+        .frame(width: size.width, height: size.height)
+        .clipShape(shape)
+        .reachySurface(.window, in: shape)
+        // **The chrome goes outside the clip**, which is where it has always been. Moved
+        // inside it once, and the references named the mistake exactly: a capsule inset
+        // by `Space.xs` meets a 16 pt continuous corner, so the corner shaved it. The
+        // three floating captures carrying a switcher or a badge all moved and
+        // `Floating viewport — no camera`, which carries neither, did not.
+        .overlay(alignment: .topLeading) { windowOnly { switcher } }
+        .overlay(alignment: .bottomTrailing) { windowOnly { reconnectingBadge } }
+        .shadow(color: .black.opacity(0.2), radius: isDocked ? 8 : 12, y: isDocked ? 0 : 4)
+        .contentShape(.rect)
+        // A non-zero minimum distance is what leaves the tap intact: at 0 the drag
+        // claims every touch, and tapping is how the window is both opened and
+        // brought back.
+        .gesture(drag)
+        .onTapGesture(perform: tapped)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isDocked ? .reachy("Live view, hidden") : .reachy("Live view"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityActions { actions }
+        // SwiftUI can drop a `DragGesture` without ever ending it, and this subtree
+        // really is unmounted mid-gesture — selecting the Live tab or losing the robot
+        // both do it. Without this the window stayed wherever the finger left it.
+        //
+        // `finishSettling` is owed by an animation's completion handler, and an
+        // animation on a subtree that is already gone may never report one. Every way
+        // into the model guards on `settling == nil`, so a completion that never
+        // arrived would leave the window unable to move again — and `isStreaming` true
+        // over one the reader had put away.
+        //
+        // **Not in a preview, and the reference images are why.** A frozen `settling` is
+        // the only static evidence there is about the morph, and Prefire captures one
+        // preview body once per device and appearance off a single model — so adopting
+        // it here rendered the mid-morph state in the first capture and the placement it
+        // settled into in the other three. Measured: `Floating viewport — undocking` came
+        // back with a switcher and a spinner in three of its four references.
+        .onDisappear {
+            model.endDrag()
+            if !previewMode {
+                model.finishSettling()
+            }
+        }
+        .modifier(DragOffset(model: model, bounds: bounds))
+        // `.position` comes last and carries only the *resting* point, never the live
+        // gesture: it is a layout modifier, so driving it from every touch event ran a
+        // layout pass over a subtree hosting a rendering `RealityView`. The finger goes
+        // through `DragOffset` instead, which is a render-time transform and the shape
+        // `JoystickPad` already uses.
+        .position(centre)
     }
 
-    private var windowSize: CGSize {
+    /// The expansion is these two and `pictureSize` together, and they only make sense
+    /// read as one: a frame growing to the screen while the centre stays on a corner
+    /// anchor leaves most of the window off it.
+    private var size: CGSize {
+        model.isExpanding ? bounds.size : model.drawnSize
+    }
+
+    private var centre: CGPoint {
+        model.isExpanding ? CGPoint(x: bounds.midX, y: bounds.midY) : model.centre(in: bounds)
+    }
+
+    private var isDocked: Bool {
+        model.drawnEdge != nil
+    }
+
+    // MARK: - What is inside
+
+    /// The renderer, at a size of its own rather than the container's — see `pictureSize`.
+    ///
+    /// **Mounted on `placement`, faded on `drawn`** — that gap is the two-phase dock.
+    /// While the window is animating into its edge `placement` is still `.floating`, so
+    /// this stays mounted and fades out; it is `finishSettling()` that unmounts it and
+    /// stops the stream, after the animation rather than on its first frame.
+    @ViewBuilder
+    private var picture: some View {
+        if case .floating = model.placement {
+            ViewportContent(model: viewport)
+                // **The window's content is a picture, not a control.** `RobotSceneView`
+                // hangs a `DragGesture(minimumDistance: 0)` off the `RealityView` for
+                // the orbit camera, and in SwiftUI a descendant's gesture beats an
+                // ancestor's `.gesture(_:)` — so every touch on the 3D pane went to the
+                // camera and the window could be neither moved nor opened. The camera
+                // pane had no such gesture and worked, which is what made the bug look
+                // 3D-only.
+                //
+                // Suppressed rather than out-prioritised with `highPriorityGesture`:
+                // orbiting a 160 pt viewport is the same call as the absent `makeTeleop`
+                // above, and both belong to full screen. The chrome is added *after*
+                // this and stays live.
+                .allowsHitTesting(false)
+                .frame(width: pictureSize.width, height: pictureSize.height)
+                .opacity(isDocked ? 0 : 1)
+                // Scoped to the opacity so the geometry keeps its spring: the picture
+                // leaves in roughly the first third, and what gets squashed into the
+                // edge is an empty surface rather than a shrinking 3D scene.
+                .animation(Motion.absorbContent, value: isDocked)
+        }
+    }
+
+    /// Fixed while the window morphs into its edge: the container's frame shrinks to the
+    /// tab's, and a child that took that proposal would re-lay-out the `RealityView` on
+    /// every frame of the morph. This ignores it and is clipped instead.
+    ///
+    /// It does follow the expansion, where there is no morph and no clip to hide behind —
+    /// the window is growing into the Live tab and the picture has to arrive at the size
+    /// the tab will hand back.
+    private var pictureSize: CGSize {
         model.isExpanding ? bounds.size : Metrics.floatingViewport
     }
 
+    /// Something that belongs to the window rather than to the tab: mounted and faded
+    /// exactly as the picture is, because there is no room for a control on a 44 pt tab
+    /// and no reason to draw one over the glyphs on the way there.
+    @ViewBuilder
+    private func windowOnly(@ViewBuilder _ content: () -> some View) -> some View {
+        if case .floating = model.placement {
+            content()
+                .opacity(isDocked ? 0 : 1)
+                .animation(Motion.absorbContent, value: isDocked)
+        }
+    }
+
+    /// What the tab at the edge shows instead: the mode it will come back in, and a dot
+    /// for the link. Always mounted — two glyphs cost nothing — and faded by `drawn`,
+    /// so they arrive as the picture leaves.
+    private var edgeGlyphs: some View {
+        VStack(spacing: Space.xs) {
+            Image(systemName: viewport.content.systemImage)
+                .font(Typography.detail)
+                .foregroundStyle(Tone.quiet.style)
+            Circle()
+                .fill(linkTone.style)
+                .frame(width: Space.sm, height: Space.sm)
+        }
+        .opacity(isDocked ? 1 : 0)
+        .animation(Motion.absorbContent, value: isDocked)
+    }
+
+    // MARK: - Gestures
+
     private var drag: some Gesture {
         DragGesture(minimumDistance: 4)
-            .onChanged { model.dragChanged(translation: $0.translation, in: bounds) }
-            .onEnded { value in
-                withAnimation(Motion.springBack) {
-                    model.dragEnded(translation: value.translation, in: bounds)
-                }
-            }
+            .onChanged { model.dragChanged(translation: $0.translation) }
+            .onEnded(release)
+    }
+
+    /// The throw. `predictedEndTranslation` is what decides where the window lands, so a
+    /// flick reaches an edge a carry of the same length does not, and `velocity` is what
+    /// seeds the spring so it continues the gesture instead of restarting from a
+    /// standstill.
+    ///
+    /// A spring's initial velocity is a fraction of the journey per second, which is why
+    /// the model is asked how long the journey is rather than the distance being guessed
+    /// from the gesture.
+    private func release(_ value: DragGesture.Value) {
+        let carried = FloatingViewportModel.DragRelease(
+            predictedEndTranslation: value.predictedEndTranslation
+        )
+        let distance = model.releaseDistance(for: carried, in: bounds)
+        let speed = hypot(value.velocity.width, value.velocity.height)
+        withAnimation(Motion.absorb(velocity: speed / max(distance, 1))) {
+            model.dragEnded(carried, in: bounds)
+        } completion: {
+            model.finishSettling()
+        }
+    }
+
+    private func tapped() {
+        if isDocked {
+            undock()
+        } else {
+            openFullScreen()
+        }
     }
 
     private func openFullScreen() {
@@ -105,6 +242,24 @@ struct FloatingViewport: View {
             open()
         }
     }
+
+    private func dock(_ edge: HorizontalEdge) {
+        withAnimation(Motion.absorb(velocity: 0)) {
+            model.beginDocking(edge, in: bounds)
+        } completion: {
+            model.finishSettling()
+        }
+    }
+
+    private func undock() {
+        withAnimation(Motion.absorb(velocity: 0)) {
+            model.beginUndocking(in: bounds)
+        } completion: {
+            model.finishSettling()
+        }
+    }
+
+    // MARK: - Chrome
 
     /// Two icons and no labels: at 160 pt there is room for the state, not for the
     /// word naming it. The Live tab keeps the picker, which is what a reader who
@@ -149,63 +304,17 @@ struct FloatingViewport: View {
     /// offered as a named action instead. Without them the window could neither be
     /// opened nor put away, and it covers content.
     @ViewBuilder
-    private var windowActions: some View {
-        Button(.reachy("Open full screen"), action: openFullScreen)
-        ForEach(options) { option in
-            Button(option.title) { viewport.setContent(option) }
-        }
-        Button(.reachy("Hide at the leading edge")) { dock(.leading) }
-        Button(.reachy("Hide at the trailing edge")) { dock(.trailing) }
-    }
-
-    private func dock(_ edge: HorizontalEdge) {
-        withAnimation(Motion.dock) { model.dock(edge, in: bounds) }
-    }
-
-    // MARK: - The tab at the edge
-
-    /// The off switch, and the way back. Flush with the screen edge, so it reads
-    /// as something hanging off the side rather than as a shrunken window.
-    ///
-    /// **`.window` and not `.chrome`.** The role with no glass is the one that
-    /// flips in a dark appearance and the one that does not smear where it meets
-    /// the safe-area edge — both measured, both written up in
-    /// `ReachyDesign/AGENTS.md`.
-    private func edgeTab(_ edge: HorizontalEdge) -> some View {
-        let leading = edge == .leading
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: leading ? 0 : Radius.lg,
-            bottomLeadingRadius: leading ? 0 : Radius.lg,
-            bottomTrailingRadius: leading ? Radius.lg : 0,
-            topTrailingRadius: leading ? Radius.lg : 0,
-            style: .continuous
-        )
-        return VStack(spacing: Space.xs) {
-            Image(systemName: viewport.content.systemImage)
-                .font(Typography.detail)
-                .foregroundStyle(Tone.quiet.style)
-            Circle()
-                .fill(linkTone.style)
-                .frame(width: Space.sm, height: Space.sm)
-        }
-        .frame(width: Metrics.viewportTab.width, height: Metrics.viewportTab.height)
-        .background { ReachySurfaceFill(.window, in: shape) }
-        .shadow(color: .black.opacity(0.2), radius: 8)
-        .contentShape(.rect)
-        // `.position` last, for the reason the window records: it gives its child
-        // the whole area, and a tap attached after it would answer anywhere.
-        .onTapGesture {
-            withAnimation(Motion.dock) { model.undock(in: bounds) }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(.reachy("Live view, hidden"))
-        .accessibilityAddTraits(.isButton)
-        .accessibilityActions {
-            Button(.reachy("Show the live view")) {
-                withAnimation(Motion.dock) { model.undock(in: bounds) }
+    private var actions: some View {
+        if isDocked {
+            Button(.reachy("Show the live view"), action: undock)
+        } else {
+            Button(.reachy("Open full screen"), action: openFullScreen)
+            ForEach(options) { option in
+                Button(option.title) { viewport.setContent(option) }
             }
+            Button(.reachy("Hide at the leading edge")) { dock(.leading) }
+            Button(.reachy("Hide at the trailing edge")) { dock(.trailing) }
         }
-        .position(model.centre(in: bounds))
     }
 
     private var options: [ViewportModel.Content] {
@@ -229,106 +338,18 @@ struct FloatingViewport: View {
     }
 }
 
-extension View {
-    /// Floats the live view over the whole interface, wherever the shell draws a
-    /// tab bar.
-    ///
-    /// **Apply this to the `TabView`.** Order against `reachyTabAccessory` no longer
-    /// matters — it used to, back when the dock was a bottom `safeAreaInset` this
-    /// overlay could read, and the note here said so. The strip is system chrome
-    /// now, invisible to this reader like the tab bar, so `FloatingViewportModel`
-    /// is told it is there instead.
-    ///
-    /// It is mounted in the shell rather than in the root so it dies with the
-    /// connection. `.unreachable` stays in the shell, which is why a network blip
-    /// leaves the window where it is instead of taking it away.
-    func floatingViewport(
-        model: FloatingViewportModel,
-        viewport: ViewportModel,
-        session: RobotSession,
-        open: @escaping () -> Void
-    ) -> some View {
-        modifier(FloatingViewportModifier(model: model, viewport: viewport, session: session, open: open))
-    }
-}
-
-private struct FloatingViewportModifier: ViewModifier {
+/// The one thing that reads the live gesture, and a modifier of its own so that nothing
+/// else does.
+///
+/// `@Observable` tracks reads per property, so keeping `dragTranslation` out of
+/// `FloatingViewport.body` is what stops the surface, the chrome and the renderer from
+/// being rebuilt on every touch event — they are built once per drag instead. Only this
+/// node re-evaluates, and all it does is move a transform.
+private struct DragOffset: ViewModifier {
     let model: FloatingViewportModel
-    let viewport: ViewportModel
-    let session: RobotSession
-    let open: () -> Void
-
-    #if !os(macOS)
-        @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    #endif
-
-    /// **The one size-class branch in this target, and it is deliberate.** The rule
-    /// is not "iPhone" but "wherever the shell draws a tab bar rather than a
-    /// sidebar": a sidebar layout has the Live tab permanently beside the others
-    /// and nothing to float. `ReachyUI/AGENTS.md` carries the same note, because
-    /// the entry there used to say no branch was left.
-    private var hasTabBar: Bool {
-        #if os(macOS)
-            false
-        #else
-            horizontalSizeClass == .compact
-        #endif
-    }
-
-    /// Asked of the model rather than of `RootViewportTarget`: the window renders
-    /// what the model holds, and before it has attached there is nothing to float.
-    /// The Live tab asks the other question because it has to say *why* there is no
-    /// live view, which the model cannot tell it.
-    private var hasSomethingToShow: Bool {
-        viewport.source != nil && session.isAwake
-    }
+    let bounds: CGRect
 
     func body(content: Content) -> some View {
-        content
-            .overlay {
-                GeometryReader { geometry in
-                    let bounds = available(in: geometry)
-                    if hasSomethingToShow, !model.isInline {
-                        FloatingViewport(
-                            model: model,
-                            viewport: viewport,
-                            session: session,
-                            bounds: bounds,
-                            open: open
-                        )
-                        .onChange(of: bounds) { _, new in model.fit(to: new) }
-                    }
-                }
-            }
-            .onChange(of: hasTabBar, initial: true) { _, value in
-                model.hasTabBar = value
-            }
-    }
-
-    /// The region the window may rest in: this reader's own, less the chrome it
-    /// cannot see.
-    ///
-    /// **The safe area is not subtracted here, and that is the correction.** A
-    /// `GeometryReader` is laid out *inside* the safe area, so `size` has already
-    /// lost it and the origin of this reader's coordinate space — the space
-    /// `.position` places the window in — is already the top-left of the inset
-    /// region. Subtracting `safeAreaInsets` as well counted it twice at both ends.
-    /// Measured on an iPhone 17 Pro running iOS 26.4: the reader is 402 × 778 and
-    /// reports t62 b34, of a 402 × 874 screen. Reaching for `ignoresSafeArea()` on
-    /// the reader does not fix it either — that yields the full 402 × 874 but
-    /// reports t0 b0, so there would be nothing left to subtract.
-    ///
-    /// What does have to be subtracted is the chrome the reader is *not* inset by:
-    /// the tab bar insets each tab's content and reports none of it out here, and
-    /// the accessory the running-app strip sits in does the same, which is why the
-    /// shell writes `hasBottomAccessory` rather than leaving it to be measured.
-    private func available(in geometry: GeometryProxy) -> CGRect {
-        let accessory = model.hasBottomAccessory ? Metrics.tabAccessoryAllowance : 0
-        return CGRect(
-            x: 0,
-            y: 0,
-            width: geometry.size.width,
-            height: max(0, geometry.size.height - Metrics.tabBarAllowance - accessory)
-        )
+        content.offset(model.dragOffset(in: bounds))
     }
 }

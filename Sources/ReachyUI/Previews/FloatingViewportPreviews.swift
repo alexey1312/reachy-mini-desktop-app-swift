@@ -64,6 +64,26 @@ import SwiftUI
     )
 }
 
+// The window on its way back out, and the one mid-morph state a reference can say
+// anything about: it has already reached full size at its corner while the stream is
+// still off, so it is **empty**. That emptiness is the picture — direct evidence that
+// the window arrives before its content, which is what keeps RealityKit's start-up off
+// the frames the animation is drawing.
+#Preview("Floating viewport — undocking", traits: .sizeThatFitsLayout) {
+    PreviewScene.floatingViewport(
+        .preview(.docked(.leading, y: 200), settling: .floating(.bottomLeading)),
+        viewport: .preview(sceneModel: .preview(.buildingScene))
+    )
+}
+
+// **Not covered, and measured rather than assumed: the other direction.** A `docking`
+// preview was written, recorded and then deleted — it came back as an ordinary edge tab,
+// because a static capture of a morph renders its *destination*, and the one thing that
+// differs there is a renderer held mounted at opacity 0, which renders nothing headless
+// anyway. Four references certifying what `tab at the trailing edge` already certifies.
+// The two-phase hand-over is model logic and lives in `FloatingViewportModelTests`
+// (`dockingIsTwoPhase`), which asserts on `isStreaming` where an image cannot.
+
 // And with the robot unreachable, which is the only thing the tab can report while
 // the stream is off.
 #Preview("Floating viewport — tab, unreachable", traits: .sizeThatFitsLayout) {
