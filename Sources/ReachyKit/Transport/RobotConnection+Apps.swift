@@ -3,7 +3,7 @@ import Foundation
 /// `/api/apps/*`, plus the one lock route that lives under `/api/daemon/`.
 ///
 /// Two paths, on purpose. Most routes go through the generated client, which is
-/// also what guarantees `install` posts the catalogue entry back unchanged. Four
+/// also what guarantees `install` posts the catalogue entry back unchanged. Five
 /// do not, and each for a reason the spec cannot express:
 ///
 /// - `current-app-status` answers **200 with a literal `null`** when the robot is
@@ -15,6 +15,9 @@ import Foundation
 ///   carried through (project rule 3) — `RobotAppStatus` and `RobotAppLockStatus`
 ///   decode those defensively.
 /// - `job-status` likewise, via `DaemonJob`.
+/// - `stop-current-app` answers 400 with two opposite meanings in its `detail`,
+///   and the generated client discards the body. Its 200 body is an untyped `{}`
+///   nothing here reads, so there was nothing on the other side of the trade.
 extension RobotConnection: RobotAppsClient {
     public func availableApps() async throws -> [RobotApp] {
         switch try await hubClient.listAllAvailableAppsApiAppsListAvailableGet() {
@@ -56,14 +59,15 @@ extension RobotConnection: RobotAppsClient {
         try await hubJSON(method: "POST", path: "/api/apps/restart-current-app")
     }
 
-    /// 400 when nothing is running, which is what a second Stop looks like.
+    /// 400 when nothing is running, which is what a second Stop looks like — and
+    /// what an app wedged in `stopping` looks like for as long as it stays wedged.
+    ///
+    /// Hand-rolled like its two siblings rather than generated, and that is a
+    /// change: the 200 body is an untyped `{}` this client never reads, so the
+    /// generated path bought nothing, while `hubData` carries the daemon's `detail`
+    /// up to the screen. Telling those two 400s apart is the whole value here.
     public func stopCurrentApp() async throws {
-        switch try await hubClient.stopAppApiAppsStopCurrentAppPost() {
-        case .ok:
-            return
-        case let .undocumented(statusCode, _):
-            throw ReachyKitError.fromStatusCode(statusCode)
-        }
+        _ = try await hubData(method: "POST", path: "/api/apps/stop-current-app")
     }
 
     /// The daemon stores this exact `AppInfo` as the app's metadata, so it goes
@@ -194,7 +198,11 @@ extension RobotConnection {
             throw ReachyKitError.daemonRejected(statusCode: -1)
         }
         guard (200 ..< 300).contains(http.statusCode) else {
-            throw ReachyKitError.fromStatusCode(http.statusCode)
+            // The refusals on this surface are the ones a person has to act on, and
+            // the daemon words them itself: "No app is currently running" against
+            // "An app is already running" are the same 400 and mean opposite things.
+            // Reporting only the status left both reading `HTTP 400`.
+            throw ReachyKitError.fromStatusCode(http.statusCode, detail: ReachyKitError.detail(in: data))
         }
         return data
     }
