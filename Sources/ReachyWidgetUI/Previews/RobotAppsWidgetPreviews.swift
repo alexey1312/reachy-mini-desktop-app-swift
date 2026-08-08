@@ -104,6 +104,16 @@ func reachyAppsPreviewCard(_ content: RobotAppsWidgetContent, size: CGSize) -> s
     )
 }
 
+// One installed app on a family with room for two. The ordinary case for a robot
+// nobody has loaded a library onto, and the case the configuration used to demand
+// exactly two of — which left the widget in WidgetKit's placeholder for good.
+#Preview("Apps — small, one app", traits: .sizeThatFitsLayout) {
+    reachyAppsPreviewCard(
+        AppsPreview.content(cache: AppsPreview.cache([AppsPreview.dance]), limit: 2),
+        size: AppsPreviewSize.small
+    )
+}
+
 #Preview("Apps — medium", traits: .sizeThatFitsLayout) {
     reachyAppsPreviewCard(
         AppsPreview.content(configured: AppsPreview.all, limit: 4),

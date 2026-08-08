@@ -283,6 +283,13 @@ Adding a screen (project rule 8) means: a preview per state in `Previews/<Screen
   missing one: it reads as coverage and passes any change.
 - Not covered, deliberately: `SceneViewport` in `.ready` — a bare `RealityView`, which renders nothing meaningful
   headless, so its overlay phases are what get snapshotted.
+- **Not covered either, and measured rather than assumed: a `confirmationDialog`.** It presents in a context of its
+  own that captures as nothing. Recorded twice for `RobotScreen`'s power-off dialog — once with a running app and
+  once without, which change the sentence in it — the two references came out **byte-identical**, and identical to
+  the same screen with no dialog at all. Three references for one image, none of which could tell the states apart.
+  The rule that leaves behind: a dialog's _copy_ is model logic, and belongs in a model test
+  (`RobotPowerOffModelTests` asserts which app gets named); the screen behind it is what a reference is for.
+  `MaintenanceCard` never had one of these either, which now reads as the same finding made silently.
 - **`CameraViewport` in `.streaming` used to be on that list and is not any more.** The reasoning was that the video
   is a Metal-backed `RTCMTLVideoView` and captures as an empty rectangle — true, and beside the point once the phase
   grew chrome of its own. The joystick and the return-to-neutral button draw over that empty rectangle perfectly

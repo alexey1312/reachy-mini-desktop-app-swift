@@ -199,6 +199,18 @@ regex-scrapes the literal out of the app's `main.py`, so what arrives is the app
   motor mode — an asleep robot accepts them, plays the sound, and does not move.
 - `daemon/start?wake_up=<bool>` returns a job id immediately and starts the backend in the background (409 while
   another job runs); poll `daemon/status` until `running`. With `wake_up=true` the daemon enables the motors itself.
+- **`daemon/stop?goto_sleep=<bool>` is the "Power off" of the official app, and it is the mirror image of start** —
+  a job id at once, 409 while another job runs, poll `daemon/status` until `stopped`. What it stops is the *backend*;
+  the daemon's own HTTP server stays up, which is what makes `daemon/start` the way back and why the connect gate can
+  offer it. `state == error` is a finished stop too, not a reason to keep polling: `Daemon.stop` records a failed
+  sleep that way and tears the backend down regardless, so the error belongs on screen (`backendFault` already reads
+  `status.error`) rather than being reported as a timeout.
+  - `goto_sleep=true` is a **more** careful shutdown than the client's own sleep protocol: `daemon.py` enables the
+    motors, `await`s the animation, and only then disables them. `RobotPower.sleep()` never enables them first, so
+    performing a client-side sleep beforehand adds nothing and delays the parking.
+  - **It does not stop the running app.** `Daemon.stop` closes the JSON-RPC relay and the media server and never
+    touches `app_manager`, so an app left running has its backend disappear underneath it. Same shape as the
+    `reset-apps` guard: the client owns it, and `RobotSession.powerOff` stops the app first.
 - No MJPEG endpoint exists. Camera is WebRTC-only (signaling `ws://<host>:8443`, GStreamer webrtcsink, single H.264
   Constrained Baseline 3.1 stream, Opus audio, STUN `stun.l.google.com:19302`).
 - Daemon 1.9.0 is the minimum and tested API baseline. Enforce
