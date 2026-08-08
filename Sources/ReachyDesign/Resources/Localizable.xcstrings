@@ -508,6 +508,9 @@
     "No Reachy online": {
       "extractionState": "manual"
     },
+    "No app was running.": {
+      "extractionState": "manual"
+    },
     "No apps installed": {
       "extractionState": "manual"
     },

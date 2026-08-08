@@ -78,7 +78,7 @@ struct RobotAppTileView: View {
 
     var body: some View {
         if tile.isTappable {
-            Button(intent: ToggleRobotAppIntent(id: tile.id, name: tile.name)) {
+            Button(intent: RobotAppTileIntent(id: tile.id, name: tile.name)) {
                 label
             }
             .buttonStyle(.plain)

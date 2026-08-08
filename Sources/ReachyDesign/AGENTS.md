@@ -119,12 +119,17 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
   because `withAnimation` and `animation(_:value:)` already take an optional. A caller that stops moving must still
   render a distinguishable resting state — `ConnectRailNode` draws a static arc, which is also what every reference
   image records, so the resting state is the one under regression cover.
-- **The App Intents strings.** `RobotAppIntents`, `RobotPowerIntents`, `RobotAppsConfigurationIntent`,
-  `RobotAppEntity`, `ReachyShortcuts` and the two widget `configurationDisplayName`s stay bare
-  `LocalizedStringResource` against the main bundle. `AppIntent.title` and `DisplayRepresentation` are baked into
-  `Metadata.appintents` at build time, and `.reachy(_:)` records a _runtime_ bundle URL the metadata processor has no
-  reason to be able to follow — Siri and Shortcuts would read an unresolvable reference. Localizing them means a
+- **The App Intents _metadata_ strings.** `RobotAppIntents`, `RobotPowerIntents`, `RobotAppShortcutIntents`,
+  `RobotAppsConfigurationIntent`, `RobotAppEntity`, `ReachyShortcuts` and the two widget `configurationDisplayName`s
+  stay bare `LocalizedStringResource` against the main bundle. `AppIntent.title` and `DisplayRepresentation` are baked
+  into `Metadata.appintents` at build time, and `.reachy(_:)` records a _runtime_ bundle URL the metadata processor has
+  no reason to be able to follow — Siri and Shortcuts would read an unresolvable reference. Localizing them means a
   catalogue in each executable's own bundle, which is a separate decision from this one.
+  **The boundary is extraction, not the word "intent".** An `IntentDialog` returned from `perform()` is built and
+  resolved in this process while it runs, so nothing extracts it and there is no unresolvable reference to be had:
+  those take `.reachy(_:)` like any other sentence a person reads, through `IntentDialog.init(_:)`, which takes a
+  `LocalizedStringResource`. `RobotAppShortcutIntents` is where they are — its metadata is exempt and its dialogs are
+  not, in the same file.
 
 ## The localization catalogue
 
@@ -156,7 +161,7 @@ The ~50 keys that _do_ interpolate are deliberately absent — their stored form
 whose types cannot be read off the call site, and a wrong entry is worse than a missing one, which merely falls back
 to the English key. Finish them by opening the catalogue in Xcode, which extracts the placeholders correctly. The
 working list lives under gitignored `.context/` and does not travel to another clone: rebuild it with
-`grep -rnE '\.reachy\("[^"]*\\\(' Sources --include='*.swift'` — 53 call sites, ~50 distinct keys.
+`grep -rnE '\.reachy\("[^"]*\\\(' Sources --include='*.swift'` — 62 call sites, ~56 distinct keys.
 
 ## Applying a role — what happened
 

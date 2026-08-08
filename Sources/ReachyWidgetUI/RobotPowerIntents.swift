@@ -82,6 +82,11 @@ public enum RobotIntentTarget {
         return RobotPower(client: target.client)
     }
 
+    public static func shutdown() async throws -> RobotShutdown {
+        let target = try await connection(timeout: 10)
+        return RobotShutdown(client: target.client)
+    }
+
     static func validate(_ handshake: RobotConnection.Handshake, expected robot: KnownRobot) throws {
         guard handshake.identity.deduplicationKey == robot.key else {
             throw RobotIntentError.wrongRobot
@@ -148,6 +153,28 @@ public struct SleepRobotIntent: AppIntent {
     public func perform() async throws -> some IntentResult {
         let power = try await RobotIntentTarget.power()
         try await power.sleep()
+        return .result()
+    }
+}
+
+/// Sleep's bigger sibling: the camera, the state stream and the motors all go
+/// rather than only the motors.
+///
+/// Not behind a confirmation, unlike the button on the Robot screen. There is
+/// nowhere to ask from — Siri and the Home Screen menu both run this with no
+/// screen of their own — and the daemon's own HTTP server survives the teardown,
+/// so waking up is the way back and nothing has to be reconnected.
+public struct PowerOffRobotIntent: AppIntent {
+    public static let title: LocalizedStringResource = "Power Reachy Mini off"
+    public static let description = IntentDescription(
+        "Stops the running app, puts the robot to sleep and shuts its backend down. Waking up brings it back."
+    )
+
+    public init() {}
+
+    public func perform() async throws -> some IntentResult {
+        let shutdown = try await RobotIntentTarget.shutdown()
+        try await shutdown.perform()
         return .result()
     }
 }
