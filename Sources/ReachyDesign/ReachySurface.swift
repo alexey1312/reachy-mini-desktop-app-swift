@@ -12,15 +12,18 @@ public enum SurfaceRole: Sendable, CaseIterable {
     case badge
     /// The backdrop behind a header, a footer or a console.
     case scrim
-    /// A window sitting under the whole interface — the running-app strip, and so
-    /// far only that.
+    /// A raised, opaque, glass-free panel: the running-app strip where it has to
+    /// back itself, and the floating live view.
     ///
-    /// Separate from `.scrim` because it takes no glass, and for a measured
-    /// reason: the strip's shape reaches past the safe area, and glass over an
-    /// edge with nothing behind it renders in the iOS 26 simulator as a
-    /// black-red-green smear. The same glass over the viewport's chrome, which
-    /// stays inside the screen, renders cleanly. It also wants none — the whole
-    /// point of a window is that nothing shows through it.
+    /// Separate from `.scrim` because it takes no glass, and for a measured reason
+    /// — though not any longer the one it was born with. The strip's shape used to
+    /// reach past the safe area, and glass over an edge with nothing behind it
+    /// renders in the iOS 26 simulator as a black-red-green smear; the same glass
+    /// over the viewport's chrome, which stays inside the screen, renders cleanly.
+    /// The strip sits above the tab bar now and crosses no edge, so that is history
+    /// rather than a live constraint. **Keep the role glass-free anyway**: it is the
+    /// only surface that flips correctly in a dark reference, which is what
+    /// `FloatingViewport` picked it for, and nothing should show through a window.
     case window
 }
 

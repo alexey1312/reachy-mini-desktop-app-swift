@@ -21,13 +21,14 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
 | `ReachySurfaceGroup.swift` | `GlassEffectContainer` — and why it cannot hold a `reachySurface`            |
 | `ReachyButton.swift`       | `ButtonEmphasis` + `reachyButton(_:)` — and why it has no glass tier         |
 | `ReachyChrome.swift`       | The iOS 26 bar behaviours, each a no-op below the floor                      |
+| `ReachyTabAccessory.swift` | The tab-view bottom accessory, its placement vocabulary, and its fallback    |
 
 ## Rules
 
 - **A call site names a role, never a material, a glass or an OS version.** `.reachySurface(.chrome, in: .capsule)`,
   not `.background(.regularMaterial, in: Capsule())`. The availability fork lives in one file.
 - **Every role lays an opaque `baseFill` first, then the effect on top.** Neither glass nor a material renders in a
-  headless snapshot (`RunningAppDock.swift:172-178` records the same about `.bar`). Without a fill that _does_ render,
+  headless snapshot (`RunningAppDock`'s `windowEdge` records the same about `.bar`). Without a fill that _does_ render,
   every surface would be invisible to the reference images and the layout and text on each card would silently lose
   their regression cover. Do not "simplify" the fill away because it looks redundant on device.
 - **Glass is invisible headless, but what it wraps is not.** `glassEffect` renders its content vibrantly, and that
@@ -35,17 +36,31 @@ A caller maps its own domain type onto a token (`RobotAppStatus.state` → `Stat
   text inside one all render black, while `.tint` survives. Modifier order makes no difference — inside or outside the
   surface, the result is identical. So the effect goes **under** the content, never around it, and `.badge` takes
   neither glass nor material: a marker inside a card floats over nothing, and carrying a colour is the whole of its job.
-- **Three more things glass does headless, each measured rather than assumed.** They are why this module looks more
+- **Four more things glass does headless, each measured rather than assumed.** They are why this module looks more
   conservative than the plan:
   1. **`.buttonStyle(.glass)` blanks the whole capture.** Not "does not render" — a screen carrying one comes out
      empty apart from its toolbar, which is a separate pass. Recorded the onboarding suite twice to confirm: every
      reference blank with it, every reference complete without it, nothing else changed. `reachyButton` therefore has
      no glass tier, and roughly sixty references keep their cover.
-  2. **Glass over an edge with nothing behind it renders as a black-red-green smear.** The dock's shape crosses the
-     safe area, and its reference caught exactly that. The same glass over the viewport's chrome, which stays inside
-     the screen, is clean. Hence `.window`, a role that is `.scrim` minus the glass.
-  3. **Glass laid over a `Color.clear` does the same** — there is no backdrop to refract. It goes over the opaque
+  2. **An enabled `tabViewBottomAccessory` blanks the whole capture too**, and it is the same failure wearing a
+     different hat — the system draws that slot as a glass container. Recorded once: `Root — dock on the robot tab`
+     came back with no `Form` on it at all, only ghosts of the app's artwork tile and the tab-bar glyphs. So the
+     system placement is **uncapturable**, in the sense `SceneViewport.ready` is, and `PreviewScene.root` forces
+     `ReachyTabAccessoryStyle.legacy` on every root preview rather than leave each one to remember. What the
+     resulting images still certify is everything both placements share: the tab bar survives, the strip is above
+     it, the tab's content is inset to clear it. See `ReachyTabAccessory`.
+  3. **Glass over an edge with nothing behind it renders as a black-red-green smear.** Measured when the dock's shape
+     still crossed the safe area; it does not any more, and `.window` is the role that came out of it — `.scrim`
+     minus the glass. Keep the role: glass-free is also what makes it the one surface that flips correctly in a dark
+     reference, which is why `FloatingViewport` uses it.
+  4. **Glass laid over a `Color.clear` does the same** — there is no backdrop to refract. It goes over the opaque
      `baseFill`, which is where `ReachySurfaceFill` puts it.
+- **No reference image is evidence about the safe area.** `Apps/ReachyUISnapshotTests/PreviewTests.stencil` sets
+  `snapshot.device.safeArea = .zero` before every capture, so the home indicator, the status bar and every inset
+  derived from them are simply absent from all ~1100 of them. This is not a detail: it is the whole reason the
+  running-app dock shipped for five releases mounted in a way that drew it straight over the tab bar, with three
+  root references recording that and being read as confirming the opposite. Anything about safe-area geometry gets a
+  booted simulator and `simctl io booted screenshot`, or a device — never a reference.
 - **`GlassEffectContainer` and `reachySurface` are mutually exclusive, and only a device says so.** A container
   composites the `glassEffect`s it finds in its subtree into one merged sheet — but it only finds the ones applied to
   its own subviews. One nested inside a `.background`, which is where every role puts it, is hoisted into that sheet

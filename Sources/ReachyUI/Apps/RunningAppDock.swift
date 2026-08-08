@@ -3,43 +3,41 @@ import ReachyKit
 import ReachyWidgetUI
 import SwiftUI
 
-/// The running app, pinned to the bottom of the window under everything else.
+/// The running app, in the tab accessory above the tab bar.
 ///
-/// Mounted as a bottom `safeAreaInset` on the root `TabView`, so it sits *below*
-/// the tab bar and the whole interface shrinks to make room — the shape Telegram
-/// uses for a minimized Mini App, rather than the Apple-Music accessory that rides
-/// above the bar. Tapping it opens the full sheet; dismissing that sheet comes back
-/// here without stopping the app.
+/// **It used to claim the row *below* the bar, and it never had it.** The strip was
+/// a bottom `safeAreaInset` on the root `TabView`, on the reasoning that growing
+/// that view's safe area would push the bar up and leave the strip underneath it —
+/// the shape Telegram gives a minimized Mini App. A `safeAreaInset` does not shrink
+/// the frame it is applied to, and the boundary between SwiftUI and the tab bar's
+/// own controller does not carry the safe area across, so nothing moved: measured
+/// off the reference images, the tab's content was byte-identical either way and
+/// the bar was drawn straight under the opaque strip. With an app running there was
+/// no tab bar on screen at all, for five releases.
+///
+/// So it is the Apple-Music accessory now, which is a slot the platform actually
+/// has: `ReachyAccessoryPlacement` says which of the three shapes this is being
+/// drawn in, and `ReachyTabAccessory` is where the fork lives. Tapping it opens the
+/// full sheet; dismissing that sheet comes back here without stopping the app.
+///
+/// Presence, its animation and the keyboard all belong to whichever placement
+/// modifier mounted it — the system animates its own slot, and two animations on
+/// one arrival fight.
 struct RunningAppDock: View {
     let session: RobotSession
     let model: RunningAppModel
 
     var body: some View {
-        Group {
-            if let status = model.visibleStatus(for: session) {
-                RunningAppDockContent(
-                    status: status,
-                    conversationTurn: model.conversationTurn,
-                    isReachable: model.isReachable(session),
-                    busy: model.busy,
-                    expand: { model.isExpanded = true },
-                    perform: perform
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+        if let status = model.visibleStatus(for: session) {
+            RunningAppDockContent(
+                status: status,
+                conversationTurn: model.conversationTurn,
+                isReachable: model.isReachable(session),
+                busy: model.busy,
+                expand: { model.isExpanded = true },
+                perform: perform
+            )
         }
-        .animation(Motion.dock, value: isVisible)
-        // Without this the strip rides up on top of the keyboard whenever the Apps
-        // search field takes focus. Being covered is the least surprising thing a
-        // pinned bar can do.
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-    }
-
-    /// Animate on the appearance, not on every status change: re-running the
-    /// transition because the caption went from "Starting…" to "Running" would slide
-    /// the whole interface for a word.
-    private var isVisible: Bool {
-        model.visibleStatus(for: session) != nil
     }
 
     private func perform(_ action: RunningAppDockContent.Action) {
@@ -54,15 +52,15 @@ struct RunningAppDock: View {
 }
 
 extension View {
-    /// Pins the running-app dock under the whole interface, opens its sheet, and
-    /// keeps its reading fresh.
+    /// Opens the running app's page and keeps its reading fresh: the detail sheet,
+    /// the status poll and the conversation stream.
     ///
-    /// **Apply this to the `TabView`, never to a tab's content.** A bottom
-    /// `safeAreaInset` shrinks the safe area of the view it is applied to, and the
-    /// tab bar lays itself out inside that — so on the `TabView` the bar moves up
-    /// and the strip lands *below* it, which is what a minimized Telegram Mini App
-    /// does. On a tab's content the same modifier puts the strip *above* the bar,
-    /// which is the Apple-Music accessory and a different feature.
+    /// **The strip's placement is not here.** It is mounted by `ReachyTabShell`,
+    /// through `reachyTabAccessory` on the `TabView` and `reachyTabAccessoryFallback`
+    /// on each tab's content — exactly one of which is live. Hiding a layout effect
+    /// behind a modifier called `runningAppDock` is what let this view assert for
+    /// five releases that it moved the tab bar, with no call site in a position to
+    /// notice that it did not.
     ///
     /// It lives here rather than in the root view because that reasoning belongs
     /// next to the thing it is about — and because the root view is already at its
@@ -72,17 +70,17 @@ extension View {
     /// dock opens `AppDetailSheet`, the one page about an app, and that page can
     /// install, update and remove as well as stop. A model built here would be a
     /// second copy of the store's, disagreeing with it the moment either acted.
-    func runningAppDock(
+    func runningApp(
         session: RobotSession,
         model: RunningAppModel,
         store: AppStoreModel,
         install: AppInstallModel
     ) -> some View {
-        modifier(RunningAppDockModifier(session: session, model: model, store: store, install: install))
+        modifier(RunningAppModifier(session: session, model: model, store: store, install: install))
     }
 }
 
-private struct RunningAppDockModifier: ViewModifier {
+private struct RunningAppModifier: ViewModifier {
     let session: RobotSession
     let model: RunningAppModel
     let store: AppStoreModel
@@ -110,9 +108,6 @@ private struct RunningAppDockModifier: ViewModifier {
     func body(content: Content) -> some View {
         @Bindable var model = model
         content
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                RunningAppDock(session: session, model: self.model)
-            }
             .sheet(isPresented: $model.isExpanded) {
                 // Read afresh rather than captured: an app that stops while the
                 // sheet is open should close it, not leave a page about a process
@@ -164,11 +159,32 @@ struct RunningAppDockContent: View {
     let expand: () -> Void
     let perform: (Action) -> Void
 
+    @Environment(\.reachyAccessoryPlacement) private var placement
+
     private var hasFailed: Bool {
         status.state == .error
     }
 
     var body: some View {
+        switch placement {
+        case .inline:
+            inlineRow
+        case .expanded:
+            // No surface: the system's slot draws a capsule of its own, and an
+            // opaque fill inside it renders as a second, differently rounded one.
+            expandedRow
+        case .standalone:
+            // Inset after the fill, so the capsule and its shadow move in together
+            // — the shape the system's own container has, at the one place that has
+            // to build it by hand.
+            expandedRow
+                .background { windowEdge }
+                .padding(.horizontal, Space.md)
+                .padding(.bottom, Space.xs)
+        }
+    }
+
+    private var expandedRow: some View {
         HStack(spacing: Space.md) {
             Button(action: expand) {
                 AppRowLabel(
@@ -196,39 +212,56 @@ struct RunningAppDockContent: View {
         }
         .padding(.horizontal, Space.lg)
         .frame(minHeight: Metrics.dockStrip)
-        .background { windowEdge }
     }
 
-    /// What makes the strip read as a *window under the app* rather than as a
-    /// toolbar belonging to it: a rounded top edge with a shadow above it. A flat
-    /// full-bleed bar with a hairline divider says the opposite — that it is part of
-    /// the screen it is pinned to.
+    /// Merged into a minimised tab bar: one row the height of the bar, and a
+    /// fraction of its width.
     ///
-    /// The `.window` role is this strip's own two-fill backing, generalised: an
-    /// opaque base under the material, because nothing may show through a window.
-    /// `.bar` alone is translucent — on iPad the Disconnect card behind it read
-    /// straight through — and it does not render at all in a headless snapshot,
-    /// which is the same reason the tab bar's glass is absent from every root
-    /// capture. The role exists as its own case rather than as `.scrim` because
-    /// this shape crosses the safe-area edge, where glass has nothing to refract.
+    /// The caption goes — a crash tail cannot be read in a tab bar, and
+    /// `RunningAppCaption.Failure.inline` exists because the expanded row's one
+    /// caption line is the only place it *can* be read. Restart goes too: three
+    /// controls do not fit, and Stop is the action that ends the situation. Both
+    /// are still one tap away, because tapping the row opens `AppDetailSheet`.
+    private var inlineRow: some View {
+        HStack(spacing: Space.sm) {
+            Button(action: expand) {
+                AppRowLabel(
+                    artwork: AppArtwork(app: status.app),
+                    title: status.app.title,
+                    layout: .dock
+                )
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(.reachy("Opens the running app"))
+
+            if hasFailed {
+                dismissButton
+            } else {
+                stopButton
+            }
+        }
+        .padding(.horizontal, Space.sm)
+    }
+
+    /// The container the system draws on iOS 26.1, drawn by hand where there is no
+    /// system slot to draw it: a rounded capsule, inset from both edges, raised off
+    /// the tab bar by a shadow.
     ///
-    /// It is placed as a fill rather than applied to the strip's content, so the
-    /// caption keeps its colour: a crashed app says so in red, and glass renders
+    /// **All four corners, and no `ignoresSafeArea`.** It used to round only its top
+    /// two and reach past the home indicator, because it was meant to be a window
+    /// crossing the bottom edge of the screen. It sits above the tab bar now, well
+    /// inside the safe area, so an `ignoresSafeArea` here would stretch the opaque
+    /// fill down through the bar and reproduce the very look this change removes.
+    ///
+    /// The `.window` role stays: it is the raised, opaque, glass-free surface, and
+    /// glass-free is what makes it the one role that flips correctly in a dark
+    /// reference. It is placed as a fill rather than applied to the content so the
+    /// caption keeps its colour — a crashed app says so in red, and glass renders
     /// what it wraps vibrantly.
-    ///
-    /// The shape reaches past the home indicator so the fill runs to the screen
-    /// edge; only its top corners are rounded, since the rest is off-screen.
     private var windowEdge: some View {
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: Radius.window,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: Radius.window,
-            style: .continuous
-        )
-        return ReachySurfaceFill(.window, in: shape)
-            .shadow(color: .black.opacity(0.15), radius: 10, y: -1)
-            .ignoresSafeArea(edges: .bottom)
+        ReachySurfaceFill(.window, in: Radius.rect(Radius.window))
+            .shadow(color: .black.opacity(0.15), radius: 10, y: 1)
     }
 
     private var restartButton: some View {

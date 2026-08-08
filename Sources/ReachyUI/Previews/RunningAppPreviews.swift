@@ -53,6 +53,25 @@ import SwiftUI
     PreviewScene.runningAppDock(.preview(.unknown("reloading")))
 }
 
+// MARK: - Merged into a minimised tab bar
+
+// The two captures of `.inline`, and the only cover it can have: reaching it for
+// real takes a finger scrolling a list down, and nothing scrolls in a snapshot.
+// What they certify is the row's *contents* — no caption, one control — not the
+// width the system ends up giving it.
+//
+// Every capture above is `.standalone`, which is the shape below iOS 26.1 and on
+// macOS: the strip backing itself. The third shape, `.expanded`, draws no surface
+// at all because the system's slot draws one, and it is the root captures that
+// show it.
+#Preview("Dock — inline", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.preview(.running), placement: .inline)
+}
+
+#Preview("Dock — inline, crashed", traits: .sizeThatFitsLayout) {
+    PreviewScene.runningAppDock(.previewCrashed, placement: .inline)
+}
+
 // MARK: - The expanded page
 
 // The dock expands into `AppDetailSheet` — the same page a store row opens — so

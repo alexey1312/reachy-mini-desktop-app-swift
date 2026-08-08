@@ -212,6 +212,20 @@ enum PreviewScene {
         ) {
             Text("Developer tools")
         }
+        // **Every root capture takes the fallback placement, and none may take the
+        // system's.** `tabViewBottomAccessory` does not merely fail to render
+        // headless — an enabled one blanks the entire capture, the way
+        // `.buttonStyle(.glass)` does: recorded once without this line and
+        // `Root — dock on the robot tab` came back with no Form on it at all, just
+        // ghosts of the artwork tile and the tab-bar glyphs. Since a blank reference
+        // reads as cover and passes any change, the harness forces the other branch
+        // rather than leaving each preview to remember.
+        //
+        // So the native placement is uncapturable, in the sense `SceneViewport.ready`
+        // is, and the device checklist is its only cover. What these images do still
+        // certify is everything either placement shares — that the tab bar survives,
+        // that the strip is above it, that the tab's content is inset to clear it.
+        .environment(\.reachyTabAccessoryStyle, .legacy)
         .preview()
     }
 

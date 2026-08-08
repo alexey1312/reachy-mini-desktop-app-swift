@@ -20,12 +20,20 @@ Shared SwiftUI views for all platforms (macOS/iPadOS/iOS). Depends on ReachyKit 
   tabs. The five are unconditional — a tab that comes and goes forces the shell to catch its disappearance and drag
   the selection elsewhere, which is what `onChange(of: offersLiveTab)` used to do. An unavailable feature renders an
   unavailable state inside its own tab instead.
-- **The tab bar does not minimise while the running-app dock is up, and that is not a preference.** The dock is an
-  opaque strip in the bottom safe area; `tabBarMinimizeBehavior(.onScrollDown)` shrinks the bar into the row that
-  strip occupies, so scrolling any list down with an app running took the _whole_ tab bar off screen — it read as
-  the dock having replaced it. `reachyMinimizingTabBar(_:)` takes the flag and passes `.never`. The recorded
-  references could not have caught this: nothing scrolls in a snapshot, so `Root — dock on the apps tab` shows the
-  bar exactly where the layout puts it when the bar is expanded, which is also where it is now.
+- **The running-app dock is a tab accessory, and it is not a `safeAreaInset` on the `TabView`. Do not put it back.**
+  It was one for five releases, on the reasoning that growing the `TabView`'s safe area would push the bar up and
+  leave the strip below it — the Telegram shape. A `safeAreaInset` does not shrink the frame it is applied to, and
+  that safe area does not cross into the tab bar's controller or into the tabs' hosting controllers. Measured off the
+  references with a pixel diff: with the dock up, the tab's content was **byte-identical** to the dock-free capture
+  for the top 63% of the frame and the tab bar was **absent from the image entirely**. With an app running there was
+  no tab bar on screen at all. `ReachyTabAccessory` holds the replacement and the reason each half exists.
+  - **The tab bar minimises again, and that reverses the previous entry here.** It was switched off because the bar
+    shrank into the row the opaque strip occupied and the whole bar went with it. The accessory _is_ that row, so
+    minimising is now the interaction rather than the thing that breaks it: `reachyMinimizingTabBar()` takes no flag.
+    Nothing scrolls in a snapshot, so no reference covers this in either direction — it is a device check.
+  - **The old entry read `Root — dock on the apps tab` as showing the bar where the layout puts it.** It showed the
+    bar buried. When a reference is the evidence for a claim about layout, say which pixels — and see
+    `ReachyDesign/AGENTS.md` on why no reference can be evidence about the safe area at all.
 - **`.unreachable` belongs to the shell, not the gate.** Only `.idle` and `.connecting` show the gate. A network blip
   must not pull the tab bar out from under a finger, and the robot screen already reports the state in place.
 - **The gate's fork has progress conditions, and they only ever delay.** For `.connected`, `isConnectedEnough` waits
