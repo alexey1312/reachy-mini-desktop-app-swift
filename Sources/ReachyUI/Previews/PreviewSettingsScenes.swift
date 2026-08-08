@@ -1,5 +1,6 @@
 import HuggingFaceAuth
 import ReachyKit
+import ReachySSH
 @testable import ReachyUI
 import SwiftUI
 
@@ -15,6 +16,37 @@ extension PreviewScene {
     static func settings(_ session: RobotSession) -> some View {
         NavigationHost {
             SettingsScreen(session: session)
+        }
+        .preview()
+    }
+
+    /// The Advanced group on its own, open.
+    ///
+    /// Captured here rather than through `SettingsScreen`, where it sits below the
+    /// fold on both snapshot devices and so appears in no reference at all.
+    static func advancedSection(_ session: RobotSession, developerTools: Bool = true) -> some View {
+        // An `if`, not a ternary: unifying a `@MainActor` closure with `nil` sends
+        // the type checker into "failed to produce diagnostic for expression", which
+        // names this function and says nothing about why. And `swift build` cannot
+        // catch it — `Previews/` is excluded from the SwiftPM target, so only
+        // `mise run project` plus a snapshot build sees this file at all.
+        var developer: (@MainActor () -> AnyView)?
+        if developerTools {
+            developer = { AnyView(Text(verbatim: "Developer tools")) }
+        }
+        return Form {
+            AdvancedSettingsSection(session: session, isExpanded: true)
+        }
+        .formStyle(.grouped)
+        .environment(\.reachyDeveloperScreen, developer)
+        .preview()
+    }
+
+    /// The robot's own file system. Every state is injected: the screen's `.task`
+    /// is inert under `reachyPreviewMode`, so nothing here opens a socket.
+    static func robotFiles(_ model: RobotFilesModel) -> some View {
+        NavigationHost {
+            RobotFilesScreen(model: model)
         }
         .preview()
     }

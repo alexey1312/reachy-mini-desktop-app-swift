@@ -24,6 +24,35 @@ import SwiftUI
     PreviewScene.settings(.preview(status: .preview(state: .stopped)))
 }
 
+// MARK: - The Advanced group
+
+// Closed on a real screen, and below the fold on both snapshot devices, so a
+// reference taken through `SettingsScreen` shows none of these rows. Standalone
+// and open, it shows all of them — including the only way into the robot's files.
+#Preview("Advanced — every row") {
+    PreviewScene.advancedSection(.preview())
+}
+
+// A relay session has no route to port 22 (ADR 0003), so Robot files is absent
+// rather than present and failing. A reference for the offered state alone cannot
+// tell a conditional row from a permanent one.
+#Preview("Advanced — over the relay") {
+    PreviewScene.advancedSection(
+        .preview(address: nil, link: .remote, client: PreviewRemoteRobotClient())
+    )
+}
+
+// A Lite robot mounts neither `/wifi/*` nor `/cache/*`, so the network and
+// maintenance rows go with them.
+#Preview("Advanced — Lite robot") {
+    PreviewScene.advancedSection(.preview(status: .preview(wirelessVersion: false)))
+}
+
+// The app target may not supply a developer screen at all.
+#Preview("Advanced — no developer tools") {
+    PreviewScene.advancedSection(.preview(), developerTools: false)
+}
+
 // MARK: - Maintenance
 
 // Both actions delete something on the robot and neither can be undone from here,
