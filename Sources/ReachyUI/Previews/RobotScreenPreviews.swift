@@ -38,6 +38,21 @@ import SwiftUI
     PreviewScene.robotScreen(.preview(powerTransition: .startingBackend))
 }
 
+// The whole ladder in its last rung: the daemon parks the robot before it tears
+// the backend down, and the caption says so because that is the part the reader
+// can watch happen.
+#Preview("Robot — powering off") {
+    PreviewScene.robotScreen(.preview(powerTransition: .stoppingBackend))
+}
+
+// Not covered, deliberately: the power-off `confirmationDialog`. It presents in a
+// context of its own that renders as nothing headless — recorded once with and
+// once without a running app, the two references came out **byte-identical** and
+// identical to this screen without a dialog at all, so neither could tell the
+// sentence apart. That sentence is the whole point of the dialog, and it is
+// asserted where it can be: `RobotPowerOffModelTests` names the running app
+// without rendering anything.
+
 // Every identity field is optional and the daemon may report none of them; the screen falls back
 // to em dashes and drops the links whose transport it does not have.
 #Preview("Robot — nothing reported") {

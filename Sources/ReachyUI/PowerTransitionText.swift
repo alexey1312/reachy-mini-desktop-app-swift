@@ -8,6 +8,9 @@ extension RobotSession.PowerTransition {
     var statusText: String {
         switch self {
         case .startingBackend: String(localized: .reachy("Starting the robot backend… this can take a minute"))
+        // Says the sleep out loud because it is the part the reader can see: the
+        // robot parks its head first and the backend goes only after that.
+        case .stoppingBackend: String(localized: .reachy("Powering off… going to sleep first"))
         case .wakingUp: String(localized: .reachy("Waking up…"))
         case .goingToSleep: String(localized: .reachy("Going to sleep…"))
         }
